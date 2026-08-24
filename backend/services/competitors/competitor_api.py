@@ -85,9 +85,8 @@ def list_studies(user: dict = Depends(require_permission("competitors.view"))):
                    bp.market, bp.industry, bp.scrape_status,
                    coalesce(c.tracked, 0)::int   as tracked_competitors,
                    coalesce(c.suggested, 0)::int as suggested_competitors,
-                   coalesce(f.total, 0)::int     as finding_count,
-                   coalesce(f.high, 0)::int      as high_impact_count,
-                   f.latest_generated_at
+                   coalesce(a.total, 0)::int     as article_count,
+                   a.last_scraped_at
             from projects p
             left join business_profiles bp on bp.project_id = p.id
             left join (
@@ -97,11 +96,13 @@ def list_studies(user: dict = Depends(require_permission("competitors.view"))):
                 from competitors group by project_id
             ) c on c.project_id = p.id
             left join (
-                select project_id, count(*) as total,
-                       count(*) filter (where impact_level = 'high') as high,
-                       max(generated_at) as latest_generated_at
-                from latest_findings group by project_id
-            ) f on f.project_id = p.id
+                select ap.project_id,
+                       count(*) as total,
+                       max(ar.fetched_at) as last_scraped_at
+                from article_projects ap
+                join articles ar on ar.id = ap.article_id
+                group by ap.project_id
+            ) a on a.project_id = p.id
             where p.mode = 'competitor'
             order by p.created_at desc
             """

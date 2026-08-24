@@ -10,17 +10,17 @@
  * keyboard-reachable, since the whole surface is the click target.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, BarChart3, Building2, CalendarClock, Check, ChevronRight,
-  ExternalLink, Layers, LayoutGrid, Lightbulb, Link2, List, Pencil, Plus, Radar, RefreshCw, Search,
-  ShieldCheck, Sparkles, Target, Trash2, TrendingUp, X,
+  AlertTriangle, BarChart3, Building2, CalendarClock, Check, ChevronRight,
+  ExternalLink, Layers, Link2, Pencil, Plus, Radar, RefreshCw, Search,
+  ShieldCheck, Sparkles, Trash2,
 } from 'lucide-react';
 import {
-  IMPACT_LABELS, PLATFORM_LABELS, SIZE_TIER_LABELS, addAccount, addCompetitorManual, analyze,
+  PLATFORM_LABELS, SIZE_TIER_LABELS, addAccount, addCompetitorManual,
   avatarGradient, deleteStudy, discoverAccounts, discoverCompetitors, discoverTrackedAccounts,
-  getSchedule, getStudy, initials, listAccounts, listCompetitors, listFindings, pollAnalysisRun,
+  getSchedule, getStudy, initials, listAccounts, listCompetitors,
   pollDiscoveryRun, relativeTime, saveProfile, setCompetitorStatus, setSchedule, syncSources,
   updateCompetitor, updateStudy, validateAccount,
 } from '../competitorApi.js';
@@ -38,20 +38,6 @@ const SCHEDULE_UNIT_OPTIONS = [
   { value: 'days', label: 'day(s)' },
 ];
 
-const IMPACT_FILTERS = [
-  { key: '', label: 'All impact' },
-  { key: 'high', label: 'High' },
-  { key: 'medium', label: 'Medium' },
-  { key: 'low', label: 'Low' },
-];
-
-/** Alternate names a competitor is published under, edited as a comma-separated
- *  list. Evidence attribution otherwise only matches the company name and its
- *  domain label, so a company reported on in another language or script, or
- *  trading under a different retail brand, is never matched at all. It is also
- *  the way to make a competitor whose name is an ordinary word analyzable:
- *  those are dropped as automatic matchers, but an alias typed here is
- *  trusted. */
 function AliasEditor({ competitor, onSave }) {
   const stored = Array.isArray(competitor.aliases) ? competitor.aliases : [];
   const [value, setValue] = useState(stored.join(', '));
@@ -100,39 +86,6 @@ function AliasEditor({ competitor, onSave }) {
 // window a move from six months ago sits beside one from last week with
 // nothing to tell them apart. Longer windows are for competitors that are
 // simply covered rarely.
-const ANALYSIS_PERIODS = [
-  { days: 30, label: 'Last 30 days' },
-  { days: 90, label: 'Last 90 days' },
-  { days: 180, label: 'Last 6 months' },
-  { days: 365, label: 'Last 12 months' },
-];
-
-// Same run-labeling convention as Dashboard/Reports (DashboardOverview.jsx,
-// App.jsx's renderReportsView) - "Pipeline #N: <date>" - so a run means the
-// same thing wherever it's picked from.
-function formatPipelineRunLabel(run) {
-  const value = run?.finished_at || run?.created_at;
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return 'Run';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    + ' ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-function pipelineRunTitle(run, index) {
-  const number = run?.sequence_number ?? (index + 1);
-  return `Pipeline #${number}: ${formatPipelineRunLabel(run)}`;
-}
-
-const VIEW_MODES = [
-  { value: 'card', label: 'Cards', icon: LayoutGrid },
-  { value: 'list', label: 'List', icon: List },
-];
-
-const WORKSPACE_TABS = [
-  { value: 'reports', label: 'Reports', icon: BarChart3 },
-  { value: 'sources', label: 'Sources', icon: Link2 },
-];
-
 // The unfiltered "All sources" list spans every account across every tracked
 // and suggested competitor - easily well past a screenful for a study with
 // many competitors, so it's paged rather than rendered all at once.
@@ -157,107 +110,6 @@ const SOURCE_GROUP_BY_KEY = Object.fromEntries(SOURCE_GROUPS.map((group) => [gro
 function sourceGroupKey(platform) {
   const found = SOURCE_GROUPS.find((group) => group.platforms.has(platform));
   return found ? found.key : 'other';
-}
-
-function FindingCard({ finding, onOpen }) {
-  const actions = Array.isArray(finding.actions) ? finding.actions : [];
-  const signals = Array.isArray(finding.signals) ? finding.signals : [];
-  const evidence = Array.isArray(finding.evidence) ? finding.evidence : [];
-
-  return (
-    <button type="button" className="cs-card" onClick={() => onOpen(finding.id)}>
-      <span className={`cs-card-spine cs-card-spine-${finding.impact_level}`} aria-hidden="true" />
-      <div className="cs-card-body">
-        <div className="cs-card-top">
-          <div className="cs-card-competitor">
-            <span className="cs-avatar" style={{ background: avatarGradient(finding.competitor_name) }} aria-hidden="true">
-              {initials(finding.competitor_name)}
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <p className="cs-card-name">{finding.competitor_name}</p>
-              <p className="cs-card-domain">
-                {finding.competitor_domain || '-'}
-                {finding.size_tier ? ` · ${SIZE_TIER_LABELS[finding.size_tier] || finding.size_tier}` : ''}
-              </p>
-            </div>
-          </div>
-          <span className={`cs-pill cs-pill-${finding.impact_level}`}>
-            {IMPACT_LABELS[finding.impact_level] || finding.impact_level}
-          </span>
-        </div>
-
-        <h3 className="cs-card-headline">{finding.headline}</h3>
-
-        <div className="cs-answer">
-          <span className="cs-answer-label"><Activity size={11} /> What they&rsquo;re up to</span>
-          <p className="cs-answer-text cs-answer-clamp">{finding.whats_up}</p>
-        </div>
-
-        <div className="cs-answer">
-          <span className="cs-answer-label"><Target size={11} /> How it affects us</span>
-          <p className="cs-answer-text cs-answer-clamp">{finding.impact}</p>
-        </div>
-
-        {actions.length ? (
-          <div className="cs-answer">
-            <span className="cs-answer-label"><Lightbulb size={11} /> Suggested actions</span>
-            <ul className="cs-actions-preview">
-              {actions.slice(0, 2).map((item, index) => (
-                <li key={index}>{item.action}</li>
-              ))}
-            </ul>
-            {actions.length > 2 ? (
-              <span style={{ fontSize: '0.79rem', color: 'var(--text-light)', paddingLeft: 17 }}>
-                +{actions.length - 2} more
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {signals.length ? (
-          <div className="cs-pills">
-            {signals.slice(0, 4).map((signal) => (
-              <span key={signal} className="cs-pill cs-pill-signal">{signal}</span>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="cs-card-foot">
-          <span>
-            {finding.story_count} source{finding.story_count === 1 ? '' : 's'}
-            {evidence.length ? ` · ${evidence.length} cited` : ''}
-            {finding.generated_at ? ` · ${relativeTime(finding.generated_at)}` : ''}
-          </span>
-          <span className="cs-card-foot-open">Full report <ChevronRight size={13} /></span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function FindingRow({ finding, onOpen }) {
-  const evidence = Array.isArray(finding.evidence) ? finding.evidence : [];
-
-  return (
-    <button type="button" className="cs-finding-row" onClick={() => onOpen(finding.id)}>
-      <span className={`cs-pill cs-pill-${finding.impact_level}`}>
-        {IMPACT_LABELS[finding.impact_level] || finding.impact_level}
-      </span>
-      <span className="cs-avatar cs-finding-row-avatar" style={{ background: avatarGradient(finding.competitor_name) }} aria-hidden="true">
-        {initials(finding.competitor_name)}
-      </span>
-      <span className="cs-finding-row-main">
-        <span className="cs-finding-row-name">{finding.competitor_name}</span>
-        <span className="cs-finding-row-headline">{finding.headline}</span>
-      </span>
-      <span className="cs-finding-row-meta">
-        {finding.story_count} source{finding.story_count === 1 ? '' : 's'}
-        {evidence.length ? ` · ${evidence.length} cited` : ''}
-        {finding.generated_at ? ` · ${relativeTime(finding.generated_at)}` : ''}
-      </span>
-      <ChevronRight size={15} className="cs-finding-row-chevron" />
-    </button>
-  );
 }
 
 function StatTile({ icon: Icon, label, value, tone }) {
@@ -467,38 +319,11 @@ export default function CompetitorWorkspace() {
   const [deleting, setDeleting] = useState(false);
   const [profile, setProfile] = useState(null);
   const [competitors, setCompetitors] = useState([]);
-  const [findings, setFindings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [runMode, setRunMode] = useState(null); // 'scrape' | 'direct' - which choice is currently running
-  const [showRunChoice, setShowRunChoice] = useState(false);
-  const [periodDays, setPeriodDays] = useState(ANALYSIS_PERIODS[0].days);
-  const [pipelineRuns, setPipelineRuns] = useState([]);
-  const [pipelineRunId, setPipelineRunId] = useState(null);
-  const pipelineRunDefaultedRef = useRef(new Set());
-  const [notice, setNotice] = useState(null);
-  const [impact, setImpact] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  // Filters the reports list by which pipeline run generated the evidence -
-  // separate from pipelineRunId above, which picks what a *new* analysis run
-  // should use. Not defaulted to the latest run: unlike starting a fresh
-  // analysis, opening the reports list should show everything already on
-  // file until the user asks to narrow it.
-  const [findingsRunId, setFindingsRunId] = useState(null);
-  const [findingsLoading, setFindingsLoading] = useState(false);
-  const [viewMode, setViewMode] = useState(() => {
-    try {
-      return window.localStorage.getItem('competitors-view-mode') === 'list' ? 'list' : 'card';
-    } catch {
-      return 'card';
-    }
-  });
   const [showCompetitors, setShowCompetitors] = useState(false);
-  const [activeTab, setActiveTab] = useState('reports');
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState(null);
   const [sourceSearch, setSourceSearch] = useState('');
   const [sourceGroupFilter, setSourceGroupFilter] = useState('');
   const [sourceStatusFilter, setSourceStatusFilter] = useState('');
@@ -514,7 +339,6 @@ export default function CompetitorWorkspace() {
   const [discoveryNotice, setDiscoveryNotice] = useState(null);
   const [discoveringChannels, setDiscoveringChannels] = useState(false);
   const [discoveryLogs, setDiscoveryLogs] = useState([]);
-  const [analysisLogs, setAnalysisLogs] = useState([]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editDraft, setEditDraft] = useState({ name: '', description: '', status: 'active' });
@@ -560,146 +384,6 @@ export default function CompetitorWorkspace() {
     };
   }, [studyId]);
 
-  // A study is a project, so it has the same pipeline_runs rows any project's
-  // scrapes write - fetched here so "Run analysis" can offer analyzing one
-  // specific past run instead of only a date window, same choice Dashboard/
-  // Reports give over `articles.pipeline_run_id`. Defaults to the latest
-  // completed run the first time this study is opened (tracked per study id
-  // so it doesn't fight a choice the user already made); after that, only an
-  // explicit pick changes it.
-  useEffect(() => {
-    if (!studyId) return undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/pipeline-runs?project_id=${studyId}&limit=500`);
-        if (!res.ok) return;
-        const data = await res.json().catch(() => ({}));
-        const runs = Array.isArray(data?.runs) ? data.runs : [];
-        const completed = runs
-          .filter((run) => run?.finished_at)
-          .sort((a, b) => new Date(b.finished_at).getTime() - new Date(a.finished_at).getTime());
-        if (cancelled) return;
-        setPipelineRuns(completed);
-        if (!pipelineRunDefaultedRef.current.has(studyId)) {
-          pipelineRunDefaultedRef.current.add(studyId);
-          if (completed.length > 0) setPipelineRunId(completed[0].id);
-        }
-      } catch {
-        if (!cancelled) setPipelineRuns([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [studyId]);
-
-  // Debounce the free-text search the same way ArticlesPage does, so every
-  // keystroke doesn't fire its own request.
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), 250);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
-
-  // Findings are fetched separately from the study/competitors/schedule load
-  // above so that changing a filter never has to re-fetch all of those too.
-  useEffect(() => {
-    if (!studyId) return undefined;
-    let cancelled = false;
-    (async () => {
-      setFindingsLoading(true);
-      try {
-        const result = await listFindings(studyId, {
-          impact: impact || undefined,
-          search: search || undefined,
-          // Mutually exclusive on the server too: a specific run already
-          // names a fixed set of evidence, so a date box layered on top
-          // would just silently narrow it further.
-          date_from: findingsRunId ? undefined : (dateFrom || undefined),
-          date_to: findingsRunId ? undefined : (dateTo || undefined),
-          pipeline_run_id: findingsRunId || undefined,
-        });
-        if (!cancelled) setFindings(result.findings || []);
-      } catch (caught) {
-        if (!cancelled) setError(caught.message);
-      } finally {
-        if (!cancelled) setFindingsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [studyId, impact, search, dateFrom, dateTo, findingsRunId]);
-
-  const hasFindingFilters = Boolean(impact || search || dateFrom || dateTo || findingsRunId);
-
-  const clearFindingFilters = () => {
-    setImpact('');
-    setSearchInput('');
-    setSearch('');
-    setDateFrom('');
-    setDateTo('');
-    setFindingsRunId(null);
-  };
-
-  const changeViewMode = (mode) => {
-    setViewMode(mode);
-    try {
-      window.localStorage.setItem('competitors-view-mode', mode);
-    } catch {
-      // ignore - persistence is a nicety, not a requirement
-    }
-  };
-
-  // Never scraped before - hint which choice to lead with in the run dialog.
-  const likelyNeedsScrape = !study?.last_run_at;
-
-  const runAnalysis = async (scrapeFirst) => {
-    // Picking a specific past run means "analyze exactly what it gathered" -
-    // a fresh scrape would just be a different, not-yet-selected run.
-    const runFilter = pipelineRunId;
-    const willScrapeFirst = scrapeFirst && !runFilter;
-    setShowRunChoice(false);
-    setRunMode(willScrapeFirst ? 'scrape' : 'direct');
-    setAnalyzing(true);
-    setError('');
-    setNotice(null);
-    setAnalysisLogs([]);
-    try {
-      await syncSources(studyId);
-      // Queued, not awaited: a scrape plus one LLM call per competitor runs for
-      // minutes. Poll for progress so the log renders live instead of leaving
-      // the user on a spinner with no idea what stage it reached.
-      const queued = await analyze(studyId, {
-        period_days: periodDays,
-        pipeline_run_id: runFilter || undefined,
-        scrape: willScrapeFirst,
-      });
-      const run = await pollAnalysisRun(studyId, queued.run_id, (r) => setAnalysisLogs(r.logs || []));
-      if (run.status === 'failed') throw new Error(run.error || 'Analysis failed.');
-
-      setFindings(run.findings || []);
-      const validation = run.validation || {};
-      setNotice({
-        generated: run.generated,
-        scanned: validation.scanned || 0,
-        // From the run, not the picker: reports the window actually analyzed,
-        // which stays right even if the selector is changed afterwards.
-        periodDays: validation.period_days || null,
-        pipelineRunId: validation.pipeline_run_id || null,
-        skipped: run.skipped || [],
-        reasons: validation.rejection_reasons || {},
-        scrapedFirst: Boolean(run.scrape_run),
-        scrapeRun: run.scrape_run || null,
-      });
-      clearFindingFilters();
-    } catch (caught) {
-      setError(caught.message);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   const handleDeleteStudy = async () => {
     setDeleting(true);
     try {
@@ -735,6 +419,30 @@ export default function CompetitorWorkspace() {
     }
   };
 
+  // A confirmed channel is only *collected* once it exists as a row in
+  // `sources` linked to this study - that's what the scraper reads. Analysis
+  // used to trigger this implicitly before every run; with collection as the
+  // whole point of a study it's an explicit action instead, and the schedule
+  // save below also does it so turning tracking on can't leave a study
+  // scheduled to scrape nothing.
+  const runSyncSources = async ({ quiet = false } = {}) => {
+    if (!quiet) {
+      setSyncing(true);
+      setSyncNotice(null);
+    }
+    setError('');
+    try {
+      const result = await syncSources(studyId);
+      if (!quiet) setSyncNotice(result || {});
+      return result;
+    } catch (caught) {
+      setError(caught.message);
+      return null;
+    } finally {
+      if (!quiet) setSyncing(false);
+    }
+  };
+
   const openSchedule = () => {
     setScheduleDraft({
       repeat_enabled: Boolean(schedule?.repeat_enabled),
@@ -755,6 +463,7 @@ export default function CompetitorWorkspace() {
       });
       setScheduleState(result.schedule || null);
       setStudy((prev) => (prev ? { ...prev, ...result.schedule } : prev));
+      if (scheduleDraft.repeat_enabled) await runSyncSources({ quiet: true });
       setScheduleOpen(false);
     } catch (caught) {
       setError(caught.message);
@@ -958,10 +667,9 @@ export default function CompetitorWorkspace() {
   const stats = useMemo(() => {
     const tracked = competitors.filter((item) => item.status === 'tracked');
     const pendingChannels = competitors.reduce((sum, item) => sum + (item.pending_account_count || 0), 0);
-    const highImpact = findings.filter((item) => item.impact_level === 'high').length;
     const channellessTracked = tracked.filter((item) => !item.account_count).length;
-    return { tracked: tracked.length, pendingChannels, highImpact, channellessTracked };
-  }, [competitors, findings]);
+    return { tracked: tracked.length, pendingChannels, channellessTracked };
+  }, [competitors]);
 
   // Every competitor already carries its full `accounts` list from
   // listCompetitors() (see loadAll below) - no extra request needed to see
@@ -1044,12 +752,12 @@ export default function CompetitorWorkspace() {
           <p>
             {profile?.name ? (
               <>
-                Measured against <strong>{profile.name}</strong>
-                {profile.market ? ` in ${profile.market}` : ''}. Each card is one competitor: what
-                they are doing, what it means for you, and what to do about it.
+                Tracked against <strong>{profile.name}</strong>
+                {profile.market ? ` in ${profile.market}` : ''}. Confirm each competitor's channels
+                and they are collected on every run of this study.
               </>
             ) : (
-              'Add your business profile so competitor activity can be judged against it.'
+              'Add your business profile so competitor discovery has something to compare against.'
             )}
           </p>
         </div>
@@ -1067,12 +775,12 @@ export default function CompetitorWorkspace() {
               {discoveringChannels ? 'Finding channels...' : `Find channels (${stats.channellessTracked})`}
             </button>
           )}
-          <button type="button" className="cs-btn cs-btn-primary" onClick={() => setShowRunChoice(true)} disabled={analyzing}>
-            {analyzing ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-            {analyzing ? (runMode === 'scrape' ? 'Scraping & analysing...' : 'Analysing...') : 'Run analysis'}
-          </button>
           {canManage && (
             <>
+                  <button type="button" className="cs-btn cs-btn-primary" onClick={() => runSyncSources()} disabled={syncing}>
+                {syncing ? <span className="cs-spinner" /> : <RefreshCw size={15} />}
+                {syncing ? 'Syncing sources...' : 'Sync sources'}
+              </button>
               <button type="button" className="cs-btn" onClick={openProfile}>
                 <Building2 size={15} /> {profile ? 'Edit profile' : 'Add profile'}
               </button>
@@ -1100,13 +808,20 @@ export default function CompetitorWorkspace() {
         <DiscoveryLog logs={discoveryLogs} active={discoveringCompetitors || discoveringChannels} />
       ) : null}
 
-      {analyzing || analysisLogs.length ? (
-        <DiscoveryLog logs={analysisLogs} active={analyzing} />
-      ) : null}
-
       {error ? (
         <div className="cs-alert cs-alert-error">
           <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{error}</span>
+        </div>
+      ) : null}
+
+      {syncNotice ? (
+        <div className="cs-alert cs-alert-info">
+          <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            This study&rsquo;s confirmed channels are now linked as scrapable sources
+            {Number.isFinite(Number(syncNotice.synced)) ? ` (${syncNotice.synced})` : ''}. They are
+            collected on the next run of this study.
+          </span>
         </div>
       ) : null}
 
@@ -1128,8 +843,8 @@ export default function CompetitorWorkspace() {
           <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {stats.pendingChannels} channel{stats.pendingChannels === 1 ? '' : 's'} still awaiting
-            confirmation. Unconfirmed channels are not scraped, so their activity is missing from
-            these reports.{' '}
+            confirmation. Unconfirmed channels are not scraped, so nothing from them is
+            collected.{' '}
             <button type="button" onClick={() => setShowCompetitors(true)}
               style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}>
               Review them
@@ -1138,75 +853,21 @@ export default function CompetitorWorkspace() {
         </div>
       ) : null}
 
-      {notice ? (
-        <div className="cs-alert cs-alert-info">
-          <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            {notice.scrapedFirst ? (
-              <>
-                This study had no articles yet, so we scraped and enriched its sources first
-                {notice.scrapeRun?.articles_saved ? ` (${notice.scrapeRun.articles_saved} saved)` : ''}, then{' '}
-              </>
-            ) : null}
-            Generated {notice.generated} report{notice.generated === 1 ? '' : 's'} from{' '}
-            {notice.scanned} scanned article{notice.scanned === 1 ? '' : 's'}
-            {notice.pipelineRunId
-              ? ' from the selected pipeline run'
-              : notice.periodDays ? ` in the last ${notice.periodDays} days` : ''}.
-            {Object.keys(notice.reasons).length ? (
-              <>
-                {' '}Filtered out:{' '}
-                {Object.entries(notice.reasons)
-                  .map(([reason, count]) => `${count} ${reason.replace(/_/g, ' ')}`)
-                  .join(', ')}
-                .
-              </>
-            ) : null}
-            {notice.skipped.length ? (
-              <> {notice.skipped.length} competitor{notice.skipped.length === 1 ? '' : 's'} skipped —{' '}
-                {notice.skipped.map((item) => `${item.name}: ${item.reason}`).join(' ')}</>
-            ) : null}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="cs-view-tabs" role="tablist" aria-label="Switch workspace tab" style={{ marginBottom: 16 }}>
-        {WORKSPACE_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.value;
-          return (
-            <button key={tab.value} type="button" role="tab" aria-selected={isActive}
-              className={`cs-view-tab${isActive ? ' active' : ''}`} onClick={() => setActiveTab(tab.value)}>
-              <Icon size={14} /> {tab.label}
-            </button>
-          );
-        })}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
+        <StatTile icon={Radar} label="Tracked" value={stats.tracked} />
+        <StatTile icon={Link2} label="Total sources" value={sourceStats.total} />
+        <StatTile icon={ShieldCheck} label="Valid" value={sourceStats.valid} />
+        <StatTile icon={RefreshCw} label="Pending" value={sourceStats.pending}
+          tone={sourceStats.pending ? '#a16207' : undefined} />
+        <StatTile icon={CalendarClock} label="Last run"
+          value={study?.last_run_at ? relativeTime(study.last_run_at) : 'Never'} />
       </div>
-
-      {activeTab === 'sources' ? (
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
-          <StatTile icon={Link2} label="Total sources" value={sourceStats.total} />
-          <StatTile icon={ShieldCheck} label="Valid" value={sourceStats.valid} />
-          <StatTile icon={RefreshCw} label="Pending" value={sourceStats.pending}
-            tone={sourceStats.pending ? '#a16207' : undefined} />
-          <StatTile icon={X} label="Rejected" value={sourceStats.rejected} />
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
-          <StatTile icon={Radar} label="Tracked" value={stats.tracked} />
-          <StatTile icon={BarChart3} label="Reports" value={findings.length} />
-          <StatTile icon={TrendingUp} label="High impact" value={stats.highImpact}
-            tone={stats.highImpact ? '#b91c1c' : undefined} />
-          <StatTile icon={CalendarClock} label="Last run"
-            value={study?.last_run_at ? relativeTime(study.last_run_at) : 'Never'} />
-        </div>
-      )}
 
       {showCompetitors ? (
         <div className="cs-panel" style={{ marginBottom: 20 }}>
           <h2 className="cs-panel-title"><Layers size={16} /> Competitors</h2>
           <p className="cs-panel-hint">
-            Only tracked competitors are scraped and analysed. Ranked by size.
+            Only tracked competitors are scraped. Ranked by size.
           </p>
 
           <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid #eef1f6' }}>
@@ -1345,265 +1006,22 @@ export default function CompetitorWorkspace() {
         </div>
       ) : null}
 
-      {activeTab === 'sources' ? (
-        <SourcesPanel
-          sources={pagedSources}
-          filteredTotal={filteredSources.length}
-          total={allSources.length}
-          groupCounts={sourceGroupCounts}
-          search={sourceSearch}
-          onSearch={setSourceSearch}
-          groupFilter={sourceGroupFilter}
-          onGroupFilter={setSourceGroupFilter}
-          statusFilter={sourceStatusFilter}
-          onStatusFilter={setSourceStatusFilter}
-          onChooseCompetitors={() => setShowCompetitors(true)}
-          page={sourceSafePage}
-          totalPages={sourceTotalPages}
-          onPageChange={setSourcePage}
-        />
-      ) : (findings.length > 0 || hasFindingFilters) ? (
-        <>
-          <div className="cs-panel cs-findings-toolbar">
-            <label className="cs-search-field">
-              <Search size={16} />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search headline, summary, competitor..."
-              />
-            </label>
-
-            <select className="cs-select" value={impact} onChange={(event) => setImpact(event.target.value)}
-              aria-label="Filter by impact">
-              {IMPACT_FILTERS.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
-
-            <div className="filter-tabs-shell" style={{ margin: 0 }}>
-              <div className="filter-tab-buttons filter-mode-toggle" role="tablist" aria-label="Filter reports by">
-                <button type="button" role="tab" aria-selected={!findingsRunId}
-                  className={`source-type-tab ${!findingsRunId ? 'active' : ''}`}
-                  onClick={() => setFindingsRunId(null)}>
-                  Date range
-                </button>
-                {pipelineRuns.length > 0 ? (
-                  <button type="button" role="tab" aria-selected={!!findingsRunId}
-                    className={`source-type-tab ${findingsRunId ? 'active' : ''}`}
-                    onClick={() => setFindingsRunId(findingsRunId || pipelineRuns[0].id)}>
-                    Pipeline run
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            {findingsRunId ? (
-              pipelineRuns.length > 3 ? (
-                <select className="cs-select filter-run-select" value={findingsRunId}
-                  onChange={(event) => setFindingsRunId(event.target.value)}
-                  aria-label="Filter by pipeline run">
-                  {pipelineRuns.map((run, index) => (
-                    <option key={run.id} value={run.id}>{pipelineRunTitle(run, index)}</option>
-                  ))}
-                </select>
-              ) : (
-                <div className="filter-tab-buttons scrollable" role="tablist" aria-label="Filter by pipeline run">
-                  {pipelineRuns.map((run, index) => (
-                    <span key={run.id} className="filter-tab-run-item">
-                      {index > 0 ? <ChevronRight size={14} className="filter-tab-arrow" aria-hidden="true" /> : null}
-                      <button type="button" role="tab" aria-selected={findingsRunId === run.id}
-                        className={`source-type-tab ${findingsRunId === run.id ? 'active' : ''}`}
-                        onClick={() => setFindingsRunId(run.id)}>
-                        {pipelineRunTitle(run, index)}
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="cs-date-range">
-                <input type="date" className="cs-input" value={dateFrom}
-                  onChange={(event) => setDateFrom(event.target.value)} aria-label="From date" />
-                <span>to</span>
-                <input type="date" className="cs-input" value={dateTo}
-                  onChange={(event) => setDateTo(event.target.value)} aria-label="To date" />
-              </div>
-            )}
-
-            {hasFindingFilters ? (
-              <button type="button" className="cs-btn cs-btn-sm" onClick={clearFindingFilters}>
-                <X size={13} /> Clear filters
-              </button>
-            ) : null}
-
-            <div className="cs-view-tabs" role="tablist" aria-label="Switch report view">
-              {VIEW_MODES.map((mode) => {
-                const Icon = mode.icon;
-                const isActive = viewMode === mode.value;
-                return (
-                  <button key={mode.value} type="button" role="tab" aria-selected={isActive}
-                    className={`cs-view-tab${isActive ? ' active' : ''}`} onClick={() => changeViewMode(mode.value)}>
-                    <Icon size={14} /> {mode.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={{ opacity: findingsLoading ? 0.6 : 1, transition: 'opacity 0.15s ease' }}>
-            {findings.length ? (
-              viewMode === 'list' ? (
-                <div className="cs-finding-list">
-                  {findings.map((finding) => (
-                    <FindingRow key={finding.id} finding={finding}
-                      onOpen={(id) => navigate(`/competitors/${studyId}/reports/${id}`)} />
-                  ))}
-                </div>
-              ) : (
-                <div className="cs-card-grid">
-                  {findings.map((finding) => (
-                    <FindingCard key={finding.id} finding={finding}
-                      onOpen={(id) => navigate(`/competitors/${studyId}/reports/${id}`)} />
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="cs-empty">
-                <div className="cs-empty-icon"><Search size={20} /></div>
-                <h3>No matching reports</h3>
-                <p>Try adjusting your search, impact, or date filters.</p>
-                <button type="button" className="cs-btn" onClick={clearFindingFilters}>
-                  <X size={15} /> Clear filters
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="cs-empty">
-          <div className="cs-empty-icon"><Sparkles size={20} /></div>
-          <h3>No reports yet</h3>
-          <p>
-            {stats.tracked
-              ? 'Competitors are tracked but nothing has been analysed. Run the analysis to scrape fresh evidence or read what is already on file.'
-              : 'Track at least one competitor, confirm their channels, then run the analysis.'}
-          </p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {stats.tracked ? (
-              <button type="button" className="cs-btn cs-btn-primary" onClick={() => setShowRunChoice(true)} disabled={analyzing}>
-                {analyzing ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-                {analyzing ? (runMode === 'scrape' ? 'Scraping & analysing...' : 'Analysing...') : 'Run analysis'}
-              </button>
-            ) : (
-              <button type="button" className="cs-btn cs-btn-primary" onClick={() => setShowCompetitors(true)}>
-                <Layers size={15} /> Choose competitors
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showRunChoice ? (
-        <div className="confirm-modal-backdrop" role="presentation" onClick={() => setShowRunChoice(false)}>
-          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="run-analysis-title"
-            aria-describedby="run-analysis-message" onClick={(event) => event.stopPropagation()}>
-            <div className="confirm-modal-header">
-              <h2 id="run-analysis-title" className="confirm-modal-title">Run analysis</h2>
-              <button type="button" className="confirm-modal-close" onClick={() => setShowRunChoice(false)} aria-label="Close dialog">
-                <X size={18} />
-              </button>
-            </div>
-
-            <p id="run-analysis-message" className="confirm-modal-message">
-              Scrape this study&rsquo;s sources for fresh articles first, or analyse the evidence already on file?
-              {' '}{study?.last_run_at ? `Last scraped ${relativeTime(study.last_run_at)}.` : 'This study has never been scraped.'}
-            </p>
-
-            <div className="cs-run-period" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div className="filter-tabs-shell" style={{ margin: 0 }}>
-                <div className="filter-tab-buttons filter-mode-toggle" role="tablist" aria-label="Evidence source">
-                  <button type="button" role="tab" aria-selected={!pipelineRunId}
-                    className={`source-type-tab ${!pipelineRunId ? 'active' : ''}`}
-                    onClick={() => setPipelineRunId(null)}>
-                    Date range
-                  </button>
-                  {pipelineRuns.length > 0 ? (
-                    <button type="button" role="tab" aria-selected={!!pipelineRunId}
-                      className={`source-type-tab ${pipelineRunId ? 'active' : ''}`}
-                      onClick={() => setPipelineRunId(pipelineRunId || pipelineRuns[0].id)}>
-                      Pipeline run
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              {pipelineRunId ? (
-                <select className="cs-select filter-run-select" value={pipelineRunId}
-                  onChange={(event) => setPipelineRunId(event.target.value)}
-                  aria-label="Pipeline run to analyze">
-                  {pipelineRuns.map((run, index) => (
-                    <option key={run.id} value={run.id}>{pipelineRunTitle(run, index)}</option>
-                  ))}
-                </select>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <label htmlFor="cs-analysis-period">Look back over</label>
-                  <select id="cs-analysis-period" className="cs-select" style={{ flex: 1 }} value={periodDays}
-                    onChange={(event) => setPeriodDays(Number(event.target.value))}>
-                    {ANALYSIS_PERIODS.map((option) => (
-                      <option key={option.days} value={option.days}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <small>
-                {pipelineRunId
-                  ? 'Only the articles that specific pipeline run gathered are used as evidence - no new scrape runs.'
-                  : (<>
-                      Evidence outside this window is ignored, and each report says which window it covers.
-                      Pages scraped from a competitor&rsquo;s own site are dated by when they were fetched, so
-                      a longer window mainly helps with competitors the news covers rarely.
-                    </>)}
-              </small>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '4px 0 6px' }}>
-              {pipelineRunId ? (
-                <button type="button" onClick={() => runAnalysis(false)}
-                  className="cs-btn cs-btn-primary"
-                  style={{ justifyContent: 'flex-start', width: '100%' }}>
-                  <Sparkles size={15} />
-                  <span style={{ textAlign: 'left', flex: 1 }}>Analyze this pipeline run</span>
-                </button>
-              ) : (
-                <>
-                  <button type="button" onClick={() => runAnalysis(true)}
-                    className={`cs-btn${likelyNeedsScrape ? ' cs-btn-primary' : ''}`}
-                    style={{ justifyContent: 'flex-start', width: '100%' }}>
-                    <RefreshCw size={15} />
-                    <span style={{ textAlign: 'left', flex: 1 }}>Scrape &amp; analyze</span>
-                    {likelyNeedsScrape ? <span style={{ fontSize: '0.72rem', opacity: 0.85 }}>Recommended</span> : null}
-                  </button>
-                  <button type="button" onClick={() => runAnalysis(false)}
-                    className={`cs-btn${likelyNeedsScrape ? '' : ' cs-btn-primary'}`}
-                    style={{ justifyContent: 'flex-start', width: '100%' }}>
-                    <Sparkles size={15} />
-                    <span style={{ textAlign: 'left', flex: 1 }}>Analyze existing articles</span>
-                    {likelyNeedsScrape ? null : <span style={{ fontSize: '0.72rem', opacity: 0.85 }}>Recommended</span>}
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="confirm-modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setShowRunChoice(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SourcesPanel
+        sources={pagedSources}
+        filteredTotal={filteredSources.length}
+        total={allSources.length}
+        groupCounts={sourceGroupCounts}
+        search={sourceSearch}
+        onSearch={setSourceSearch}
+        groupFilter={sourceGroupFilter}
+        onGroupFilter={setSourceGroupFilter}
+        statusFilter={sourceStatusFilter}
+        onStatusFilter={setSourceStatusFilter}
+        onChooseCompetitors={() => setShowCompetitors(true)}
+        page={sourceSafePage}
+        totalPages={sourceTotalPages}
+        onPageChange={setSourcePage}
+      />
 
       <ConfirmModal
         open={editOpen}
@@ -1647,7 +1065,7 @@ export default function CompetitorWorkspace() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', marginBottom: 14 }}>
           <input type="checkbox" checked={scheduleDraft.repeat_enabled}
             onChange={(event) => setScheduleDraft({ ...scheduleDraft, repeat_enabled: event.target.checked })} />
-          Scrape and re-analyse automatically
+          Scrape automatically
         </label>
         {scheduleDraft.repeat_enabled ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '0.88rem' }}>

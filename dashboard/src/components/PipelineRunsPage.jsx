@@ -146,7 +146,7 @@ export default function PipelineRunsPage({ projects = [] }) {
           </div>
           <h1 className="admin-page-title">Pipeline Runs</h1>
           <p className="admin-page-subtitle">
-            Independent history view for scraper and enrich jobs.
+            Independent history view for every scrape run.
           </p>
         </div>
 

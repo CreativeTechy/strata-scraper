@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Calendar, CarFront, Tag, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, FolderInput, X } from 'lucide-react';
+import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, FolderInput, Layers, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { useAuth } from '../auth/useAuth.js';
-import { computeOverallTone } from '../lib/tone.js';
 import '../styles/Articles.css';
 
-const SENTIMENTS = ['all', 'positive', 'negative', 'neutral', 'mixed'];
 const SORT_OPTIONS = [
   { value: 'published.desc', label: 'Newest first' },
   { value: 'published.asc', label: 'Oldest first' },
-  { value: 'relevance_score.desc', label: 'Highest relevance' },
-  { value: 'relevance_score.asc', label: 'Lowest relevance' },
+  { value: 'fetched_at.desc', label: 'Recently scraped' },
   { value: 'created_at.desc', label: 'Recently saved' },
+  { value: 'source.asc', label: 'Source (A-Z)' },
 ];
 
 const PAGE_SIZES = [12, 24, 48, 96];
@@ -103,12 +101,6 @@ function ImportProgressBanner({ run, onDismiss }) {
   );
 }
 
-function prettyLabel(value) {
-  return String(value || '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function articleDate(value) {
   if (!value) return 'Unknown date';
   const parsed = new Date(value);
@@ -119,17 +111,6 @@ function scrapedAtLabel(value) {
   if (!value) return 'Unknown';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-}
-
-function formatMatchScore(value) {
-  const score = Number(value);
-  if (!Number.isFinite(score)) return '';
-  return score.toFixed(2);
-}
-
-function confidencePct(value) {
-  const score = Number(value);
-  return Number.isFinite(score) ? `${Math.round(score * 100)}%` : null;
 }
 
 function getPageNumbers(currentPage, totalPages) {
@@ -180,7 +161,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
   }, [projectId]);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [sentiment, setSentiment] = useState('all');
   const [projectFilter, setProjectFilter] = useState(() => (normalizedProjectId != null ? String(normalizedProjectId) : 'all'));
   const [sourceFilter, setSourceFilter] = useState('all');
   const [limit, setLimit] = useState(24);
@@ -206,12 +186,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
     }
   });
   const [expandedRows, setExpandedRows] = useState(() => new Set());
-  const [detailArticleId, setDetailArticleId] = useState(null);
-  const [detailData, setDetailData] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState('');
-  const [detailReprocessing, setDetailReprocessing] = useState(false);
-  const [detailActionMessage, setDetailActionMessage] = useState('');
   const hasArticlesRef = useRef(false);
   const searchInputRef = useRef(null);
   const importInputRef = useRef(null);
@@ -219,7 +193,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const { hasPermission } = useAuth();
   const canDeleteAll = hasPermission('articles.delete');
   const canImport = hasPermission('articles.import');
-  const canReprocess = hasPermission('pipeline.run');
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(searchInput.trim()), 250);
@@ -228,7 +201,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
   useEffect(() => {
     setOffset(0);
-  }, [search, sentiment, projectFilter, sourceFilter, limit, sort, scrapedFrom, scrapedTo]);
+  }, [search, projectFilter, sourceFilter, limit, sort, scrapedFrom, scrapedTo]);
 
   const activeProject = useMemo(() => {
     if (projectFilter === 'all') return null;
@@ -255,7 +228,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
       try {
         const params = new URLSearchParams();
         if (search) params.set('search', search);
-        if (sentiment !== 'all') params.set('sentiment', sentiment);
         if (projectFilter !== 'all') params.set('project_id', String(projectFilter));
         if (sourceFilter !== 'all') params.set('source_url', sourceFilter);
         if (scrapedFrom) params.set('scraped_from', scrapedFrom);
@@ -287,36 +259,11 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
     loadArticles();
     return () => controller.abort();
-  }, [search, sentiment, projectFilter, sourceFilter, limit, offset, sort, scrapedFrom, scrapedTo, reloadToken]);
+  }, [search, projectFilter, sourceFilter, limit, offset, sort, scrapedFrom, scrapedTo, reloadToken]);
 
   useEffect(() => {
     hasArticlesRef.current = articles.length > 0;
   }, [articles.length]);
-
-  useEffect(() => {
-    if (detailArticleId == null) return undefined;
-    const controller = new AbortController();
-    async function loadDetail() {
-      setDetailLoading(true);
-      setDetailError('');
-      setDetailActionMessage('');
-      try {
-        const res = await fetch(`/api/articles/${detailArticleId}/analysis`, { signal: controller.signal });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.detail || data?.error || `Failed to load analysis (${res.status})`);
-        setDetailData(data?.analysis || null);
-      } catch (err) {
-        if (err?.name !== 'AbortError') {
-          setDetailData(null);
-          setDetailError(err?.message || 'Failed to load analysis details.');
-        }
-      } finally {
-        setDetailLoading(false);
-      }
-    }
-    loadDetail();
-    return () => controller.abort();
-  }, [detailArticleId]);
 
   const changeViewMode = (mode) => {
     setViewMode(mode);
@@ -334,29 +281,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
       else next.add(id);
       return next;
     });
-  };
-
-  const closeDetailModal = () => {
-    setDetailArticleId(null);
-    setDetailData(null);
-    setDetailError('');
-    setDetailActionMessage('');
-  };
-
-  const handleReprocess = async () => {
-    if (detailArticleId == null || detailReprocessing) return;
-    setDetailReprocessing(true);
-    setDetailActionMessage('');
-    try {
-      const res = await fetch(`/api/articles/${detailArticleId}/reprocess`, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || data?.error || `Failed to reprocess article (${res.status})`);
-      setDetailActionMessage('Reprocessing started - reopen this panel in a moment to see the updated result.');
-    } catch (err) {
-      setDetailActionMessage(err?.message || 'Failed to reprocess article.');
-    } finally {
-      setDetailReprocessing(false);
-    }
   };
 
   const start = total === 0 ? 0 : offset + 1;
@@ -393,7 +317,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
       }
       setSearchInput('');
       setSearch('');
-      setSentiment('all');
       setProjectFilter(normalizedProjectId != null ? String(normalizedProjectId) : 'all');
       setSourceFilter('all');
       setScrapedFrom('');
@@ -414,7 +337,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
-      if (sentiment !== 'all') params.set('sentiment', sentiment);
       if (projectFilter !== 'all') params.set('project_id', String(projectFilter));
       if (sourceFilter !== 'all') params.set('source_url', sourceFilter);
       if (scrapedFrom) params.set('scraped_from', scrapedFrom);
@@ -541,7 +463,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
             </div>
             <h1 className="admin-page-title">Articles</h1>
             <p className="admin-page-subtitle">
-              Server-side search, sentiment, project, sort, and pagination powered by the API.
+              Server-side search, project, source, date-range, sort, and pagination powered by the API.
               {project ? ` Dashboard project: ${project.name}.` : ' Showing all projects.'}
             </p>
           </div>
@@ -605,95 +527,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
             await handleDeleteAll();
           }}
         />
-
-        <ConfirmModal
-          open={detailArticleId != null}
-          title="Analysis details"
-          hideCancel={!canReprocess}
-          cancelLabel="Close"
-          confirmLabel={canReprocess ? (detailReprocessing ? 'Reprocessing...' : 'Reprocess') : 'Close'}
-          onClose={closeDetailModal}
-          onConfirm={canReprocess ? handleReprocess : closeDetailModal}
-        >
-          {detailLoading ? (
-            <p className="subtitle">Loading analysis details...</p>
-          ) : detailError ? (
-            <p style={{ color: '#b42318' }}>{detailError}</p>
-          ) : detailData ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span
-                  className={`badge ${
-                    detailData.analysis_status === 'failed' ? 'negative' : detailData.analysis_status === 'success' ? 'positive' : 'neutral'
-                  }`}
-                >
-                  {prettyLabel(detailData.analysis_status || 'unknown')}
-                </span>
-                {detailData.analysis_error ? <span className="badge negative">{detailData.analysis_error}</span> : null}
-              </div>
-
-              <div>
-                <strong>Sentiment:</strong> {prettyLabel(detailData.sentiment)}
-                {confidencePct(detailData.confidence?.sentiment) && (
-                  <span style={{ marginLeft: 6, color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                    (confidence {confidencePct(detailData.confidence.sentiment)}
-                    {detailData.confidence?.sentiment_low_confidence ? ', low confidence' : ''})
-                  </span>
-                )}
-              </div>
-              <div>
-                <strong>Category:</strong> {prettyLabel(detailData.article_category)}
-                {confidencePct(detailData.confidence?.category) && (
-                  <span style={{ marginLeft: 6, color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                    (confidence {confidencePct(detailData.confidence.category)})
-                  </span>
-                )}
-              </div>
-              <div>
-                <strong>Writer tone:</strong> {prettyLabel(detailData.writer_tone)}
-                {confidencePct(detailData.confidence?.writer_tone) && (
-                  <span style={{ marginLeft: 6, color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                    (confidence {confidencePct(detailData.confidence.writer_tone)})
-                  </span>
-                )}
-              </div>
-              <div>
-                <strong>Article tone:</strong> {prettyLabel(detailData.article_tone)}
-                {confidencePct(detailData.confidence?.article_tone) && (
-                  <span style={{ marginLeft: 6, color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                    (confidence {confidencePct(detailData.confidence.article_tone)})
-                  </span>
-                )}
-              </div>
-              <div>
-                <strong>Overall tone:</strong> {prettyLabel(detailData.overall_tone)}
-              </div>
-              {detailData.source_language ? (
-                <div>
-                  <strong>Source language:</strong> {detailData.source_language.toUpperCase()}
-                  {confidencePct(detailData.source_language_confidence) && (
-                    <span style={{ marginLeft: 6, color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                      (confidence {confidencePct(detailData.source_language_confidence)})
-                    </span>
-                  )}
-                </div>
-              ) : null}
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-light)', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 10 }}>
-                <div>
-                  Models - sentiment: {detailData.models?.sentiment || 'n/a'}, classification: {detailData.models?.classification || 'n/a'}, extraction:{' '}
-                  {detailData.models?.extraction || 'n/a'}
-                </div>
-                <div style={{ marginTop: 4 }}>
-                  Attempts: {detailData.processing?.attempt_count ?? 0} - Last run:{' '}
-                  {detailData.processing?.finished_at ? new Date(detailData.processing.finished_at).toLocaleString() : 'Not yet'}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="subtitle">No analysis data available for this article.</p>
-          )}
-          {detailActionMessage ? <p style={{ marginTop: 10, fontSize: '0.85rem', color: 'var(--text-light)' }}>{detailActionMessage}</p> : null}
-        </ConfirmModal>
 
         <div className="articles-filters-row">
           <div className="glass-card articles-filter-panel">
@@ -771,14 +604,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 </button>
               ) : null}
             </label>
-
-            <select className="filter-select" value={sentiment} onChange={(e) => setSentiment(e.target.value)}>
-              {SENTIMENTS.map((value) => (
-                <option key={value} value={value}>
-                  {value === 'all' ? 'All sentiments' : value[0].toUpperCase() + value.slice(1)}
-                </option>
-              ))}
-            </select>
 
             <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
               {SORT_OPTIONS.map((option) => (
@@ -981,9 +806,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
                           onClick={() => toggleRowExpanded(article.id)}
                           aria-expanded={isExpanded}
                         >
-                          <span className={`badge ${article.sentiment?.toLowerCase() || 'neutral'}`}>
-                            {article.sentiment || 'Neutral'}
-                          </span>
                           <span className="article-row-title">{article.title || 'Untitled article'}</span>
                           <span className="article-row-source">{article.source || 'Unknown source'}</span>
                           <span className="article-row-date">
@@ -995,75 +817,34 @@ export default function ArticlesPage({ project = null, projectId = null, project
                         {isExpanded ? (
                           <div className="article-row-details">
                             <div className="article-meta">
-                              <span className="badge category">
-                                {prettyLabel(article.article_category || article.category || 'general_article')}
-                              </span>
-                              {article.source_language ? (
-                                <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Detected source language">
-                                  Language: {article.source_language.toUpperCase()}
-                                </span>
-                              ) : null}
-                              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Writer tone">
-                                Writer: {prettyLabel(article.writer_tone || 'neutral')}
-                              </span>
-                              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Article tone">
-                                Article: {prettyLabel(article.article_tone || 'neutral')}
-                              </span>
-                              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Overall tone (derived from writer + article tone)">
-                                Overall: {prettyLabel(computeOverallTone(article.article_tone, article.writer_tone))}
-                              </span>
                               <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="When the pipeline scraped this article">
                                 <Calendar size={11} style={{ marginRight: 4 }} /> Scraped: {scrapedAtLabel(article.fetched_at)}
                               </span>
-                              {article.relevance_score != null && (
-                                <span className="badge score">Score: {Number(article.relevance_score).toFixed(1)}/10</span>
-                              )}
-                              {article.project_similarity_score != null && (
-                                <span className="badge score">Project match: {formatMatchScore(article.project_similarity_score)}</span>
-                              )}
+                              {article.author ? (
+                                <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                                  By {article.author}
+                                </span>
+                              ) : null}
+                              {article.story_id ? (
+                                <span
+                                  className="panel-chip muted"
+                                  style={{ textTransform: 'none', letterSpacing: 0 }}
+                                  title="Syndication group: articles whose bodies are near-identical share one story group"
+                                >
+                                  <Layers size={11} style={{ marginRight: 4 }} /> Story #{article.story_id}
+                                </span>
+                              ) : null}
+                              {article.verified ? <span className="badge positive">Verified source</span> : null}
                             </div>
 
                             <p className="article-summary">
-                              {article.summary || article.insight_json?.summary || (article.text ? `${article.text.substring(0, 220)}...` : 'No summary available.')}
+                              {article.text ? `${article.text.substring(0, 400)}...` : 'No text captured.'}
                             </p>
-
-                            {article.insight_json?.frequent_ideas?.length ? (
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                                {article.insight_json.frequent_ideas.slice(0, 3).map((item) => (
-                                  <span key={item.idea} className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                                    {item.idea}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-
-                            {(article.brands?.length > 0 || article.car_models?.length > 0) && (
-                              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
-                                {article.brands?.slice(0, 4).map((brand) => (
-                                  <span key={brand} style={{ fontSize: '0.75rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                    <Tag size={12} /> {brand}
-                                  </span>
-                                ))}
-                                {article.car_models?.slice(0, 4).map((model) => (
-                                  <span key={model} style={{ fontSize: '0.75rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                    <CarFront size={12} /> {model}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
 
                             <div className="article-row-details-actions">
                               <a href={article.url} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ textDecoration: 'none' }}>
                                 <ExternalLink size={13} /> Open original
                               </a>
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                onClick={() => setDetailArticleId(article.id)}
-                                title="View analysis details"
-                              >
-                                <Info size={13} /> Analysis details
-                              </button>
                             </div>
                           </div>
                         ) : null}
@@ -1088,45 +869,20 @@ export default function ArticlesPage({ project = null, projectId = null, project
                     >
                       <div className="article-header">
                         <div className="article-meta">
-                          <span className={`badge ${article.sentiment?.toLowerCase() || 'neutral'}`}>
-                            {article.sentiment || 'Neutral'}
-                          </span>
-                          <span className="badge category">
-                            {prettyLabel(article.article_category || article.category || 'general_article')}
-                          </span>
-                          {article.source_language ? (
-                            <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Detected source language">
-                              Language: {article.source_language.toUpperCase()}
-                            </span>
-                          ) : null}
-                          <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Writer tone">
-                            Writer: {prettyLabel(article.writer_tone || 'neutral')}
-                          </span>
-                          <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Article tone">
-                            Article: {prettyLabel(article.article_tone || 'neutral')}
-                          </span>
-                          <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="Overall tone (derived from writer + article tone)">
-                            Overall: {prettyLabel(computeOverallTone(article.article_tone, article.writer_tone))}
-                          </span>
                           <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="When the pipeline scraped this article">
                             <Calendar size={11} style={{ marginRight: 4 }} /> Scraped: {scrapedAtLabel(article.fetched_at)}
                           </span>
-                          {article.relevance_score != null && (
-                            <span className="badge score">Score: {Number(article.relevance_score).toFixed(1)}/10</span>
-                          )}
-                          {article.project_similarity_score != null && (
-                            <span className="badge score">Project match: {formatMatchScore(article.project_similarity_score)}</span>
-                          )}
+                          {article.story_id ? (
+                            <span
+                              className="panel-chip muted"
+                              style={{ textTransform: 'none', letterSpacing: 0 }}
+                              title="Syndication group: articles whose bodies are near-identical share one story group"
+                            >
+                              <Layers size={11} style={{ marginRight: 4 }} /> Story #{article.story_id}
+                            </span>
+                          ) : null}
+                          {article.verified ? <span className="badge positive">Verified source</span> : null}
                         </div>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.72rem', flexShrink: 0 }}
-                          onClick={() => setDetailArticleId(article.id)}
-                          title="View analysis details"
-                        >
-                          <Info size={13} /> Details
-                        </button>
                       </div>
 
                       <h3 className="article-title">
@@ -1136,33 +892,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
                       </h3>
 
                       <p className="article-summary">
-                        {article.summary || article.insight_json?.summary || (article.text ? `${article.text.substring(0, 160)}...` : 'No summary available.')}
+                        {article.text ? `${article.text.substring(0, 220)}...` : 'No text captured.'}
                       </p>
-
-                      {article.insight_json?.frequent_ideas?.length ? (
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                          {article.insight_json.frequent_ideas.slice(0, 3).map((item) => (
-                            <span key={item.idea} className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                              {item.idea}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {(article.brands?.length > 0 || article.car_models?.length > 0) && (
-                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
-                          {article.brands?.slice(0, 2).map((brand) => (
-                            <span key={brand} style={{ fontSize: '0.75rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <Tag size={12} /> {brand}
-                            </span>
-                          ))}
-                          {article.car_models?.slice(0, 2).map((model) => (
-                            <span key={model} style={{ fontSize: '0.75rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <CarFront size={12} /> {model}
-                            </span>
-                          ))}
-                        </div>
-                      )}
 
                       <div className="article-footer">
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1183,7 +914,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
                     <Search size={18} />
                   </div>
                   <strong>No articles found</strong>
-                  <span>Try adjusting your search, sentiment, source, date range, or project filters.</span>
+                  <span>Try adjusting your search, source, date range, or project filters.</span>
                 </div>
               </div>
             )}

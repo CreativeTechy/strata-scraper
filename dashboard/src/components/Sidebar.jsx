@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
-  BarChart3,
   GitMerge,
-  MessageSquare,
   Rss,
   Newspaper,
   Database,
-  ScanSearch,
   CalendarDays,
   Radar,
   Users,
@@ -22,19 +19,17 @@ import {
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 
-// The two experiences answer different questions and are kept visibly apart:
-// "Insights" is what people are saying (sentiment, opinions); "Monitoring" is
-// the two ongoing watch programs (your own brand's opinion monitor and rival
-// companies' competitor analysis). Mixing them in one flat list is what made
-// the old navigation ambiguous.
+// Kept visibly apart by what they're for: "Collection" is the data itself,
+// "Monitoring" is the two ongoing watch programs that decide what gets
+// collected (your own brand's opinion monitor and rival companies' competitor
+// analysis), "Setup" is the plumbing that runs it. Mixing them in one flat
+// list is what made the old navigation ambiguous.
 const NAV_SECTIONS = [
   {
-    label: 'Insights',
+    label: 'Collection',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/reports', label: 'Reports', icon: BarChart3 },
       { to: '/articles', label: 'Articles', icon: Newspaper },
-      { to: '/intelligence', label: 'Copilot', icon: MessageSquare },
     ],
   },
   {
@@ -50,7 +45,6 @@ const NAV_SECTIONS = [
       { to: '/sources', label: 'Sources', icon: Rss },
       { to: '/workflow', label: 'Manual Run', icon: GitMerge },
       { to: '/pipeline-runs', label: 'Pipeline Runs', icon: Database },
-      { to: '/analysis', label: 'Performance Logs', icon: ScanSearch },
     ],
   },
 ];

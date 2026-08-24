@@ -2,18 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ConfirmModal from './ConfirmModal';
-import DemographicSentimentChart from './DemographicSentimentChart';
 import { useAuth } from '../auth/useAuth.js';
 import {
   ArrowLeft,
-  BarChart3,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Hash,
-  Lightbulb,
   Link2,
   Loader2,
+  Newspaper,
+  Rss,
   MapPin,
   AtSign,
   Tag,
@@ -68,6 +67,12 @@ function prettyLabel(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function scrapedLabel(value) {
+  if (!value) return 'Never';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+}
+
 export default function ProjectDetailPage({
   projects = [],
   sources = [],
@@ -85,12 +90,6 @@ export default function ProjectDetailPage({
   const [articleStats, setArticleStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [seenProjectId, setSeenProjectId] = useState(null);
-  const [ideaClusters, setIdeaClusters] = useState({ clusters: [], total: 0, limit: 10, offset: 0 });
-  const [ideaClustersLoading, setIdeaClustersLoading] = useState(false);
-  const [ideaClustersError, setIdeaClustersError] = useState('');
-  const [ideaOffset, setIdeaOffset] = useState(0);
-  const [openingClusterId, setOpeningClusterId] = useState(null);
-  const [clusterOpenErrors, setClusterOpenErrors] = useState({});
 
   const project = useMemo(
     () => projects.find((item) => Number(item.id) === Number(params.projectId)) || null,
@@ -103,9 +102,6 @@ export default function ProjectDetailPage({
     setSeenProjectId(project?.id ?? null);
     setSourcesPage(1);
     setActiveSourceTab('all');
-    setIdeaOffset(0);
-    setOpeningClusterId(null);
-    setClusterOpenErrors({});
   }
 
   useEffect(() => {
@@ -129,78 +125,6 @@ export default function ProjectDetailPage({
     loadArticleStats();
     return () => controller.abort();
   }, [project?.id]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    async function loadIdeaClusters() {
-      if (!project?.id) {
-        setIdeaClusters({ clusters: [], total: 0, limit: 10, offset: 0 });
-        return;
-      }
-      setIdeaClustersLoading(true);
-      setIdeaClustersError('');
-      try {
-        const params = new URLSearchParams({ limit: '10', offset: String(ideaOffset) });
-        const res = await fetch(`/api/projects/${project.id}/idea-clusters?${params.toString()}`, { signal: controller.signal });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.detail || data?.error || `Failed to load frequent ideas (${res.status})`);
-        setIdeaClusters({
-          clusters: Array.isArray(data?.clusters) ? data.clusters : [],
-          total: Number(data?.total) || 0,
-          limit: Number(data?.limit) || 10,
-          offset: Number(data?.offset) || 0,
-        });
-      } catch (err) {
-        if (err?.name !== 'AbortError') {
-          setIdeaClusters({ clusters: [], total: 0, limit: 10, offset: 0 });
-          setIdeaClustersError(err?.message || 'Failed to load frequent ideas.');
-        }
-      } finally {
-        setIdeaClustersLoading(false);
-      }
-    }
-    loadIdeaClusters();
-    return () => controller.abort();
-  }, [project?.id, ideaOffset]);
-
-  // A cluster's persisted frequency can span far more articles than fit in
-  // this page's list - fetch a large-but-bounded page of its representative
-  // articles up front, then hand them to TopicDetailPage via router state so
-  // its chart/attribution can be built from real data without a second fetch.
-  const openClusterTopic = async (cluster) => {
-    setOpeningClusterId(cluster.id);
-    setClusterOpenErrors((current) => ({ ...current, [cluster.id]: '' }));
-    try {
-      const res = await fetch(`/api/projects/${project.id}/idea-clusters/${cluster.id}/articles?limit=200`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || data?.error || `Failed to load articles (${res.status})`);
-      const clusterSources = (Array.isArray(data?.articles) ? data.articles : []).map((article) => ({
-        id: article.id,
-        url: article.url,
-        title: article.title,
-        pipelineRunId: article.pipeline_run_id,
-        published: article.published,
-        source: article.source,
-        summary: article.summary,
-        sentiment: article.sentiment,
-      }));
-      navigate(`/projects/${project.id}/topics`, {
-        state: {
-          idea: cluster.idea,
-          type: cluster.type,
-          category: cluster.category,
-          frequencyEstimate: cluster.frequency_estimate,
-          sources: clusterSources,
-          backTo: '/dashboard',
-          backLabel: 'Back to Dashboard',
-        },
-      });
-    } catch (err) {
-      setClusterOpenErrors((current) => ({ ...current, [cluster.id]: err?.message || 'Failed to load articles for this idea.' }));
-    } finally {
-      setOpeningClusterId(null);
-    }
-  };
 
   const assignedSources = useMemo(() => {
     if (!project) return [];
@@ -579,200 +503,56 @@ export default function ProjectDetailPage({
         style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 24 }}
       >
         <div className="panel-header-tight">
-          <strong style={{ fontSize: '1rem' }}>Article Insights</strong>
-          <span className="panel-chip">{(articleStats?.total || 0).toLocaleString()} analyzed articles</span>
+          <strong style={{ fontSize: '1rem' }}>Collected articles</strong>
+          <span className="panel-chip">{(articleStats?.total || 0).toLocaleString()} stored</span>
         </div>
 
         {statsLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-light)', fontSize: '0.86rem', padding: '12px 0' }}>
-            <Loader2 size={16} className="spin" /> Loading article insights...
+            <Loader2 size={16} className="spin" /> Loading collection summary...
           </div>
         ) : !articleStats?.total ? (
           <div className="admin-empty-state" style={{ padding: '20px 12px' }}>
             <div className="admin-empty-state-icon">
-              <BarChart3 size={18} />
+              <Newspaper size={18} />
             </div>
-            <strong>No analyzed articles yet</strong>
-            <span>Run the pipeline for this project to see tone and sentiment insights here.</span>
+            <strong>Nothing collected yet</strong>
+            <span>Run the pipeline for this project to start storing articles from its sources.</span>
           </div>
         ) : (
           <>
             <div className="project-detail-summary-grid">
               <div className="admin-item-card" style={{ margin: 0 }}>
-                <div className="admin-item-meta" style={{ marginBottom: 8 }}>
-                  <span>Overall Mood</span>
-                </div>
-                <strong style={{ fontSize: '0.98rem' }}>{prettyLabel(articleStats?.insights?.overall_mood || 'neutral')}</strong>
+                <span className="admin-item-label">First scraped</span>
+                <strong style={{ fontSize: '0.98rem' }}>{scrapedLabel(articleStats?.first_scraped_at)}</strong>
               </div>
-
               <div className="admin-item-card" style={{ margin: 0 }}>
-                <div className="admin-item-meta" style={{ marginBottom: 8 }}>
-                  <span>Overall Tone</span>
+                <span className="admin-item-label">Last scraped</span>
+                <strong style={{ fontSize: '0.98rem' }}>{scrapedLabel(articleStats?.last_scraped_at)}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span className="admin-item-label">
+                <Rss size={12} style={{ marginRight: 4 }} /> Articles by source
+              </span>
+              {(articleStats?.sources || []).map((row) => (
+                <div
+                  key={row.source}
+                  className="admin-item-card"
+                  style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+                >
+                  <strong style={{ fontSize: '0.9rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {row.source}
+                  </strong>
+                  <span className="panel-chip" style={{ flexShrink: 0 }}>
+                    {Number(row.count || 0).toLocaleString()} articles
+                  </span>
                 </div>
-                <strong style={{ fontSize: '0.98rem' }}>{prettyLabel(articleStats?.insights?.overall_tone || 'neutral')}</strong>
-              </div>
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Writer Tone Breakdown</strong>
-              </div>
-              <div className="admin-item-chips">
-                {(articleStats?.insights?.writer_tone_breakdown || []).length ? (
-                  articleStats.insights.writer_tone_breakdown.map((item) => (
-                    <span key={item.tone} className="admin-tag muted">{prettyLabel(item.tone)} ({item.count})</span>
-                  ))
-                ) : (
-                  <span className="admin-tag muted">No data yet</span>
-                )}
-              </div>
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Article Tone Breakdown</strong>
-              </div>
-              <div className="admin-item-chips">
-                {(articleStats?.insights?.article_tone_breakdown || []).length ? (
-                  articleStats.insights.article_tone_breakdown.map((item) => (
-                    <span key={item.tone} className="admin-tag muted">{prettyLabel(item.tone)} ({item.count})</span>
-                  ))
-                ) : (
-                  <span className="admin-tag muted">No data yet</span>
-                )}
-              </div>
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Sentiment by Region</strong>
-              </div>
-              <DemographicSentimentChart title="Sentiment by region" data={articleStats?.insights?.region_breakdown} />
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Sentiment by Gender</strong>
-              </div>
-              <DemographicSentimentChart title="Sentiment by gender" data={articleStats?.insights?.gender_breakdown} />
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Sentiment by Age Range</strong>
-              </div>
-              <DemographicSentimentChart title="Sentiment by age range" data={articleStats?.insights?.age_range_breakdown} />
-            </div>
-
-            <div className="admin-item-card" style={{ margin: 0 }}>
-              <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                <strong style={{ fontSize: '0.94rem' }}>Sentiment by Segment</strong>
-              </div>
-              <DemographicSentimentChart title="Sentiment by segment" data={articleStats?.insights?.segment_breakdown} />
+              ))}
             </div>
           </>
         )}
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.15 }}
-        className="glass-card"
-        style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 24 }}
-      >
-        <div className="panel-header-tight">
-          <strong style={{ fontSize: '1rem' }}>Frequent Ideas</strong>
-          <span className="panel-chip">{ideaClusters.total.toLocaleString()} clusters</span>
-        </div>
-        <p className="subtitle" style={{ margin: 0 }}>
-          Ideas repeated across analyzed articles for this project, accumulated across every pipeline run.
-        </p>
-
-        {ideaClustersError ? (
-          <div className="admin-empty-state" style={{ padding: '20px 12px' }}>
-            <div className="admin-empty-state-icon">
-              <Lightbulb size={18} />
-            </div>
-            <strong>Couldn't load frequent ideas</strong>
-            <span>{ideaClustersError}</span>
-          </div>
-        ) : ideaClustersLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-light)', fontSize: '0.86rem', padding: '12px 0' }}>
-            <Loader2 size={16} className="spin" /> Loading frequent ideas...
-          </div>
-        ) : ideaClusters.clusters.length === 0 ? (
-          <div className="admin-empty-state" style={{ padding: '20px 12px' }}>
-            <div className="admin-empty-state-icon">
-              <Lightbulb size={18} />
-            </div>
-            <strong>No repeated ideas yet</strong>
-            <span>Run the pipeline to build up cross-article idea clusters for this project.</span>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {ideaClusters.clusters.map((cluster) => {
-              const isOpening = openingClusterId === cluster.id;
-              const openError = clusterOpenErrors[cluster.id];
-              return (
-                <div key={cluster.id} className="admin-item-card admin-item-card-clickable" style={{ margin: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => openClusterTopic(cluster)}
-                    disabled={isOpening}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      gap: 10,
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: isOpening ? 'wait' : 'pointer',
-                      textAlign: 'left',
-                      font: 'inherit',
-                      color: 'inherit',
-                    }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      {isOpening ? <Loader2 size={16} className="spin" style={{ flexShrink: 0 }} /> : <ChevronRight size={16} style={{ flexShrink: 0 }} />}
-                      <strong style={{ fontSize: '0.92rem' }}>{cluster.idea}</strong>
-                      <span className="admin-tag muted">{cluster.type || 'issue'}</span>
-                    </span>
-                    <span className="panel-chip" style={{ flexShrink: 0 }}>
-                      {Number(cluster.frequency_estimate || 0).toLocaleString()} articles
-                    </span>
-                  </button>
-                  {openError ? (
-                    <span style={{ display: 'block', marginTop: 8, color: '#b42318', fontSize: '0.82rem' }}>{openError}</span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {ideaClusters.total > ideaClusters.limit ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button
-              className="btn-secondary"
-              onClick={() => setIdeaOffset((prev) => Math.max(0, prev - ideaClusters.limit))}
-              disabled={ideaOffset === 0 || ideaClustersLoading}
-              style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-            >
-              <ChevronLeft size={14} /> Previous
-            </button>
-            <button
-              className="btn-secondary"
-              onClick={() => setIdeaOffset((prev) => prev + ideaClusters.limit)}
-              disabled={ideaOffset + ideaClusters.limit >= ideaClusters.total || ideaClustersLoading}
-              style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-            >
-              Next <ChevronRight size={14} />
-            </button>
-          </div>
-        ) : null}
       </motion.div>
 
       <ConfirmModal

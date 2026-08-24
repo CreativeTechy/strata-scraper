@@ -72,13 +72,13 @@ function projectNameForRun(run, projectsById) {
   return run.project_id != null ? `Project #${run.project_id}` : 'Unassigned';
 }
 
-// Scraping, cleaning, enriching, and saving all happen interleaved within a
-// single crawl now (see backend/scraper/pipelines.py's StreamingEnrichPipeline) -
-// one source can finish while another is still being fetched, so separate
-// clean/enrich start-finish timestamps for the whole run no longer mean
-// anything distinct from the scrape span itself.
+// Scraping, validating, and saving all happen interleaved within a single
+// crawl (see backend/scraper/pipelines.py's StreamingCollectPipeline) - one
+// source can finish while another is still being fetched, so a separate
+// clean start-finish timestamp for the whole run means nothing distinct from
+// the scrape span itself.
 const STAGE_ROWS = [
-  { key: 'scrape', label: 'Scraping & enriching', startField: 'scrape_started_at', endField: 'scrape_finished_at', Icon: Rss },
+  { key: 'scrape', label: 'Scraping & saving', startField: 'scrape_started_at', endField: 'scrape_finished_at', Icon: Rss },
 ];
 
 const TOTAL_STATS = [
@@ -102,9 +102,8 @@ const SOURCE_COLUMNS = [
   { key: 'duplicate', label: 'Duplicate' },
   { key: 'blocked', label: 'Blocked' },
   { key: 'date_filtered', label: 'Date filtered' },
-  { key: 'skipped_existing', label: 'Already enriched' },
+  { key: 'skipped_existing', label: 'Already scraped' },
   { key: 'kept', label: 'Kept' },
-  { key: 'enriched', label: 'Enriched' },
   { key: 'saved', label: 'Saved' },
 ];
 
@@ -208,7 +207,7 @@ export default function PipelineRunDetailPage({ projects = [] }) {
       const status = (loadedRun?.status || '').toLowerCase();
       if (status !== 'queued' && status !== 'running') return;
       // Per-source rows fill in live while the run is active (see
-      // backend/scraper/pipelines.py's StreamingEnrichPipeline) - poll until
+      // backend/scraper/pipelines.py's StreamingCollectPipeline) - poll until
       // the run reaches a terminal status instead of leaving this static.
       intervalId = setInterval(() => {
         load().then((polledRun) => {

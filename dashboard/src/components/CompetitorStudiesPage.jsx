@@ -40,10 +40,10 @@ function StudyRow({ study }) {
         <span className="cs-finding-row-headline">{study.name}</span>
       </span>
       <span className="cs-finding-row-meta">
-        {study.tracked_competitors} tracked · {study.finding_count} report{study.finding_count === 1 ? '' : 's'}
-        {study.latest_generated_at ? ` · ${relativeTime(study.latest_generated_at)}` : ' · Not analysed yet'}
+        {study.tracked_competitors} tracked · {Number(study.article_count || 0).toLocaleString()} article
+        {Number(study.article_count) === 1 ? '' : 's'}
+        {study.last_scraped_at ? ` · ${relativeTime(study.last_scraped_at)}` : ' · Never scraped'}
       </span>
-      {study.high_impact_count ? <span className="cs-pill cs-pill-high">{study.high_impact_count} high</span> : null}
       <ChevronRight size={15} className="cs-finding-row-chevron" />
     </Link>
   );
@@ -126,10 +126,10 @@ export default function CompetitorStudiesPage() {
         if (!haystack.includes(search)) return false;
       }
       if (fromTime != null || toTime != null) {
-        const generated = study.latest_generated_at ? new Date(study.latest_generated_at).getTime() : null;
-        if (generated == null) return false;
-        if (fromTime != null && generated < fromTime) return false;
-        if (toTime != null && generated > toTime) return false;
+        const scraped = study.last_scraped_at ? new Date(study.last_scraped_at).getTime() : null;
+        if (scraped == null) return false;
+        if (fromTime != null && scraped < fromTime) return false;
+        if (toTime != null && scraped > toTime) return false;
       }
       return true;
     });
@@ -185,10 +185,10 @@ export default function CompetitorStudiesPage() {
 
             <div className="cs-date-range">
               <input type="date" className="cs-input" value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)} aria-label="Last analysed from" />
+                onChange={(event) => setDateFrom(event.target.value)} aria-label="Last scraped from" />
               <span>to</span>
               <input type="date" className="cs-input" value={dateTo}
-                onChange={(event) => setDateTo(event.target.value)} aria-label="Last analysed to" />
+                onChange={(event) => setDateTo(event.target.value)} aria-label="Last scraped to" />
             </div>
 
             {hasFilters ? (
@@ -237,14 +237,15 @@ export default function CompetitorStudiesPage() {
                             </p>
                           )}
                         </div>
-                        {study.high_impact_count ? (
-                          <span className="cs-pill cs-pill-high">{study.high_impact_count} high impact</span>
-                        ) : null}
                       </div>
 
                       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: '0.83rem', color: 'var(--text-light)' }}>
                         <span><strong style={{ color: 'var(--text-dark)' }}>{study.tracked_competitors}</strong> tracked</span>
-                        <span><strong style={{ color: 'var(--text-dark)' }}>{study.finding_count}</strong> report{study.finding_count === 1 ? '' : 's'}</span>
+                        <span>
+                          <strong style={{ color: 'var(--text-dark)' }}>
+                            {Number(study.article_count || 0).toLocaleString()}
+                          </strong> article{Number(study.article_count) === 1 ? '' : 's'}
+                        </span>
                         {study.repeat_enabled ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <CalendarClock size={12} /> scheduled
@@ -254,9 +255,9 @@ export default function CompetitorStudiesPage() {
 
                       <div className="cs-card-foot">
                         <span>
-                          {study.latest_generated_at
-                            ? `Last analysed ${relativeTime(study.latest_generated_at)}`
-                            : 'Not analysed yet'}
+                          {study.last_scraped_at
+                            ? `Last scraped ${relativeTime(study.last_scraped_at)}`
+                            : 'Never scraped'}
                         </span>
                         <span className="cs-card-foot-open">Open <ChevronRight size={13} /></span>
                       </div>
@@ -282,7 +283,7 @@ export default function CompetitorStudiesPage() {
           <h3>No competitor studies yet</h3>
           <p>
             Start one and Strata will read your website to work out your market, find who you
-            compete with, and report what they are doing about it.
+            compete with, and collect everything they publish.
           </p>
           <button type="button" className="cs-btn cs-btn-primary" onClick={() => navigate('/competitors/new')}>
             <Sparkles size={15} /> Create your first study

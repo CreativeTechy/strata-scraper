@@ -163,22 +163,10 @@ export default function WorkflowPage({
     return selectedProjects[0].name || '1 project';
   }, [projects.length, selectedProjects]);
 
-  const formatMatchScore = (value) => {
-    const score = Number(value);
-    if (!Number.isFinite(score)) return '';
-    return score.toFixed(2);
-  };
-
   const stats = useMemo(() => {
     const total = articles.length;
-    const positive = articles.filter((a) => (a.sentiment || '').toLowerCase() === 'positive').length;
-    const negative = articles.filter((a) => (a.sentiment || '').toLowerCase() === 'negative').length;
-    const mixed = articles.filter((a) => (a.sentiment || '').toLowerCase() === 'mixed').length;
-    const neutral = articles.filter((a) => (a.sentiment || '').toLowerCase() === 'neutral' || !a.sentiment).length;
     const sources = new Set(articles.map((a) => a.source).filter(Boolean)).size;
-    const avg = total
-      ? (articles.reduce((s, a) => s + (Number(a.relevance_score) || 0), 0) / total).toFixed(1)
-      : '0.0';
+    const grouped = new Set(articles.map((a) => a.story_id).filter(Boolean)).size;
     const topSources = Object.entries(
       articles.reduce((acc, a) => {
         if (!a.source) return acc;
@@ -190,7 +178,7 @@ export default function WorkflowPage({
       .slice(0, 4)
       .map(([source, count]) => ({ source, count }));
 
-    return { total, positive, negative, neutral, mixed, sources, avg, topSources };
+    return { total, sources, grouped, topSources };
   }, [articles]);
 
   const latestArticles = useMemo(
@@ -239,16 +227,13 @@ export default function WorkflowPage({
     if (!currentRun) return '';
     if ((currentRun.status || '').toLowerCase() !== 'running') {
       if ((currentRun.stage || '').toLowerCase() === 'done') {
-        return scraped > 0 ? `Enriched ${Math.min(cleaned || scraped, scraped)}/${scraped} articles` : 'Pipeline complete';
+        return scraped > 0 ? `Kept ${Math.min(cleaned || scraped, scraped)}/${scraped} articles` : 'Pipeline complete';
       }
       return currentRun.message || '';
     }
     if ((currentRun.stage || '').toLowerCase() === 'clean') {
-      return currentRun.message || 'Cleaning articles...';
-    }
-    if ((currentRun.stage || '').toLowerCase() === 'enrich') {
-      if (scraped > 0) return `Enriching articles ${Math.min(Math.max(cleaned, 0), scraped)}/${scraped}`;
-      return 'Enriching articles...';
+      if (scraped > 0) return `Validating articles ${Math.min(Math.max(cleaned, 0), scraped)}/${scraped}`;
+      return currentRun.message || 'Validating articles...';
     }
     if ((currentRun.stage || '').toLowerCase() === 'scrape') {
       return scraped > 0 ? `Scraping sources ${Math.max(1, currentRun.crawl_pages || 0)} pages / ${scraped} articles` : 'Scraping sources...';
@@ -534,7 +519,7 @@ export default function WorkflowPage({
                 <div className="block-icon clean">
                   <Sparkles size={20} />
                 </div>
-                <div className="block-title">Cleanup & Enrich</div>
+                <div className="block-title">Validate & Dedup</div>
               </div>
 
               <div className="cleanup-status">
@@ -599,7 +584,7 @@ export default function WorkflowPage({
               <div className="save-summary">
                 {!hasData ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-light)' }}>
-                    Awaiting enriched data...
+                    Awaiting collected data...
                   </div>
                 ) : (
                   <>
@@ -608,28 +593,12 @@ export default function WorkflowPage({
                       <span className="summary-value">{stats.total} Rows</span>
                     </div>
                     <div className="summary-stat">
-                      <span className="summary-label">Positive Sentiment</span>
-                      <span className="summary-value" style={{ color: '#2ed573' }}>{stats.positive} Articles</span>
-                    </div>
-                    <div className="summary-stat">
-                      <span className="summary-label">Negative Sentiment</span>
-                      <span className="summary-value" style={{ color: '#ff6b6b' }}>{stats.negative} Articles</span>
-                    </div>
-                    <div className="summary-stat">
-                      <span className="summary-label">Neutral Sentiment</span>
-                      <span className="summary-value" style={{ color: '#9aa0aa' }}>{stats.neutral} Articles</span>
-                    </div>
-                    <div className="summary-stat">
-                      <span className="summary-label">Mixed Sentiment</span>
-                      <span className="summary-value" style={{ color: '#f59e0b' }}>{stats.mixed} Articles</span>
-                    </div>
-                    <div className="summary-stat">
                       <span className="summary-label">Unique Sources</span>
                       <span className="summary-value" style={{ color: 'var(--secondary-color)' }}>{stats.sources} Found</span>
                     </div>
                     <div className="summary-stat">
-                      <span className="summary-label">Average Relevance</span>
-                      <span className="summary-value" style={{ color: 'var(--primary-color)' }}>{stats.avg} / 10</span>
+                      <span className="summary-label">Story Groups</span>
+                      <span className="summary-value" style={{ color: 'var(--primary-color)' }}>{stats.grouped} Grouped</span>
                     </div>
 
                     <div className="save-btn" style={{ cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -803,17 +772,8 @@ export default function WorkflowPage({
                     <div key={article.url} className="article-preview-row">
                     <div className="article-preview-top">
                       <span className="article-preview-source">{article.source || 'Unknown source'}</span>
-                      <span className={`badge ${article.sentiment?.toLowerCase() || 'neutral'}`}>
-                        {article.sentiment || 'Neutral'}
-                      </span>
-                      {article.project_similarity_score != null && (
-                        <span className="badge score">Match {formatMatchScore(article.project_similarity_score)}</span>
-                      )}
                     </div>
                       <div className="article-preview-title">{article.title || article.url}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-light)', marginTop: 4 }}>
-                        {article.article_category || article.category || 'general_article'}
-                      </div>
                     </div>
                   ))
                 ) : (

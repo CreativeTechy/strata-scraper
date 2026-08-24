@@ -35,82 +35,17 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   return payload ?? {};
 }
 
-/** Same error/response shape as request(), but for a FormData body — request()
- *  always JSON-encodes, which would mangle a multipart upload and also fights
- *  the browser's auto-generated Content-Type boundary if set manually. */
-async function requestForm(path, formData) {
-  const response = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    const message =
-      payload?.detail || payload?.error || `Request failed (${response.status})`;
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  return payload ?? {};
-}
-
 // --- studies ---------------------------------------------------------------
 export const listStudies = () => request('/studies');
 export const createStudy = (body) => request('/studies', { method: 'POST', body });
 export const getStudy = (id) => request(`/studies/${id}`);
 export const updateStudy = (id, body) => request(`/studies/${id}`, { method: 'PUT', body });
 export const deleteStudy = (id) => request(`/studies/${id}`, { method: 'DELETE' });
-/** Paginated findings for one study, highest impact first — powers the Dashboard/Reports pulse card. */
-export const listStudyFindings = (id, { limit = 10, offset = 0 } = {}) =>
-  request(`/studies/${id}/findings/recent?limit=${limit}&offset=${offset}`);
-
 // --- business profile ------------------------------------------------------
 export const getProfile = (id) => request(`/studies/${id}/profile`);
 /** Scrapes the website and derives market context — expect this to take a while. */
 export const buildProfile = (id, body) => request(`/studies/${id}/profile`, { method: 'POST', body });
 export const saveProfile = (id, body) => request(`/studies/${id}/profile`, { method: 'PUT', body });
-
-// --- documents (offline studies) --------------------------------------------
-/** `status` moves uploaded -> processing -> processed/failed as chunked
- *  extraction (per page/sheet, text-library or OCR, decided server-side) runs
- *  in the background — see pollDocumentExtraction below. `total_chunks`/
- *  `processed_chunks` are progress while active. `extraction_error` is a
- *  summary of every chunk that failed and is set whenever any did, even if
- *  status ends up 'processed' from the chunks that succeeded — always show it,
- *  a partial failure shouldn't hide behind a plain success pill. Raw extracted
- *  text isn't in this list — use getDocumentText/getDocumentChunks. */
-export const listDocuments = (id) => request(`/studies/${id}/documents`);
-export const uploadDocuments = (id, files) => {
-  const formData = new FormData();
-  for (const file of files) formData.append('files', file);
-  return requestForm(`/studies/${id}/documents`, formData);
-};
-export const deleteDocument = (documentId) => request(`/documents/${documentId}`, { method: 'DELETE' });
-export const getDocumentText = (documentId) => request(`/documents/${documentId}/text`);
-/** Per-page/sheet detail behind a document's rolled-up status — which part
- *  failed and why, not just that something did. */
-export const getDocumentChunks = (documentId) => request(`/documents/${documentId}/chunks`);
-
-// --- document articles (candidates split out of extracted text) -----------
-/** A document's extracted text is split into one or more candidate "articles"
- *  in the background — `articles_status` on the document (pending ->
- *  generating -> ready/failed/skipped) tracks that, same polling shape as
- *  extraction. Each candidate starts 'pending'; approving materializes it
- *  into a real article (usable by the existing analysis pipeline), rejecting
- *  just marks it — see pollArticleCandidates below. */
-export const listDocumentArticles = (id) => request(`/studies/${id}/document-articles`);
-export const setDocumentArticleStatus = (candidateId, status) =>
-  request(`/document-articles/${candidateId}/status`, { method: 'POST', body: { status } });
-export const approveAllDocumentArticles = (id) =>
-  request(`/studies/${id}/document-articles/approve-all`, { method: 'POST' });
 
 // --- competitors -----------------------------------------------------------
 /** Queues discovery as a background job; returns { run_id, status } immediately.
@@ -145,26 +80,6 @@ export const validateAccount = (accountId, status, reason = '') =>
   request(`/accounts/${accountId}/validate`, { method: 'POST', body: { status, reason } });
 export const deleteAccount = (accountId) => request(`/accounts/${accountId}`, { method: 'DELETE' });
 
-// --- analysis --------------------------------------------------------------
-/** Queues analysis as a background job; returns { run_id, status } immediately.
- *  Poll pollAnalysisRun() until it reaches a terminal status - a scrape plus one
- *  LLM call per competitor runs for minutes. */
-export const analyze = (id, body) => request(`/studies/${id}/analyze`, { method: 'POST', body });
-export const getAnalysisStatus = (id, runId) => request(`/studies/${id}/analyze/${runId}`);
-/** Offline studies: names the competitors an offline study's approved
- *  document articles are actually about, tracks them, then runs the same
- *  finding generation `analyze()` triggers for an online study. */
-export const analyzeDocuments = (id) => request(`/studies/${id}/analyze-documents`, { method: 'POST' });
-export const listFindings = (id, params = {}) => {
-  const query = new URLSearchParams(
-    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
-  ).toString();
-  return request(`/studies/${id}/findings${query ? `?${query}` : ''}`);
-};
-export const getFinding = (findingId) => request(`/findings/${findingId}`);
-export const validateFinding = (findingId, status, notes = '') =>
-  request(`/findings/${findingId}/validate`, { method: 'POST', body: { status, notes } });
-
 // --- scheduling ------------------------------------------------------------
 export const getSchedule = (id) => request(`/studies/${id}/schedule`);
 export const setSchedule = (id, body) => request(`/studies/${id}/schedule`, { method: 'PUT', body });
@@ -179,17 +94,6 @@ export const SIZE_TIER_LABELS = {
   unknown: 'Unknown size',
 };
 
-export const IMPACT_LABELS = { high: 'High impact', medium: 'Medium impact', low: 'Low impact' };
-
-export const URGENCY_LABELS = { now: 'Now', this_quarter: 'This quarter', watch: 'Watch' };
-
-export const EFFORT_LABELS = { low: 'Low effort', medium: 'Medium effort', high: 'High effort' };
-
-/** The source kinds a manually-added competitor account can be — the same
- *  scrapeable vocabulary as the project wizard's SOURCE_TYPE_OPTIONS
- *  (dashboard/src/components/ProjectsPage.jsx) and backend
- *  config.KNOWN_SOURCE_TYPES; mirrors backend PLATFORM_SOURCE_TYPE
- *  (services/competitors/competitors_store.py). */
 export const SOURCE_KIND_OPTIONS = [
   { value: 'rss', label: 'RSS' },
   { value: 'web', label: 'Web' },
@@ -246,59 +150,6 @@ export async function pollDiscoveryRun(studyId, runId, onUpdate) {
     const { run } = await getDiscoveryStatus(studyId, runId);
     if (onUpdate) onUpdate(run);
     if (run.status === 'success' || run.status === 'failed') return run;
-    await sleep(DISCOVERY_POLL_MS);
-  }
-}
-
-/** Same contract as pollDiscoveryRun, for the analysis job: scrape + one LLM
- *  call per competitor is minutes of work, so it's queued rather than awaited.
- *  `onUpdate` fires on every poll so the caller can render `run.logs` live; the
- *  terminal run carries `findings`, so no refetch is needed after it resolves. */
-export async function pollAnalysisRun(studyId, runId, onUpdate) {
-  for (;;) {
-    const { run } = await getAnalysisStatus(studyId, runId);
-    if (onUpdate) onUpdate(run);
-    if (run.status === 'success' || run.status === 'failed') return run;
-    await sleep(DISCOVERY_POLL_MS);
-  }
-}
-
-const DOCUMENT_ACTIVE_STATUSES = new Set(['uploaded', 'processing']);
-
-/** Extraction has no separate run object like discovery does — the document
- *  row's own `status` is the only progress signal, so this just re-lists until
- *  none of the given document ids are still uploaded/processing.
- *  `onUpdate` is called with the full current list on every poll. */
-export async function pollDocumentExtraction(studyId, documentIds, onUpdate) {
-  const pending = new Set(documentIds);
-  for (;;) {
-    const { documents } = await listDocuments(studyId);
-    if (onUpdate) onUpdate(documents);
-    const stillActive = documents.some(
-      (document) => pending.has(document.id) && DOCUMENT_ACTIVE_STATUSES.has(document.status),
-    );
-    if (!stillActive) return documents;
-    await sleep(DISCOVERY_POLL_MS);
-  }
-}
-
-const ARTICLES_ACTIVE_STATUSES = new Set(['pending', 'generating']);
-
-/** Candidate-article generation chains after extraction in the same
- *  background task, so it can still be running after pollDocumentExtraction
- *  above has already returned (extraction's own status left 'processing').
- *  Polls a document's `articles_status` instead — same shape, different
- *  field. Terminal values are 'ready'/'failed'/'skipped', so this always
- *  converges even for documents whose extraction failed outright. */
-export async function pollArticleCandidates(studyId, documentIds, onUpdate) {
-  const pending = new Set(documentIds);
-  for (;;) {
-    const { documents } = await listDocuments(studyId);
-    if (onUpdate) onUpdate(documents);
-    const stillActive = documents.some(
-      (document) => pending.has(document.id) && ARTICLES_ACTIVE_STATUSES.has(document.articles_status),
-    );
-    if (!stillActive) return documents;
     await sleep(DISCOVERY_POLL_MS);
   }
 }
