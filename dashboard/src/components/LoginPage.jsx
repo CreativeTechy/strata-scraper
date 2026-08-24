@@ -36,10 +36,10 @@ export default function LoginPage() {
       <div className="login-shell">
         <div className="login-brand">
           <div className="login-logo">
-            <img src="/favicon.png" alt="Strata" />
+            <img src="/favicon.png" alt="Scraper App" />
           </div>
           <div>
-            <h1 className="title login-title">Strata</h1>
+            <h1 className="title login-title">Scraper</h1>
             <p className="subtitle">Media Intelligence Platform</p>
           </div>
         </div>

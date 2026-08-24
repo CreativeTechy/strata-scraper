@@ -128,7 +128,7 @@ export default function Sidebar({
             <span className="sidebar-brand-mark">S</span>
           ) : (
             <>
-              <h1 className="title">Strata</h1>
+              <h1 className="title">Scraper</h1>
               <p className="subtitle">Media Intelligence</p>
             </>
           )}

@@ -83,7 +83,7 @@ STORAGE_DIR = BASE_DIR.parent / "storage"
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Strata Scraper API")
+app = FastAPI(title="Scraper App API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,12 +146,12 @@ async def _stop_scheduler():
 
 @app.get("/")
 def root():
-    return {"service": "Strata Media API", "ok": True, "see": "/api/health"}
+    return {"service": "Scraper App API", "ok": True, "see": "/api/health"}
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "service": "Strata Scraper API"}
+    return {"status": "healthy", "service": "Scraper App API"}
 
 
 # --- Auth --------------------------------------------------------------
