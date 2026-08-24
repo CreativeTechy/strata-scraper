@@ -1,10 +1,9 @@
 """In-memory registry for one-shot background jobs the user watches live.
 
-Competitor discovery and competitor analysis both queue a FastAPI
-BackgroundTask that can run for minutes - well past any gateway timeout - and
-both stream progress lines the UI polls for while it runs. This is the
-bookkeeping both need: a process-local dict of runs guarded by one lock, with
-an append-only log per run.
+Competitor discovery queues a FastAPI BackgroundTask that can run for minutes
+- well past any gateway timeout - and streams progress lines the UI polls for
+while it runs. This is the bookkeeping that needs: a process-local dict of
+runs guarded by one lock, with an append-only log per run.
 
 Deliberately in-process rather than Postgres. These are one-shot steps a user
 is sitting in front of, not durable scheduled work like the scrape pipeline
@@ -26,7 +25,7 @@ def _now_iso() -> str:
 
 
 class JobRegistry:
-    """One namespace of runs - discovery, analysis - keyed by run id.
+    """One namespace of runs - discovery - keyed by run id.
 
     Every method is safe to call from worker threads: the pools inside a job
     append progress lines concurrently while the request thread serving the
@@ -89,6 +88,6 @@ class JobRegistry:
 
     def logger(self, run_id: str):
         """A one-argument `log(message)` to hand to code that shouldn't have to
-        know about run ids - the analysis functions take one so they can be
+        know about run ids - the job functions take one so they can be
         called just as well from the CLI/seed path with no run at all."""
         return lambda message: self.append_log(run_id, message)
