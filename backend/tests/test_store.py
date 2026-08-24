@@ -102,6 +102,33 @@ class WriteFieldSelectionTests(unittest.TestCase):
         for column in ("verified", "content_hash", "published_at", "published_precision"):
             self.assertIn(column, fields)
 
+    def test_analysis_status_is_written_even_when_the_article_omits_it(self):
+        """The column is `not null default 'success'`. Omitting it from the
+        statement lets that default apply, and strata-media skips anything
+        already marked successful - so an article saved without an explicit
+        status would never be analyzed, silently. It has to be named on every
+        write so the 'pending' fallback applies instead."""
+        fields = self._fields(self._scraped_article())
+        self.assertIn("analysis_status", fields)
+
+    def test_omitted_analysis_status_is_written_as_pending_not_success(self):
+        """The end-to-end statement of the above: a scraped article carrying no
+        analysis_status must reach the database as 'pending'."""
+        article = self._scraped_article()
+        self.assertNotIn("analysis_status", article)
+        with patch("services.articles.store._article_columns", return_value=self.TABLE_COLUMNS):
+            fields, params = store._article_row(article)
+        self.assertEqual(dict(zip(fields, params))["analysis_status"], "pending")
+
+    def test_explicit_analysis_status_is_preserved(self):
+        """collect.mark_unanalyzed() and the JSONL import both pass a real
+        status; the safety default must not overwrite it."""
+        with patch("services.articles.store._article_columns", return_value=self.TABLE_COLUMNS):
+            fields, params = store._article_row(
+                self._scraped_article(analysis_status="success")
+            )
+        self.assertEqual(dict(zip(fields, params))["analysis_status"], "success")
+
     def test_falsy_values_are_real_values(self):
         """0/false/"" mean something; only missing means "use the default"."""
         fields = self._fields(self._scraped_article(

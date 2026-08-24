@@ -6,22 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app/backend
 
-# Build deps cover packages commonly used by Scrapy, lxml, trafilatura, and psycopg.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    libffi-dev \
-    libssl-dev \
-    libxml2-dev \
-    libxslt1-dev \
-    zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt ./requirements.txt
 
+# Every dependency (lxml, psycopg[binary], uvicorn's standard extras) ships a
+# manylinux wheel, so there is no compiler step here. Installing
+# build-essential and the libxml2/libxslt/ffi/ssl headers "to be safe" cost
+# ~94 MB of apt downloads and 380 MB on disk per build - on a slow Debian
+# mirror that alone ran 15+ minutes and made `docker compose up --build` look
+# hung. --only-binary=:all: keeps it that way: a dependency that starts
+# shipping only an sdist fails the build loudly here instead of silently
+# needing a toolchain back.
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip setuptools wheel && \
-    python -m pip install -r requirements.txt
+    python -m pip install --only-binary=:all: -r requirements.txt
 
 COPY . .
 

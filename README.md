@@ -296,20 +296,62 @@ python migrate.py --verify   # exit non-zero if pending or drifted (for CI)
 
 How it works:
 
-- `schema.sql` is version `0001_baseline`. It is idempotent, so it is safe to
-  re-run, and re-running it is how an existing database converges with a fresh
-  one. It is also mounted into `docker-entrypoint-initdb.d`, so a brand-new
-  volume starts from it directly.
+- `schema.sql` is version `0001_baseline`, and is currently the **whole**
+  schema: migrations `0002`-`0028` were squashed back into it. It is organized
+  into numbered sections with a table of contents, and states its conventions at
+  the top (identity keys, cascade vs. set null, `created_at`/`updated_at`
+  handling, explicit constraint naming, and the rule that every foreign key has
+  a usable index). It is idempotent, so it is safe to re-run, and re-running it
+  is how an existing database converges with a fresh one. It is also mounted
+  into `docker-entrypoint-initdb.d`, so a brand-new volume starts from it
+  directly.
 - `backend/migrations/NNNN_name.sql` are the forward migrations, applied in
-  numeric order, each in its own transaction.
+  numeric order, each in its own transaction. The directory is currently empty
+  apart from its own [README](backend/migrations/README.md), which covers the
+  filename convention, the never-edit-an-applied-migration rule, and when
+  squashing is legitimate. Start the next one at `0002`.
 - Applied versions and their checksums are recorded in `schema_migrations`.
-  Editing a migration - or `schema.sql` - after it has been applied is a hard
-  error: the runner refuses rather than letting environments diverge silently.
-  Add a new migration instead.
+  Editing a migration after it has been applied is a hard error: the runner
+  refuses rather than letting environments diverge silently. Add a new migration
+  instead. `schema.sql` is the exception - it is expected to keep evolving and
+  is re-applied whenever its checksum moves.
 
 Set `MIGRATE_ON_STARTUP=false` to manage migrations out of band instead - e.g.
 when several backend replicas share one database and only the deploy step should
 migrate it.
+
+#### Squash convergence
+
+The baseline is built from `create table if not exists`, which does nothing when
+the table is already there. Re-applying it to a database that predates the
+`0002`-`0028` squash therefore **adds** what is missing but does **not** undo
+anything. Verified by building both schemas and diffing them, the following did
+not converge and remain on any such database:
+
+- the 13 tables the squash dropped (`article_tags`, `article_people_opinions`,
+  `article_feedback_items`, `idea_clusters`, `idea_cluster_articles`,
+  `segment_taxonomy`, `competitor_articles`, and the six
+  `competitor_documents` / `project_documents` upload tables),
+- the 4 columns it dropped (`pipeline_runs.enrich_started_at`,
+  `pipeline_runs.enrich_finished_at`, `pipeline_run_sources.enriched`,
+  `article_projects.similarity_score`) and the index on the last of them,
+- `pipeline_run_sources_run_idx`, a standalone index on `run_id` that only
+  duplicated the leading column of the `(run_id, source)` primary key,
+- `created_at` / `updated_at` staying nullable where the new baseline declares
+  them `not null`,
+- row-level security staying enabled, with its `Public read access` policies
+  still attached.
+
+None of that affects correctness: every one of those is unused scaffolding that
+the application neither reads nor writes, and RLS is inert here because the
+backend connects as the table owner. They are cosmetic drift, not a broken
+schema. The three things that *do* converge are the new foreign-key indexes and
+the `set_updated_at` function, because `create index if not exists` and
+`create or replace function` both apply to an existing database.
+
+A fresh database - `docker compose down -v`, or any new environment - gets the
+clean shape with none of this. If a leftover ever has to be removed from a
+long-lived database, that is what a real numbered migration is for.
 
 ### The signal layer
 
@@ -337,7 +379,8 @@ docker compose up --build -d
 ```
 
 The volume is recreated from `schema.sql`, then the backend applies any
-migrations on top at startup.
+migrations on top at startup. Since the `0002`-`0028` squash there are no
+migrations to apply, so this rebuilds the schema from the baseline alone.
 
 ## Deployment Notes
 
