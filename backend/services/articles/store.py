@@ -225,6 +225,17 @@ def _article_columns():
 
 # Fields _article_row() derives itself rather than reading off the article, so
 # they are always written even when the incoming dict has no such key.
+#
+# `analysis_status` is here for the opposite reason to the rest: it is not
+# derived from anything, it is a *safety* default. The column is `not null
+# default 'success'` (it was added to a database whose rows had all been
+# analyzed), and strata-media's analyze endpoints skip anything already marked
+# successful. Left out of the statement, an article saved without an explicit
+# status would inherit 'success' from the table default and be silently skipped
+# downstream forever. Naming it always means _article_row()'s 'pending'
+# fallback applies instead, so no save path can produce that outcome by
+# omission - the collection paths that already call collect.mark_unanalyzed()
+# pass 'pending' explicitly and are unaffected.
 _ARTICLE_DERIVED_FIELDS = {
     "url",
     "published_at",
@@ -232,6 +243,7 @@ _ARTICLE_DERIVED_FIELDS = {
     "verified",
     "content_hash",
     "embedding_dimensions",
+    "analysis_status",
 }
 
 

@@ -8,6 +8,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    # -h 127.0.0.1 forces the check over TCP. pg_isready's default unix-socket
+    # probe passes during initdb - the entrypoint runs the schema.sql above
+    # against a socket-only temporary server and only opens the TCP port once
+    # that finishes - so a socket check would report healthy while the backend
+    # still cannot connect.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U scraper -d scraper"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   adminer:
@@ -25,8 +36,13 @@ services:
       context: ./backend
     env_file:
       - ./backend/.env
+    # Waits for the healthcheck above, not just for the container to start:
+    # main.py connects to Postgres during startup and uvicorn exits on
+    # failure, so a plain `- db` left the backend crash-looping (and /api
+    # returning 502) through the first-boot initdb.
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     expose:
       - "8000"
     volumes:
