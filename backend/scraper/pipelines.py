@@ -90,7 +90,7 @@ class StreamingCollectPipeline:
             self._push_progress()
             return article
 
-        saved_count, saved_delta = save_articles([article])
+        saved_count, saved_delta = save_articles([collect.mark_unanalyzed(article)])
         self.articles_saved_total += saved_count
         for saved_source, count in (saved_delta or {}).items():
             self.saved_by_source[saved_source] += count

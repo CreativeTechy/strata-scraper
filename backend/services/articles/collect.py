@@ -2,8 +2,9 @@
 belong, and hand the rest to the saver (store.save_articles).
 
 This app collects only - there is no AI enrichment stage. An article that
-survives this module is stored with its analysis columns left NULL, for
-strata-media (or whatever else consumes the JSONL export) to analyze later.
+survives this module is stored with no analysis on it and
+analysis_status='pending' (see mark_unanalyzed), for strata-media (or
+whatever else consumes the JSONL export) to analyze later.
 The four checks an article has to pass are all here:
 
   1. validation - long enough, has a title, isn't a consent/search/error
@@ -123,6 +124,24 @@ def _article_matches_project_window(article, project):
 
 def _source_key(article):
     return (article.get("source_name") or article.get("source") or "unknown").strip() or "unknown"
+
+
+# Stamped on every article this app stores. The articles table defaults
+# analysis_status to 'success' (it was added to a database whose rows had all
+# been analyzed), which would be a lie here and an actively harmful one: the
+# app that imports these exports skips re-analyzing anything already marked
+# successful, so a whole collection run would silently never be analyzed.
+# 'pending' is part of the same accepted set and says what is true.
+UNANALYZED_STATUS = "pending"
+
+
+def mark_unanalyzed(article):
+    """Return `article` with the status the export has to carry.
+
+    Set here rather than left to the column default so the intent is visible
+    at the stage that decides it - store.py keeps a matching fallback for any
+    other caller."""
+    return {**article, "analysis_status": UNANALYZED_STATUS}
 
 
 def _already_stored(article, existing_urls):
@@ -343,7 +362,9 @@ def main():
     saved_by_source = {}
     if articles:
         print("Saving to local PostgreSQL...")
-        stats["articles_saved"], saved_by_source = save_articles(articles)
+        stats["articles_saved"], saved_by_source = save_articles(
+            [mark_unanalyzed(article) for article in articles]
+        )
         print("Done.")
 
     push_run_progress(

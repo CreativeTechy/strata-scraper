@@ -217,10 +217,28 @@ def run_import_job(run_id: str, path: str, project_id: int | None = None) -> Non
         _import_runs.update(run_id, status="failed", stage="failed", message=f"Nothing to import. {detail}", error=detail)
         return
 
+    # `received` counts rows that parsed; `saved` counts rows the database
+    # actually took. save_articles() logs and swallows a failed batch rather
+    # than raising, so without this check a file whose every row is rejected
+    # (a foreign key naming a run that only exists in the exporting database,
+    # a column the destination doesn't have, ...) finishes as "success -
+    # imported 0", which reads as "the file was empty".
+    if saved == 0:
+        detail = (
+            f"All {received:,} row{'' if received == 1 else 's'} were rejected by the database. "
+            "The backend log has the first error."
+        )
+        publish()
+        _import_runs.append_log(run_id, detail)
+        _import_runs.update(run_id, status="failed", stage="failed", message=detail, error=detail)
+        return
+
     summary = (
         f"Imported {saved:,} article{'' if saved == 1 else 's'} in {_format_duration(elapsed())} "
         f"({rate():,.0f}/s)."
     )
+    if saved < received:
+        summary += f" {received - saved:,} row{'' if received - saved == 1 else 's'} rejected by the database."
     if skipped:
         summary += f" Skipped {skipped:,} unusable line{'' if skipped == 1 else 's'}."
     _import_runs.append_log(run_id, summary)

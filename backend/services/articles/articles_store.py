@@ -28,6 +28,20 @@ ARTICLES_SELECT = (
 )
 
 
+# Columns whose values only mean anything inside the database that produced
+# them, so the export leaves them out even though the upsert writes them:
+#
+#   pipeline_run_id - a foreign key into this database's `pipeline_runs`.
+#     Exported, every row fails `articles_pipeline_run_id_fkey` on the
+#     importing side, which has no such run - and the import reports success
+#     having saved nothing. The receiving app assigns its own provenance.
+#
+# story_id is excluded for the same reason but never reaches here: it isn't
+# one of the columns the upsert writes (see store.ARTICLE_MUTABLE_FIELDS), and
+# the importing side regroups by body similarity itself.
+EXPORT_LOCAL_ONLY_FIELDS = {"pipeline_run_id"}
+
+
 @lru_cache(maxsize=1)
 def _export_select():
     """The wider column list used by the JSONL export.
@@ -35,16 +49,17 @@ def _export_select():
     ARTICLES_SELECT is tuned for the dashboard's article cards and omits most
     of what the row can store. The upsert behind the import endpoint writes
     *every* mutable column from `excluded`, so exporting the narrow list and
-    re-importing it would null those out. Selecting exactly what the upsert
-    writes keeps export -> import lossless - which is how articles collected
-    here reach an app that analyzes them.
+    re-importing it would null those out. Selecting what the upsert writes -
+    minus EXPORT_LOCAL_ONLY_FIELDS above - keeps export -> import lossless,
+    which is how articles collected here reach an app that analyzes them.
 
     Built from the live table rather than hardcoded so a database that hasn't
     had every migration applied yet exports the columns it does have instead of
     failing the whole query on one missing name."""
     from services.articles.store import stored_article_fields
 
-    fields = ["id", *stored_article_fields(), "created_at"]
+    exportable = [f for f in stored_article_fields() if f not in EXPORT_LOCAL_ONLY_FIELDS]
+    fields = ["id", *exportable, "created_at"]
     seen = set()
     ordered = []
     for field in fields:

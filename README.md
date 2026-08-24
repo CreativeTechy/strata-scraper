@@ -3,9 +3,9 @@
 Scraper App ingests content from configured sources, validates and deduplicates
 it, and stores it in PostgreSQL for the dashboard to browse and export.
 
-It **collects only**. Articles are stored exactly as scraped, with every
-analysis column left NULL, and leave through a JSONL export for whatever
-analyzes them. The one place AI is still used is deciding *what* to collect -
+It **collects only**. Articles are stored exactly as scraped, with no analysis
+on them and `analysis_status='pending'`, and leave through a JSONL export for
+whatever analyzes them. The one place AI is still used is deciding *what* to collect -
 suggesting a project's keywords, hashtags, usernames and sources, and
 discovering competitors - never interpreting what came back.
 
@@ -97,15 +97,28 @@ Collection here, analysis there, with the JSONL export as the seam:
 3. Analyze them there (its per-article and batch analyze endpoints), which also
    generates the embeddings this app doesn't produce.
 
-The export selects exactly the columns the import's upsert writes, so a
-round trip is lossless. The one intentional omission is `story_id`, whose values
-name a row in *this* database's `story_groups` - the importing side regroups by
-body similarity itself.
+The export selects the columns the import's upsert writes, so a round trip is
+lossless. Two kinds of column are deliberately left out, both because their
+values only mean something inside the database that produced them:
+
+- `pipeline_run_id` - a foreign key into this database's `pipeline_runs`.
+  Exported, every row fails that constraint on the importing side and nothing
+  lands.
+- `story_id` - names a row in this database's `story_groups`. The importing
+  side regroups by body similarity itself.
+
+Every exported article carries `analysis_status='pending'`, which is what makes
+strata-media's analyze step pick it up: it skips anything already marked
+`success`, and that is the column's own database default.
 
 > Keep `ARTICLE_MUTABLE_FIELDS` and the `articles` schema identical between the
 > two repos. A column dropped on this side silently arrives NULL on the other.
 > That is why the analysis columns still exist in `schema.sql` here even though
 > nothing populates them.
+
+If an import finishes as **failed** with "All N rows were rejected by the
+database", the backend log holds the first error - that is the signal that the
+two schemas have drifted.
 
 ## Clone And Run
 

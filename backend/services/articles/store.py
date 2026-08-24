@@ -223,18 +223,54 @@ def _article_columns():
     return set(ARTICLE_MUTABLE_FIELDS)
 
 
-def _article_write_fields():
+# Fields _article_row() derives itself rather than reading off the article, so
+# they are always written even when the incoming dict has no such key.
+_ARTICLE_DERIVED_FIELDS = {
+    "url",
+    "published_at",
+    "published_precision",
+    "verified",
+    "content_hash",
+    "embedding_dimensions",
+}
+
+
+def _article_write_fields(article=None):
+    """Which columns the upsert writes.
+
+    With no `article`, the full list this database supports - that is what the
+    export has to cover (see stored_article_fields).
+
+    For a specific article, columns it carries no value for are left out of
+    the statement entirely, so the table's own DEFAULT applies instead of an
+    explicit NULL. This matters because this app stores unanalyzed articles:
+    several analysis columns are `not null default <neutral>`
+    (sentiment_low_confidence, analysis_attempt_count, gender/age_range/
+    region/segment), and naming them with a NULL value fails the not-null
+    constraint rather than falling back to the default - which silently cost
+    every article in a run until it was caught.
+
+    A key that is present but falsy (`0`, `false`, `""`) is a real value and
+    is still written; only missing/None is treated as "no value".
+    """
     columns = _article_columns()
-    return [field for field in ARTICLE_MUTABLE_FIELDS if field in columns]
+    fields = [field for field in ARTICLE_MUTABLE_FIELDS if field in columns]
+    if article is None:
+        return fields
+    return [
+        field for field in fields
+        if field in _ARTICLE_DERIVED_FIELDS or article.get(field) is not None
+    ]
 
 
 def stored_article_fields():
-    """The exact column list `save_articles()` writes on this database.
+    """The exact column list `save_articles()` can write on this database.
 
     Read paths that need to round-trip through the upsert (the JSONL export,
     which is re-importable) select these: the upsert sets every one of them
     from `excluded`, so anything it writes but the export omits would come
-    back as NULL on re-import."""
+    back as NULL on re-import. Deliberately the full list rather than what
+    any one article happens to carry."""
     return list(_article_write_fields())
 
 
@@ -301,7 +337,7 @@ def _assign_story_group(article, saved_row):
 
 def _article_row(article):
     row = _row(article)
-    fields = _article_write_fields()
+    fields = _article_write_fields(article)
     params = []
     for field in fields:
         value = row[field]
@@ -310,10 +346,12 @@ def _article_row(article):
         elif field in _ARTICLE_TIMESTAMP_FIELDS:
             value = _null_if_blank(value)
         elif field == "analysis_status":
-            # not-null column - a pipeline result that never set this
-            # (shouldn't happen, but this is the write path, not the pipeline)
-            # must not attempt to insert NULL into it.
-            value = _null_if_blank(value) or "success"
+            # not-null column. "pending" rather than "success" as the fallback:
+            # this app never analyzes anything, so a row that reaches here
+            # without a status has not been analyzed, and claiming success
+            # would make the consumer of the export skip it (see
+            # collect.py, which sets this explicitly).
+            value = _null_if_blank(value) or "pending"
         elif field == "embedding_dimensions":
             embedding_json = row.get("embedding_json")
             value = len(embedding_json) if isinstance(embedding_json, list) else None
@@ -338,6 +376,12 @@ def _upsert_article_row(article):
     returning_sql = _article_returning_sql()
 
     updates = [f"{field} = excluded.{field}" for field in fields if field not in ("url", "pipeline_run_id")]
+    if not updates:
+        # An article carrying nothing but its URL would otherwise build
+        # `do update set` with an empty assignment list - a syntax error.
+        # A self-assignment keeps the statement valid and still RETURNINGs
+        # the existing row, so the caller counts it as saved.
+        updates.append("url = excluded.url")
     if "pipeline_run_id" in fields:
         # pipeline_run_id records which run *first* saved this article, not
         # whichever run touched it most recently - every run re-crawls all of

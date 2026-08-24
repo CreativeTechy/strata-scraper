@@ -30,14 +30,28 @@ class ExportSelectTests(unittest.TestCase):
 
         articles_store._export_select.cache_clear()
         selected = articles_store._export_select().split(",")
-        missing = [field for field in stored_article_fields() if field not in selected]
+        missing = [
+            field for field in stored_article_fields()
+            if field not in selected and field not in articles_store.EXPORT_LOCAL_ONLY_FIELDS
+        ]
         self.assertEqual(missing, [])
+
+    def test_export_omits_columns_that_only_mean_something_locally(self):
+        """pipeline_run_id is a foreign key into this database's
+        pipeline_runs. Exported, every row fails that constraint on the
+        importing side and nothing lands."""
+        articles_store._export_select.cache_clear()
+        selected = articles_store._export_select().split(",")
+        self.assertIn("pipeline_run_id", articles_store.EXPORT_LOCAL_ONLY_FIELDS)
+        for field in articles_store.EXPORT_LOCAL_ONLY_FIELDS:
+            self.assertNotIn(field, selected)
 
     # Columns whose values only mean anything inside *this* database, so the
     # export deliberately leaves them out even though the dashboard reads
-    # them: story_id points at a local story_groups row, and the importing
-    # side regroups by body similarity itself (see store._assign_story_group).
-    LOCAL_ONLY_COLUMNS = {"story_id"}
+    # them: story_id points at a local story_groups row (the importing side
+    # regroups by body similarity itself, see store._assign_story_group) and
+    # pipeline_run_id at a local pipeline_runs row.
+    LOCAL_ONLY_COLUMNS = {"story_id"} | articles_store.EXPORT_LOCAL_ONLY_FIELDS
 
     def test_export_still_carries_what_the_dashboard_list_shows(self):
         articles_store._export_select.cache_clear()
