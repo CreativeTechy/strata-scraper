@@ -1,24 +1,30 @@
-"""Read helpers for the articles table."""
+"""Read helpers for the articles table.
+
+Collection-only: rows here carry what was scraped (title, text, author,
+source, publish/fetch timestamps, story group), never analysis output, so
+there is nothing to roll up by sentiment/topic/tone. Search is a keyword
+match over the stored text - strata-media's semantic ranking needed an
+embedding per row, which this app doesn't produce.
+
+The one deliberately wide reader is _export_select(): the JSONL export has
+to round-trip through the import upsert, so it selects every column that
+upsert writes - including the analysis columns this app leaves NULL - rather
+than the narrow list the dashboard's article cards use.
+"""
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 from datetime import datetime
 from functools import lru_cache
 import re
 
 import config
 import db
-from embeddings import cosine_similarity, get_embedding
-from services.projects.projects_store import list_article_ids_for_project, list_article_similarity_scores_for_project
+from services.projects.projects_store import list_article_ids_for_project
 
 ARTICLES_SELECT = (
-    "id,url,source,source_url,title,author,published,text,fetched_at,summary,"
-    "sentiment,relevance_score,category,article_category,writer_tone,article_tone,region,gender,age_range,segment,verified,"
-    "insight_json,analysis_model,"
-    "analysis_prompt_version,analyzed_at,organizations,entities,topics,key_points,"
-    "risks,opportunities,brands,car_models,embedding_json,embedding_model,embedding_source,embedded_at,created_at,"
-    "source_language,source_language_confidence"
+    "id,url,source,source_url,title,author,published,published_at,text,fetched_at,"
+    "verified,story_id,pipeline_run_id,created_at"
 )
 
 
@@ -26,12 +32,12 @@ ARTICLES_SELECT = (
 def _export_select():
     """The wider column list used by the JSONL export.
 
-    ARTICLES_SELECT is tuned for the dashboard's article cards and omits a lot
-    of what the row actually stores (sentiment_score, the per-stage confidences
-    and model names, published_at/precision, analysis_status, ...). The upsert
-    behind the import endpoint writes *every* mutable column from `excluded`,
-    so exporting the narrow list and re-importing it would null those out.
-    Selecting exactly what the upsert writes keeps export -> import lossless.
+    ARTICLES_SELECT is tuned for the dashboard's article cards and omits most
+    of what the row can store. The upsert behind the import endpoint writes
+    *every* mutable column from `excluded`, so exporting the narrow list and
+    re-importing it would null those out. Selecting exactly what the upsert
+    writes keeps export -> import lossless - which is how articles collected
+    here reach an app that analyzes them.
 
     Built from the live table rather than hardcoded so a database that hasn't
     had every migration applied yet exports the columns it does have instead of
@@ -48,36 +54,18 @@ def _export_select():
     return ",".join(ordered)
 
 
-VALID_TONES = {
-    "neutral",
-    "positive",
-    "enthusiastic",
-    "optimistic",
-    "critical",
-    "skeptical",
-    "negative",
-    "concerned",
-    "angry",
-    "sarcastic",
-    "humorous",
-    "formal",
-    "informal",
-}
-
 SORTABLE_COLUMNS = {
     "published",
-    "relevance_score",
     "created_at",
+    "fetched_at",
     "title",
     "source",
-    "category",
-    "sentiment",
 }
 
 MAX_LIMIT = 100
 # Page size for internal readers that walk the whole result set (export,
-# search scan, stats). Distinct from MAX_LIMIT, which caps what one *API*
-# response may return and must not silently cap a bulk read: a loop that asks
+# search scan). Distinct from MAX_LIMIT, which caps what one *API* response
+# may return and must not silently cap a bulk read: a loop that asks
 # _fetch_articles for more than its ceiling gets a short page back and reads
 # that as "no more rows", stopping at MAX_LIMIT. Bulk callers therefore pass
 # max_limit=BULK_PAGE_SIZE so the page they ask for is the page they get.
@@ -85,50 +73,10 @@ BULK_PAGE_SIZE = 500
 DEFAULT_LIMIT = 24
 DEFAULT_SORT = "published.desc"
 SEARCH_SCAN_LIMIT = 1000
-SEARCH_MATCH_THRESHOLD = 0.28
-
-
-def _auth_headers():
-    return {
-        "apikey": config.SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {config.SUPABASE_SERVICE_KEY}",
-        "Accept": "application/json",
-    }
-
-
-def _base_endpoint():
-    return f"{config.SUPABASE_URL.rstrip('/')}/rest/v1/articles"
-
-
-def _parse_total(content_range: str | None, fallback: int = 0) -> int:
-    if not content_range or "/" not in content_range:
-        return fallback
-    try:
-        total = content_range.rsplit("/", 1)[-1]
-        return int(total) if total != "*" else fallback
-    except Exception:
-        return fallback
 
 
 def _normalize_text(value: str | None) -> str:
     return (value or "").strip()
-
-
-def _normalize_sentiment(value: str | None) -> str:
-    return _normalize_text(value).lower()
-
-
-def _normalize_category(value: str | None) -> str:
-    return _normalize_text(value).lower()
-
-
-def _normalize_article_category(value: str | None) -> str:
-    return _normalize_text(value).lower() or "general_article"
-
-
-def _normalize_tone(value: str | None) -> str:
-    tone = _normalize_text(value).lower()
-    return tone if tone in VALID_TONES else "neutral"
 
 
 def _normalize_date_bound(value: str | None) -> str:
@@ -136,7 +84,7 @@ def _normalize_date_bound(value: str | None) -> str:
 
     An invalid value is dropped (treated as "no bound") rather than sent to
     Postgres, so a bad query param can't blow up the request or silently
-    zero out a report - it just falls back to unfiltered for that bound.
+    zero out a count - it just falls back to unfiltered for that bound.
     """
     text = _normalize_text(value)
     if not text:
@@ -146,48 +94,6 @@ def _normalize_date_bound(value: str | None) -> str:
     except ValueError:
         return ""
     return text
-
-
-def compute_overall_tone(article_tone, writer_tone):
-    """Deterministic overall_tone for a single article. Never guessed by the AI."""
-    article_tone = _normalize_tone(article_tone)
-    writer_tone = _normalize_tone(writer_tone)
-    if article_tone == writer_tone:
-        return article_tone
-    if article_tone == "neutral" and writer_tone != "neutral":
-        return writer_tone
-    if writer_tone == "neutral" and article_tone != "neutral":
-        return article_tone
-    return "mixed"
-
-
-def _group_overall_tone(article_tone_counts, writer_tone_counts):
-    """Deterministic overall_tone for a collection of articles (project rollup).
-
-    Prefers the most frequent non-neutral article_tone; falls back to
-    writer_tone only as a tie-breaker/fallback; "mixed" on conflict.
-    """
-    non_neutral_article = [(tone, count) for tone, count in article_tone_counts.items() if tone != "neutral" and count]
-    if non_neutral_article:
-        top_count = max(count for _, count in non_neutral_article)
-        top_tones = {tone for tone, count in non_neutral_article if count == top_count}
-        if len(top_tones) == 1:
-            return next(iter(top_tones))
-        tie_break = [(tone, count) for tone, count in writer_tone_counts.items() if tone in top_tones and count]
-        if tie_break:
-            tie_break.sort(key=lambda item: -item[1])
-            return tie_break[0][0]
-        return "mixed"
-
-    non_neutral_writer = [(tone, count) for tone, count in writer_tone_counts.items() if tone != "neutral" and count]
-    if non_neutral_writer:
-        top_count = max(count for _, count in non_neutral_writer)
-        top_tones = {tone for tone, count in non_neutral_writer if count == top_count}
-        if len(top_tones) == 1:
-            return next(iter(top_tones))
-        return "mixed"
-
-    return "neutral"
 
 
 def _normalize_limit(value, default=DEFAULT_LIMIT, max_limit=MAX_LIMIT):
@@ -231,7 +137,7 @@ def _normalize_sort(value: str | None):
     return field, direction
 
 
-def _where_parts(search=None, sentiment=None, category=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
+def _where_parts(search=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
     clauses = []
     params = []
 
@@ -241,21 +147,11 @@ def _where_parts(search=None, sentiment=None, category=None, project_id=None, da
         pattern = f"%{escaped}%"
         clauses.append(
             "("
-            "title ilike %s or summary ilike %s or text ilike %s or "
+            "title ilike %s or text ilike %s or "
             "source ilike %s or source_url ilike %s or author ilike %s"
             ")"
         )
-        params.extend([pattern] * 6)
-
-    sentiment_value = _normalize_sentiment(sentiment)
-    if sentiment_value and sentiment_value != "all":
-        clauses.append("sentiment = %s")
-        params.append(sentiment_value)
-
-    category_value = _normalize_category(category)
-    if category_value and category_value != "all":
-        clauses.append("category = %s")
-        params.append(category_value)
+        params.extend([pattern] * 5)
 
     if project_id is not None:
         article_ids = list_article_ids_for_project(project_id)
@@ -295,7 +191,7 @@ def _where_parts(search=None, sentiment=None, category=None, project_id=None, da
     return "", params
 
 
-def _fetch_articles(limit=None, offset=None, search=None, sentiment=None, category=None, project_id=None, order="published.desc", select=ARTICLES_SELECT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, max_limit=MAX_LIMIT):
+def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order="published.desc", select=ARTICLES_SELECT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, max_limit=MAX_LIMIT):
     if not config.DATABASE_URL:
         return [], 0
 
@@ -304,8 +200,6 @@ def _fetch_articles(limit=None, offset=None, search=None, sentiment=None, catego
     offset = _normalize_offset(offset)
     where_sql, params = _where_parts(
         search=search,
-        sentiment=sentiment,
-        category=category,
         project_id=project_id,
         date_from=date_from,
         date_to=date_to,
@@ -339,7 +233,7 @@ def _fetch_articles(limit=None, offset=None, search=None, sentiment=None, catego
         return [], 0
 
 
-def _fetch_all_articles(search=None, sentiment=None, category=None, project_id=None, *, select=ARTICLES_SELECT, order=DEFAULT_SORT, limit=SEARCH_SCAN_LIMIT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
+def _fetch_all_articles(search=None, project_id=None, *, select=ARTICLES_SELECT, order=DEFAULT_SORT, limit=SEARCH_SCAN_LIMIT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
     if not config.DATABASE_URL:
         return []
 
@@ -354,8 +248,6 @@ def _fetch_all_articles(search=None, sentiment=None, category=None, project_id=N
             limit=want,
             offset=offset,
             search=search,
-            sentiment=sentiment,
-            category=category,
             project_id=project_id,
             order=order,
             select=select,
@@ -379,64 +271,20 @@ def _fetch_all_articles(search=None, sentiment=None, category=None, project_id=N
     return rows[:limit]
 
 
-def _project_similarity_scores(project_id):
-    """{article_id: score} for one project, or {} when there is nothing to
-    attach. Split out so a streaming reader can look them up once up front
-    instead of per page."""
-    if project_id is None:
-        return {}
-    return list_article_similarity_scores_for_project(project_id) or {}
-
-
-def _apply_similarity_scores(rows, scores):
-    if not scores:
-        return rows
-    for row in rows:
-        try:
-            article_id = int(row.get("id"))
-        except Exception:
-            continue
-        if article_id in scores:
-            row["project_similarity_score"] = scores[article_id]
-    return rows
-
-
-def _attach_project_similarity_scores(rows, project_id):
-    if project_id is None or not rows:
-        return rows
-    return _apply_similarity_scores(rows, _project_similarity_scores(project_id))
-
-
-def _search_query_embedding(search: str):
-    text = _normalize_text(search)
-    if not text:
-        return []
-
-    embedding = get_embedding(text, role="query")
-    if not embedding:
-        return []
-    vector = embedding.get("embedding_json") or []
-    return vector if isinstance(vector, list) else []
-
-
 def _article_search_blob(row: dict) -> str:
-    insight = row.get("insight_json") if isinstance(row.get("insight_json"), dict) else {}
     parts = [
         row.get("title"),
-        row.get("summary"),
         row.get("text"),
         row.get("source"),
         row.get("source_url"),
         row.get("author"),
-        insight.get("topic"),
-        insight.get("summary"),
-        row.get("article_category"),
-        row.get("category"),
     ]
     return " ".join(_normalize_text(value).lower() for value in parts if _normalize_text(value))
 
 
-def _score_search_row(row: dict, search: str, query_embedding: list[float] | None = None):
+def _score_search_row(row: dict, search: str):
+    """Keyword relevance for one row: what fraction of the query's words
+    appear in it, with a bonus when the whole phrase does."""
     search_text = _normalize_text(search).lower()
     if not search_text:
         return 0.0, False
@@ -448,26 +296,15 @@ def _score_search_row(row: dict, search: str, query_embedding: list[float] | Non
     tokens = [token for token in re.split(r"\W+", search_text) if len(token) > 1]
     keyword_hits = sum(1 for token in tokens if token in blob)
     exact_phrase_hit = search_text in blob
-    keyword_score = 0.0
+    score = 0.0
     if tokens:
-        keyword_score = min(1.0, keyword_hits / len(tokens))
+        score = min(1.0, keyword_hits / len(tokens))
     elif exact_phrase_hit:
-        keyword_score = 1.0
-
-    semantic_score = 0.0
-    if query_embedding:
-        candidate_embedding = row.get("embedding_json") or []
-        if isinstance(candidate_embedding, list) and candidate_embedding:
-            semantic_score = max(0.0, cosine_similarity(query_embedding, candidate_embedding))
-
-    score = max(keyword_score, semantic_score)
+        score = 1.0
     if exact_phrase_hit:
         score = min(1.0, score + 0.1)
-    elif keyword_score and semantic_score:
-        score = min(1.0, (keyword_score * 0.45) + (semantic_score * 0.55))
 
-    matched = exact_phrase_hit or keyword_hits > 0 or semantic_score >= SEARCH_MATCH_THRESHOLD
-    return score, matched
+    return score, exact_phrase_hit or keyword_hits > 0
 
 
 def _rank_search_rows(rows, search: str):
@@ -475,24 +312,17 @@ def _rank_search_rows(rows, search: str):
     if not search_text or not rows:
         return rows, []
 
-    query_embedding = _search_query_embedding(search_text)
     ranked = []
     matched_rows = []
     for index, row in enumerate(rows):
-        score, matched = _score_search_row(row, search_text, query_embedding)
+        score, matched = _score_search_row(row, search_text)
         ranked.append((score, matched, index, row))
         if matched:
             matched_rows.append(row)
 
     ranked_rows = [
         row
-        for score, matched, index, row in sorted(
-            ranked,
-            key=lambda item: (
-                -item[0],
-                item[2],
-            ),
-        )
+        for score, matched, index, row in sorted(ranked, key=lambda item: (-item[0], item[2]))
         if matched or score > 0
     ]
     if not ranked_rows:
@@ -501,10 +331,14 @@ def _rank_search_rows(rows, search: str):
     return ranked_rows, matched_rows
 
 
-def _search_results(search=None, sentiment=None, category=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, select=ARTICLES_SELECT):
+def _search_results(search=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, select=ARTICLES_SELECT):
+    """Rank a bounded scan (SEARCH_SCAN_LIMIT rows) by keyword relevance.
+
+    The scan is deliberately unfiltered by `search` - the SQL ilike in
+    _where_parts is a coarse prefilter that can't rank, so the scoring pass
+    below is what orders the result. Anything past SEARCH_SCAN_LIMIT is not
+    considered."""
     rows = _fetch_all_articles(
-        sentiment=sentiment,
-        category=category,
         project_id=project_id,
         select=select,
         order=DEFAULT_SORT,
@@ -515,400 +349,11 @@ def _search_results(search=None, sentiment=None, category=None, project_id=None,
         scraped_from=scraped_from,
         scraped_to=scraped_to,
     )
-    ranked_rows, matched_rows = _rank_search_rows(rows, search)
-    if _normalize_text(search):
-        visible_rows = ranked_rows
-        return visible_rows, len(visible_rows)
+    ranked_rows, _ = _rank_search_rows(rows, search)
     return ranked_rows, len(ranked_rows)
 
 
-def _fetch_rows_for_stats(search=None, category=None, project_id=None, limit=1000, date_from=None, date_to=None):
-    if not config.DATABASE_URL:
-        return []
-
-    rows = []
-    total_cap = max(1, int(limit or 1000))
-    page_size = min(total_cap, BULK_PAGE_SIZE)
-    offset = 0
-
-    while len(rows) < total_cap:
-        want = min(page_size, total_cap - len(rows))
-        batch, _ = _fetch_articles(
-            limit=want,
-            offset=offset,
-            search=search,
-            category=category,
-            project_id=project_id,
-            order="created_at.desc",
-            select="id,url,title,sentiment,category,article_category,writer_tone,article_tone,region,gender,age_range,segment,verified,insight_json,summary,published,pipeline_run_id,source_language",
-            date_from=date_from,
-            date_to=date_to,
-            max_limit=page_size,
-        )
-        if not batch:
-            break
-        rows.extend(batch)
-        if len(batch) < want:
-            break
-        offset += len(batch)
-
-    return rows[:total_cap]
-
-
-def _list_top_items(values, limit=6):
-    cleaned = []
-    counts = Counter()
-    display = {}
-    sources = {}
-    for value in values:
-        if isinstance(value, dict):
-            text = _normalize_text(value.get("text") or value.get("idea") or value.get("opinion") or value.get("feedback"))
-            source_url = _normalize_text(value.get("url"))
-            source_title = _normalize_text(value.get("title"))
-            source_id = value.get("id")
-            source_pipeline_run_id = value.get("pipeline_run_id")
-            source_published = value.get("published")
-        else:
-            text = _normalize_text(value)
-            source_url = ""
-            source_title = ""
-            source_id = None
-            source_pipeline_run_id = None
-            source_published = None
-        if not text:
-            continue
-        key = text.lower()
-        counts[key] += 1
-        if key not in display:
-            display[key] = text
-        if source_url or source_title:
-            sources.setdefault(key, [])
-            source_entry = {
-                "id": source_id,
-                "url": source_url,
-                "title": source_title or source_url,
-                "pipeline_run_id": source_pipeline_run_id,
-                "published": source_published,
-            }
-            if source_entry not in sources[key]:
-                sources[key].append(source_entry)
-    for key, count in counts.most_common(limit):
-        item = {"text": display[key], "count": count}
-        if key in sources:
-            item["sources"] = sources[key]
-        cleaned.append(item)
-    return cleaned
-
-
-def _normalize_feedback_list(value):
-    if value is None:
-        return []
-    if isinstance(value, list):
-        items = value
-    elif isinstance(value, str):
-        items = [part.strip() for part in value.replace("\n", ",").split(",")]
-    else:
-        items = [value]
-
-    cleaned = []
-    for item in items:
-        if isinstance(item, dict):
-            text = _normalize_text(item.get("idea") or item.get("opinion") or item.get("text") or item.get("feedback"))
-        else:
-            text = _normalize_text(item)
-        if text and text not in cleaned:
-            cleaned.append(text)
-    return cleaned
-
-
-def _normalize_people_opinions(value):
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        opinion = _normalize_text(item.get("opinion"))
-        if not opinion:
-            continue
-        sentiment = _normalize_text(item.get("sentiment")).lower() or "neutral"
-        category = _normalize_text(item.get("category"))
-        key = (opinion.lower(), sentiment, category.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append({
-            "opinion": opinion,
-            "sentiment": sentiment if sentiment in {"positive", "negative", "mixed", "neutral"} else "neutral",
-            "category": category,
-        })
-    return result
-
-
-def _normalize_frequent_ideas(value):
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        idea = _normalize_text(item.get("idea"))
-        if not idea:
-            continue
-        type_value = _normalize_text(item.get("type")).lower()
-        if type_value not in {"complaint", "praise", "suggestion", "issue"}:
-            type_value = "issue"
-        category = _normalize_text(item.get("category"))
-        key = (idea.lower(), type_value, category.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            freq = int(float(item.get("frequency_estimate", 1)))
-        except Exception:
-            freq = 1
-        result.append({
-            "idea": idea,
-            "type": type_value,
-            "category": category,
-            "frequency_estimate": max(1, freq),
-        })
-    return result
-
-
-def _article_category_counts(rows):
-    counts = Counter()
-    for row in rows:
-        category = _normalize_article_category(row.get("article_category") or row.get("category"))
-        counts[category] += 1
-    return [{"category": category, "count": count} for category, count in counts.most_common()]
-
-
-def _source_language_counts(rows):
-    counts = Counter()
-    for row in rows:
-        language = str(row.get("source_language") or "").strip().lower() or "unknown"
-        counts[language] += 1
-    return [{"language": language, "count": count} for language, count in counts.most_common()]
-
-
-def _overall_sentiment(rows):
-    counts = Counter()
-    for row in rows:
-        sentiment = _normalize_sentiment(row.get("sentiment"))
-        counts[sentiment] += 1
-    positive = counts["positive"]
-    negative = counts["negative"]
-    mixed = counts["mixed"]
-    neutral = counts["neutral"]
-    if negative > positive and negative >= neutral:
-        return "negative"
-    if positive > negative and positive >= neutral:
-        return "positive"
-    if mixed:
-        return "mixed"
-    return "neutral"
-
-
-def _tone_counts(rows, field):
-    counts = Counter()
-    for row in rows:
-        insight = row.get("insight_json") if isinstance(row.get("insight_json"), dict) else {}
-        counts[_normalize_tone(row.get(field) or insight.get(field))] += 1
-    return counts
-
-
-def _overall_mood_from_counts(article_tone_counts):
-    return article_tone_counts.most_common(1)[0][0] if article_tone_counts else "neutral"
-
-
-def _demographic_sentiment_breakdown(rows, field):
-    """Sentiment crosstab for one demographic dimension (region/gender/
-    age_range) - each bucket's positive_pct/negative_pct is exactly the
-    "50% of X are positive" stat these columns exist for. Reads the article's
-    own rolled-up column (see analysis/aggregation.py's
-    compute_dominant_demographics), not the per-opinion values."""
-    buckets = defaultdict(Counter)
-    for row in rows:
-        value = _normalize_text(row.get(field)) or "unknown"
-        buckets[value][_normalize_sentiment(row.get("sentiment"))] += 1
-
-    breakdown = []
-    for value, counts in buckets.items():
-        total = sum(counts.values())
-        breakdown.append({
-            "value": value,
-            "total": total,
-            "positive": counts.get("positive", 0),
-            "negative": counts.get("negative", 0),
-            "neutral": counts.get("neutral", 0),
-            "mixed": counts.get("mixed", 0),
-            "positive_pct": round(counts.get("positive", 0) / total * 100, 1) if total else 0.0,
-            "negative_pct": round(counts.get("negative", 0) / total * 100, 1) if total else 0.0,
-        })
-    breakdown.sort(key=lambda item: -item["total"])
-    return breakdown
-
-
-def _verified_breakdown(rows):
-    """Verified/unverified article counts for the dashboard's trusted-source
-    pie chart - see trusted_sources.py. A plain count, not a sentiment
-    crosstab like _demographic_sentiment_breakdown, since `verified` is a
-    boolean rather than a text bucket value."""
-    verified_count = sum(1 for row in rows if row.get("verified"))
-    total = len(rows)
-    return [
-        {"value": "verified", "total": verified_count},
-        {"value": "unverified", "total": total - verified_count},
-    ]
-
-
-def _topic_summary(rows):
-    positive_feedback = []
-    negative_feedback = []
-    nice_to_have_features = []
-    complaints = []
-    great_features = []
-    comfort_issues = []
-    performance_feedback = []
-    price_value_feedback = []
-    maintenance_reliability_feedback = []
-    technology_feedback = []
-    safety_feedback = []
-    people_opinions = []
-    frequent_ideas = []
-    topics = []
-
-    for row in rows:
-        row_source = {
-            "id": row.get("id"),
-            "url": _normalize_text(row.get("url")),
-            "title": _normalize_text(row.get("title")),
-            "pipeline_run_id": row.get("pipeline_run_id"),
-            "published": row.get("published"),
-        }
-        insight = row.get("insight_json") if isinstance(row.get("insight_json"), dict) else {}
-        for text in _normalize_feedback_list(insight.get("positive_feedback")):
-            positive_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("negative_feedback")):
-            negative_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("nice_to_have_features")):
-            nice_to_have_features.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("complaints")):
-            complaints.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("great_features")):
-            great_features.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("comfort_issues")):
-            comfort_issues.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("performance_feedback")):
-            performance_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("price_value_feedback")):
-            price_value_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("maintenance_reliability_feedback")):
-            maintenance_reliability_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("technology_feedback")):
-            technology_feedback.append({**row_source, "text": text})
-        for text in _normalize_feedback_list(insight.get("safety_feedback")):
-            safety_feedback.append({**row_source, "text": text})
-        people_opinions.extend(_normalize_people_opinions(insight.get("people_opinions")))
-        for item in _normalize_frequent_ideas(insight.get("frequent_ideas")):
-            frequent_ideas.append({**item, **row_source})
-        topic = _normalize_text(insight.get("topic") or row.get("title"))
-        if topic:
-            topics.append(topic)
-
-    idea_counts = Counter()
-    idea_display = {}
-    idea_type = {}
-    idea_category = {}
-    idea_sources = {}
-    for item in frequent_ideas:
-        idea = _normalize_text(item.get("idea"))
-        if not idea:
-            continue
-        key = idea.lower()
-        idea_counts[key] += 1
-        idea_display.setdefault(key, idea)
-        idea_type.setdefault(key, item.get("type") or "issue")
-        idea_category.setdefault(key, item.get("category") or "")
-        if item.get("url") or item.get("title"):
-            idea_sources.setdefault(key, [])
-            source_entry = {
-                "id": item.get("id"),
-                "url": _normalize_text(item.get("url")),
-                "title": _normalize_text(item.get("title")) or _normalize_text(item.get("url")),
-                "pipeline_run_id": item.get("pipeline_run_id"),
-                "published": item.get("published"),
-            }
-            if source_entry not in idea_sources[key]:
-                idea_sources[key].append(source_entry)
-
-    frequent_ideas_rollup = [
-        {
-            "idea": idea_display[key],
-            "type": idea_type.get(key, "issue"),
-            "category": idea_category.get(key, ""),
-            "frequency_estimate": count,
-            **({"sources": idea_sources.get(key, [])} if idea_sources.get(key) else {}),
-        }
-        for key, count in idea_counts.most_common()
-    ]
-
-    def as_top_items(values):
-        return _list_top_items(values)
-
-    positive_items = as_top_items(positive_feedback + great_features)
-    negative_items = as_top_items(negative_feedback + complaints + comfort_issues)
-    request_items = as_top_items(nice_to_have_features)
-
-    summary_bits = []
-    if positive_items:
-        summary_bits.append(f"People like {positive_items[0]['text'].rstrip('.')}.")
-    if negative_items:
-        summary_bits.append(f"Common concerns include {negative_items[0]['text'].rstrip('.')}.")
-    if request_items:
-        summary_bits.append(f"Requested improvements center on {request_items[0]['text'].rstrip('.')}.")
-    if not summary_bits and frequent_ideas_rollup:
-        summary_bits.append(f"The most repeated idea is {frequent_ideas_rollup[0]['idea'].rstrip('.')}.")
-    summary = " ".join(summary_bits).strip()
-
-    writer_tone_counts = _tone_counts(rows, "writer_tone")
-    article_tone_counts = _tone_counts(rows, "article_tone")
-
-    return {
-        "summary": summary,
-        "topic": topics[0] if topics else "",
-        "article_category_breakdown": _article_category_counts(rows),
-        "language_breakdown": _source_language_counts(rows),
-        "overall_sentiment": _overall_sentiment(rows),
-        "overall_mood": _overall_mood_from_counts(article_tone_counts),
-        "overall_tone": _group_overall_tone(article_tone_counts, writer_tone_counts),
-        "writer_tone_breakdown": [{"tone": tone, "count": count} for tone, count in writer_tone_counts.most_common()],
-        "article_tone_breakdown": [{"tone": tone, "count": count} for tone, count in article_tone_counts.most_common()],
-        "region_breakdown": _demographic_sentiment_breakdown(rows, "region"),
-        "gender_breakdown": _demographic_sentiment_breakdown(rows, "gender"),
-        "age_range_breakdown": _demographic_sentiment_breakdown(rows, "age_range"),
-        "segment_breakdown": _demographic_sentiment_breakdown(rows, "segment"),
-        "verified_breakdown": _verified_breakdown(rows),
-        "positive_feedback": positive_items,
-        "negative_feedback": negative_items,
-        "nice_to_have_features": request_items,
-        "complaints": as_top_items(complaints),
-        "great_features": as_top_items(great_features),
-        "comfort_issues": as_top_items(comfort_issues),
-        "performance_feedback": as_top_items(performance_feedback),
-        "price_value_feedback": as_top_items(price_value_feedback),
-        "maintenance_reliability_feedback": as_top_items(maintenance_reliability_feedback),
-        "technology_feedback": as_top_items(technology_feedback),
-        "safety_feedback": as_top_items(safety_feedback),
-        "people_opinions": people_opinions[:10],
-        "frequent_ideas": frequent_ideas_rollup[:12],
-    }
-
-
-def list_articles(search=None, sentiment=None, category=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
+def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
     limit = _normalize_limit(limit)
     offset = _normalize_offset(offset)
     field, direction = _normalize_sort(sort)
@@ -917,29 +362,24 @@ def list_articles(search=None, sentiment=None, category=None, project_id=None, l
     if search_text:
         rows, total = _search_results(
             search=search_text,
-            sentiment=sentiment,
-            category=category,
             project_id=project_id,
             source_url=source_url,
             scraped_from=scraped_from,
             scraped_to=scraped_to,
         )
         rows = rows[offset:offset + limit]
-        rows = _attach_project_similarity_scores(rows, project_id)
         return {
             "articles": rows,
             "total": total,
             "limit": limit,
             "offset": offset,
-            "sort": "semantic.desc",
+            "sort": "relevance.desc",
         }
 
     rows, total = _fetch_articles(
         limit=limit,
         offset=offset,
         search=search,
-        sentiment=sentiment,
-        category=category,
         project_id=project_id,
         order=f"{field}.{direction}",
         select=ARTICLES_SELECT,
@@ -947,7 +387,6 @@ def list_articles(search=None, sentiment=None, category=None, project_id=None, l
         scraped_from=scraped_from,
         scraped_to=scraped_to,
     )
-    rows = _attach_project_similarity_scores(rows, project_id)
     return {
         "articles": rows,
         "total": total,
@@ -957,36 +396,32 @@ def list_articles(search=None, sentiment=None, category=None, project_id=None, l
     }
 
 
-def export_articles(search=None, sentiment=None, category=None, project_id=None, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
+def export_articles(search=None, project_id=None, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
     """Yield full article rows for the JSONL export, one page at a time.
 
-    A generator rather than a list: the export carries `text` and
-    `embedding_json` for every row (see _export_select() for why it reads a
-    wider column list than list_articles() does), so materializing a whole
-    project's worth before the response starts is what would put a ceiling on
-    how large a project can be exported. Streaming holds one page at a time and
-    lets the client start receiving immediately.
+    A generator rather than a list: the export carries `text` for every row
+    (see _export_select() for why it reads a wider column list than
+    list_articles() does), so materializing a whole project's worth before the
+    response starts is what would put a ceiling on how large a project can be
+    exported. Streaming holds one page at a time and lets the client start
+    receiving immediately.
 
     Callers that genuinely need them all at once can still wrap it in list().
-    The similarity scores are looked up once here rather than per page.
     """
     select = _export_select()
-    scores = _project_similarity_scores(project_id)
     search_text = _normalize_text(search)
     if search_text:
-        # The semantic path ranks a bounded scan (SEARCH_SCAN_LIMIT) as a whole,
+        # The ranked path scores a bounded scan (SEARCH_SCAN_LIMIT) as a whole,
         # so this page is already materialized - stream it out as one chunk.
         rows, _ = _search_results(
             search=search_text,
-            sentiment=sentiment,
-            category=category,
             project_id=project_id,
             source_url=source_url,
             scraped_from=scraped_from,
             scraped_to=scraped_to,
             select=select,
         )
-        yield from _apply_similarity_scores(rows, scores)
+        yield from rows
         return
 
     page_size = BULK_PAGE_SIZE
@@ -998,8 +433,6 @@ def export_articles(search=None, sentiment=None, category=None, project_id=None,
             limit=page_size,
             offset=offset,
             search=search,
-            sentiment=sentiment,
-            category=category,
             project_id=project_id,
             order=f"{field}.{direction}",
             select=select,
@@ -1010,309 +443,68 @@ def export_articles(search=None, sentiment=None, category=None, project_id=None,
         )
         if not batch:
             return
-        yield from _apply_similarity_scores(batch, scores)
+        yield from batch
         if len(batch) < page_size:
             return
         offset += len(batch)
 
 
-def _count_articles(search=None, sentiment=None, category=None, project_id=None, date_from=None, date_to=None):
-    search_text = _normalize_text(search)
-    if search_text:
-        _, total = _search_results(
-            search=search_text,
-            sentiment=sentiment,
-            category=category,
-            project_id=project_id,
-            date_from=date_from,
-            date_to=date_to,
-        )
-        return total
+def get_article_stats(search=None, project_id=None, date_from=None, date_to=None):
+    """What was collected for a scope: how many articles, from which sources,
+    and over what span.
 
-    _, total = _fetch_articles(
-        limit=1,
-        offset=0,
+    Aggregated in SQL rather than by scanning rows into Python - there are no
+    per-article judgements left to make here, only counts, so a project with
+    50k articles costs the same as one with 50.
+    """
+    empty = {"total": 0, "sources": [], "first_scraped_at": None, "last_scraped_at": None}
+    if not config.DATABASE_URL:
+        return empty
+
+    where_sql, params = _where_parts(
         search=search,
-        sentiment=sentiment,
-        category=category,
         project_id=project_id,
-        order=DEFAULT_SORT,
-        select="id",
         date_from=date_from,
         date_to=date_to,
     )
-    return total
-
-
-def get_article_stats(search=None, category=None, project_id=None, date_from=None, date_to=None):
-    """Sentiment/category/insight rollup for a scope, optionally bounded to a date window.
-
-    date_from/date_to are ISO date or datetime strings compared against
-    coalesce(published, created_at); either can be omitted for an open-ended
-    bound. The response shape is unchanged from the unfiltered case so
-    existing UI consumers keep working - the date window only narrows which
-    articles are counted.
-    """
-    total = _count_articles(search=search, category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    positive = _count_articles(search=search, sentiment="positive", category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    negative = _count_articles(search=search, sentiment="negative", category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    neutral = _count_articles(search=search, sentiment="neutral", category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    mixed = _count_articles(search=search, sentiment="mixed", category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    search_text = _normalize_text(search)
-    if search_text:
-        rows, _ = _search_results(search=search_text, category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-    else:
-        rows = _fetch_rows_for_stats(search=search, category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-
-    return {
-        "total": total,
-        "positive": positive,
-        "negative": negative,
-        "neutral": neutral,
-        "mixed": mixed,
-        "article_category_breakdown": _article_category_counts(rows),
-        "insights": _topic_summary(rows),
-    }
-
-
-def list_idea_clusters_for_project(project_id, limit=50, offset=0):
-    """Paginated cross-article idea clusters for a project (see schema.sql's
-    idea_clusters/idea_cluster_articles - the persisted, cross-run
-    counterpart to analysis/aggregation.py's per-run in-memory rollup).
-
-    Returns the empty page shape for a falsy project_id or on a database
-    that hasn't had schema.sql re-run yet (idea_clusters doesn't exist),
-    same defensive style as the rest of this module's DB calls.
-    """
-    limit = _normalize_limit(limit, default=50)
-    offset = _normalize_offset(offset)
-    empty = {"clusters": [], "total": 0, "limit": limit, "offset": offset}
-    if not project_id or not config.DATABASE_URL:
-        return empty
-    try:
-        rows = db.fetch_all(
-            """
-            select id, idea, type, category, frequency_estimate, first_seen_at, last_seen_at
-            from idea_clusters
-            where project_id = %s
-            order by frequency_estimate desc, last_seen_at desc
-            limit %s offset %s
-            """,
-            (int(project_id), limit, offset),
-        )
-        count_row = db.fetch_one(
-            "select count(*)::int as total from idea_clusters where project_id = %s",
-            (int(project_id),),
-        )
-    except Exception:
-        return empty
-    return {"clusters": rows, "total": int((count_row or {}).get("total") or 0), "limit": limit, "offset": offset}
-
-
-def list_articles_for_idea_cluster(cluster_id, project_id, limit=10, offset=0):
-    """Representative source articles for one idea cluster, scoped to the
-    project it belongs to (so a cluster from a project the caller can't see
-    can't be browsed by guessing its id). Returns None - distinct from the
-    empty page shape - when the cluster doesn't exist or isn't in that
-    project, so the caller can 404 instead of showing an empty result."""
-    limit = _normalize_limit(limit, default=10, max_limit=500)
-    offset = _normalize_offset(offset)
-    if not config.DATABASE_URL:
-        return None
-    try:
-        cluster = db.fetch_one(
-            "select id from idea_clusters where id = %s and project_id = %s",
-            (int(cluster_id), int(project_id)),
-        )
-        if not cluster:
-            return None
-        rows = db.fetch_all(
-            """
-            select a.id, a.url, a.title, a.source, a.published, a.summary, a.sentiment, a.pipeline_run_id
-            from articles a
-            join idea_cluster_articles ica on ica.article_id = a.id
-            where ica.idea_cluster_id = %s
-            order by a.published desc nulls last, a.created_at desc
-            limit %s offset %s
-            """,
-            (int(cluster_id), limit, offset),
-        )
-        count_row = db.fetch_one(
-            "select count(*)::int as total from idea_cluster_articles where idea_cluster_id = %s",
-            (int(cluster_id),),
-        )
-    except Exception:
-        return None
-    return {"articles": rows, "total": int((count_row or {}).get("total") or 0), "limit": limit, "offset": offset}
-
-
-def get_analysis_status_counts(project_id=None):
-    """Article counts grouped by analysis_status (pending/processing/success/
-    failed/partial), optionally scoped to a project - lets an operator see
-    how many articles need reprocessing. {} on a database that hasn't had
-    schema.sql re-run yet (analysis_status doesn't exist).
-    """
-    if not config.DATABASE_URL:
-        return {}
-    try:
-        if project_id is not None:
-            rows = db.fetch_all(
-                """
-                select a.analysis_status, count(*)::int as total
-                from articles a
-                join article_projects ap on ap.article_id = a.id
-                where ap.project_id = %s
-                group by a.analysis_status
-                """,
-                (int(project_id),),
-            )
-        else:
-            rows = db.fetch_all(
-                "select analysis_status, count(*)::int as total from articles group by analysis_status"
-            )
-        return {(row.get("analysis_status") or "unknown"): int(row.get("total") or 0) for row in rows or []}
-    except Exception:
-        return {}
-
-
-def list_analysis_errors(project_id=None, limit=24, offset=0):
-    """Paginated list of articles whose most recent analysis run failed
-    (analysis_status = 'failed'), with the stored analysis_error. Empty page
-    on a database that hasn't had schema.sql re-run yet."""
-    limit = _normalize_limit(limit)
-    offset = _normalize_offset(offset)
-    empty = {"errors": [], "total": 0, "limit": limit, "offset": offset}
-    if not config.DATABASE_URL:
-        return empty
-
-    where = "where a.analysis_status = 'failed'"
-    params = []
-    if project_id is not None:
-        where += " and exists (select 1 from article_projects ap where ap.article_id = a.id and ap.project_id = %s)"
-        params.append(int(project_id))
 
     try:
-        rows = db.fetch_all(
+        totals = db.fetch_one(
             f"""
-            select a.id, a.url, a.title, a.source, a.published, a.analysis_error,
-                   a.analysis_attempt_count, a.analysis_started_at, a.analysis_finished_at
-            from articles a
-            {where}
-            order by a.analysis_finished_at desc nulls last
-            limit %s offset %s
+            select count(*)::int as total,
+                   min(fetched_at) as first_scraped_at,
+                   max(fetched_at) as last_scraped_at
+            from articles
+            {where_sql}
             """,
-            (*params, limit, offset),
-        )
-        count_row = db.fetch_one(f"select count(*)::int as total from articles a {where}", tuple(params))
+            tuple(params),
+        ) or {}
+        sources = db.fetch_all(
+            f"""
+            select coalesce(nullif(source, ''), 'unknown') as source,
+                   count(*)::int as count,
+                   max(fetched_at) as last_scraped_at
+            from articles
+            {where_sql}
+            group by 1
+            order by count desc, source asc
+            limit 50
+            """,
+            tuple(params),
+        ) or []
     except Exception:
         return empty
-    return {"errors": rows, "total": int((count_row or {}).get("total") or 0), "limit": limit, "offset": offset}
 
-
-_ARTICLE_ANALYSIS_BASE_COLUMNS = (
-    "id", "url", "title", "source", "published", "sentiment", "article_category",
-    "writer_tone", "article_tone", "insight_json", "analyzed_at", "analysis_model",
-    "analysis_prompt_version",
-)
-
-_ARTICLE_ANALYSIS_METADATA_COLUMNS = (
-    "sentiment_score", "sentiment_low_confidence", "sentiment_model",
-    "category_confidence", "writer_tone_confidence", "article_tone_confidence",
-    "classification_model", "extraction_model", "analysis_pipeline_version",
-    "source_language", "source_language_confidence", "embedding_dimensions",
-    "analysis_status", "analysis_error", "analysis_started_at", "analysis_finished_at",
-    "analysis_attempt_count", "reprocess_requested_at",
-)
-
-
-@lru_cache(maxsize=1)
-def _live_articles_columns():
-    if not config.DATABASE_URL:
-        return frozenset()
-    try:
-        rows = db.fetch_all(
-            """
-            select column_name from information_schema.columns
-            where table_schema = 'public' and table_name = 'articles'
-            """
-        )
-        return frozenset(row.get("column_name") for row in rows or [] if row.get("column_name"))
-    except Exception:
-        return frozenset()
-
-
-def _article_analysis_select_columns():
-    live = _live_articles_columns()
-    metadata_columns = [c for c in _ARTICLE_ANALYSIS_METADATA_COLUMNS if c in live] if live else []
-    return list(_ARTICLE_ANALYSIS_BASE_COLUMNS) + metadata_columns
-
-
-def _shape_article_analysis(row: dict) -> dict:
-    """Normalize one articles row into the analysis-detail response shape -
-    the single source of truth for what GET .../analysis returns, so a
-    malformed insight_json (wrong type, not a dict) never leaks through as
-    if it were real content."""
-    insight = row.get("insight_json") if isinstance(row.get("insight_json"), dict) else {}
-    writer_tone = _normalize_tone(row.get("writer_tone"))
-    article_tone = _normalize_tone(row.get("article_tone"))
     return {
-        "article_id": row.get("id"),
-        "url": row.get("url"),
-        "title": row.get("title"),
-        "source": row.get("source"),
-        "published": row.get("published"),
-        "sentiment": _normalize_sentiment(row.get("sentiment")) or "neutral",
-        "article_category": _normalize_article_category(row.get("article_category")),
-        "writer_tone": writer_tone,
-        "article_tone": article_tone,
-        "overall_tone": compute_overall_tone(article_tone, writer_tone),
-        "summary": _normalize_text(insight.get("summary")),
-        "insight_json": insight,
-        "analysis_status": row.get("analysis_status") or "success",
-        "analysis_error": row.get("analysis_error"),
-        "analyzed_at": row.get("analyzed_at"),
-        "analysis_model": row.get("analysis_model"),
-        "analysis_pipeline_version": row.get("analysis_pipeline_version") or row.get("analysis_prompt_version"),
-        "confidence": {
-            "sentiment": row.get("sentiment_score"),
-            "sentiment_low_confidence": bool(row.get("sentiment_low_confidence")),
-            "category": row.get("category_confidence"),
-            "writer_tone": row.get("writer_tone_confidence"),
-            "article_tone": row.get("article_tone_confidence"),
-        },
-        "source_language": row.get("source_language"),
-        "source_language_confidence": row.get("source_language_confidence"),
-        "models": {
-            "sentiment": row.get("sentiment_model"),
-            "classification": row.get("classification_model"),
-            "extraction": row.get("extraction_model"),
-        },
-        "processing": {
-            "attempt_count": row.get("analysis_attempt_count"),
-            "started_at": row.get("analysis_started_at"),
-            "finished_at": row.get("analysis_finished_at"),
-            "reprocess_requested_at": row.get("reprocess_requested_at"),
-        },
+        "total": int(totals.get("total") or 0),
+        "first_scraped_at": totals.get("first_scraped_at"),
+        "last_scraped_at": totals.get("last_scraped_at"),
+        "sources": [
+            {
+                "source": row.get("source"),
+                "count": int(row.get("count") or 0),
+                "last_scraped_at": row.get("last_scraped_at"),
+            }
+            for row in sources
+        ],
     }
-
-
-def get_article_analysis(article_id):
-    """Full analysis detail for one article - the response shape GET
-    /api/articles/{id}/analysis returns. None if the article doesn't exist
-    (or the database is unreachable), so the route can 404 rather than
-    return a half-filled body."""
-    if not config.DATABASE_URL:
-        return None
-    columns = _article_analysis_select_columns()
-    try:
-        row = db.fetch_one(
-            f"select {', '.join(columns)} from articles where id = %s",
-            (int(article_id),),
-        )
-    except Exception:
-        return None
-    if not row:
-        return None
-    return _shape_article_analysis(row)
-
-

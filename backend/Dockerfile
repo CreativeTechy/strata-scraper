@@ -7,8 +7,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app/backend
 
 # Build deps cover packages commonly used by Scrapy, lxml, trafilatura, and psycopg.
-# tesseract-ocr(-eng) backs pytesseract for the OCR extraction path (scanned
-# PDFs, images) - pytesseract itself is just a subprocess wrapper around it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
@@ -17,8 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libxslt1-dev \
     zlib1g-dev \
-    tesseract-ocr \
-    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./requirements.txt

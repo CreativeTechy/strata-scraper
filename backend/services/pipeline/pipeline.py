@@ -1,16 +1,16 @@
-"""Shared scrape -> enrich -> save pipeline execution.
+"""Shared scrape -> validate -> save pipeline execution.
 
 Used by both the /scrape endpoint and the interval scheduler so there is a
 single place that runs the pipeline and records its outcome.
 
-A single `scrapy crawl` subprocess does the whole run - scraping, cleaning,
-enriching, and saving each article as it's scraped (see
-scraper/pipelines.py's StreamingEnrichPipeline), rather than the previous
+A single `scrapy crawl` subprocess does the whole run - scraping,
+validating, and saving each article as it's scraped (see
+scraper/pipelines.py's StreamingCollectPipeline), rather than the previous
 two-subprocess design (a full `scrapy crawl -O raw_file` followed by a
-separate `python -m services.articles.enrich` pass over the whole file).
-That's what lets the dashboard's per-source breakdown fill in source by
-source while the crawl is still running, instead of only appearing once the
-slowest source in the run finishes.
+separate pass over the whole file). That's what lets the dashboard's
+per-source breakdown fill in source by source while the crawl is still
+running, instead of only appearing once the slowest source in the run
+finishes.
 """
 
 import os
@@ -33,8 +33,8 @@ from services.pipeline.source_diagnostics import build_fetch_note, load_source_d
 
 # services/pipeline/pipeline.py -> services/pipeline -> services -> backend/.
 # BASE_DIR must be the backend root (not this file's own directory): it's
-# used as the cwd for both the `scrapy crawl` subprocess (needs scrapy.cfg,
-# which lives at backend root) and the enrich-stage subprocess below.
+# used as the cwd for the `scrapy crawl` subprocess (it needs scrapy.cfg,
+# which lives at backend root).
 BASE_DIR = Path(__file__).resolve().parents[2]
 STORAGE_DIR = BASE_DIR.parent / "storage"
 RUNS_DIR = STORAGE_DIR / "runs"
@@ -43,7 +43,7 @@ IS_WINDOWS = platform.system() == "Windows"
 
 # Tracks the live Popen for each run so a stop request can reach the actual
 # OS process, plus which run_ids have been asked to cancel (checked between
-# pipeline stages so a stop between scrape/enrich still lands on "cancelled").
+# stages so a stop that arrives mid-run still lands on "cancelled").
 _active_processes = {}
 _cancel_requested = set()
 _registry_lock = threading.Lock()
@@ -147,7 +147,7 @@ def _merge_fetch_diagnostics(run_id, workdir):
     """Fold the spider's end-of-run fetch diagnostics (source_diagnostics.json
     - only ever writable once the whole crawl closes, so this can't be
     streamed per-item like the rest of a source's stats) into whatever
-    pipeline_run_sources rows StreamingEnrichPipeline already wrote live
+    pipeline_run_sources rows StreamingCollectPipeline already wrote live
     during the run. Also adds a row for a source that produced zero items at
     all (e.g. fully blocked) and therefore never got a row from the pipeline.
     Returns the diagnostics list too, for the caller's own console logging.
@@ -171,7 +171,6 @@ def _merge_fetch_diagnostics(run_id, workdir):
             "date_filtered": row.get("date_filtered", 0),
             "skipped_existing": row.get("skipped_existing", 0),
             "kept": row.get("kept", 0),
-            "enriched": row.get("enriched", 0),
             "saved": row.get("saved", 0),
             "http_status": (diagnostic or {}).get("http_status"),
             "network_blocked": bool((diagnostic or {}).get("network_blocked")),
@@ -190,8 +189,8 @@ def _finish_run(run_id, project_id, **fields):
 
 
 def run_scraper_pipeline(run_id: str, project_id: int | None = None):
-    """Scrape, clean, enrich, and save - all within one `scrapy crawl`
-    subprocess (see scraper/pipelines.py's StreamingEnrichPipeline)."""
+    """Scrape, validate, and save - all within one `scrapy crawl`
+    subprocess (see scraper/pipelines.py's StreamingCollectPipeline)."""
     if _is_cancel_requested(run_id):
         _finish_run(
             run_id,
@@ -212,9 +211,8 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"run-{run_id}-", dir=RUNS_DIR) as run_dir:
         run_path = Path(run_dir)
-        # Debug artifact only now - StreamingEnrichPipeline processes each
-        # item as it's scraped, so nothing reads this file back afterward the
-        # way enrich.py used to.
+        # Debug artifact only - StreamingCollectPipeline processes each item
+        # as it's scraped, so nothing reads this file back afterward.
         raw_file = run_path / "articles.raw.json"
         env["PIPELINE_WORKDIR"] = str(run_path)
 
@@ -241,11 +239,11 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
                 run_id,
                 status="running",
                 stage="scrape",
-                message="Starting scrape and enrichment...",
+                message="Starting scrape...",
                 started_at=scrape_start,
                 scrape_started_at=scrape_start,
             )
-            print("Scraping, cleaning, enriching, and saving sources...")
+            print("Scraping, validating, and saving sources...")
             _run_step(run_id, ["scrapy", "crawl", "source_rss", "-O", str(raw_file)], BASE_DIR, env)
 
             if _is_cancel_requested(run_id):
@@ -256,7 +254,7 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
 
             # Fetch-level diagnostics (was a source blocked/404/DNS-failed)
             # are only ever knowable once the whole crawl closes - this folds
-            # them into the pipeline_run_sources rows StreamingEnrichPipeline
+            # them into the pipeline_run_sources rows StreamingCollectPipeline
             # already wrote live during the run (see _merge_fetch_diagnostics).
             diagnostics = _merge_fetch_diagnostics(run_id, str(run_path))
             # Debug visibility: print every source that had a fetch problem
@@ -277,39 +275,21 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
 
             # articles_scraped/cleaned/saved were already kept live-updated
             # throughout the run (by the spider itself and by
-            # StreamingEnrichPipeline respectively) - read the current row
+            # StreamingCollectPipeline respectively) - read the current row
             # back rather than a stats file no longer written anywhere.
             final_run = get_pipeline_run(run_id) or {}
-            if final_run.get("status") == "failed":
-                # StreamingEnrichPipeline hit a fatal AI provider error (bad
-                # key, insufficient balance, rate limit, outage...) and
-                # force-stopped the crawl process itself - the subprocess can
-                # still exit 0 doing that, so the exit code alone isn't
-                # trustworthy here. Keep the specific error it already
-                # recorded instead of reporting a false "success".
-                print(f"Pipeline stopped early: {final_run.get('error')}")
-                _finish_run(
-                    run_id,
-                    project_id,
-                    status="failed",
-                    stage=final_run.get("stage") or "error",
-                    message=final_run.get("message") or "Pipeline stopped due to an AI provider error.",
-                    error=final_run.get("error"),
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                )
-            else:
-                _finish_run(
-                    run_id,
-                    project_id,
-                    status="success",
-                    stage="done",
-                    message=completion_message,
-                    articles_scraped=int(final_run.get("articles_scraped") or 0),
-                    articles_cleaned=int(final_run.get("articles_cleaned") or 0),
-                    articles_saved=int(final_run.get("articles_saved") or 0),
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                )
-                print("Pipeline complete!")
+            _finish_run(
+                run_id,
+                project_id,
+                status="success",
+                stage="done",
+                message=completion_message,
+                articles_scraped=int(final_run.get("articles_scraped") or 0),
+                articles_cleaned=int(final_run.get("articles_cleaned") or 0),
+                articles_saved=int(final_run.get("articles_saved") or 0),
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
+            print("Pipeline complete!")
         except PipelineCancelled:
             _finish_run(
                 run_id,
@@ -328,7 +308,7 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
             # a harder failure such as a spider crash) - print cmd/returncode
             # plus whatever fetch diagnostics did get written before the
             # crash, so the real cause is visible in the backend console.
-            # StreamingEnrichPipeline's per-source rows already reflect
+            # StreamingCollectPipeline's per-source rows already reflect
             # whatever it got through before the crash - still worth folding
             # in fetch diagnostics for whatever they cover.
             diagnostics = _merge_fetch_diagnostics(run_id, str(run_path))
@@ -340,25 +320,13 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
                         f"note={entry.get('note')}"
                     )
             print(f"Pipeline failed: cmd={e.cmd} returncode={e.returncode}")
-            # StreamingEnrichPipeline force-stops the crawl process (os._exit)
-            # on a fatal AI provider error, which lands here as a non-zero
-            # exit - but it already wrote the specific, user-facing cause to
-            # this run before exiting. Prefer that over the generic
-            # "non-zero exit status" text this exception carries.
-            final_run = get_pipeline_run(run_id) or {}
-            if final_run.get("status") == "failed" and final_run.get("error"):
-                message = final_run.get("message") or "Pipeline failed."
-                error = final_run.get("error")
-            else:
-                message = "Pipeline failed."
-                error = str(e)
             _finish_run(
                 run_id,
                 project_id,
                 status="failed",
                 stage="error",
-                message=message,
-                error=error,
+                message="Pipeline failed.",
+                error=str(e),
                 finished_at=datetime.now(timezone.utc).isoformat(),
             )
         except Exception as e:

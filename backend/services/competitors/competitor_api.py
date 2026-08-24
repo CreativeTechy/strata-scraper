@@ -1,35 +1,36 @@
 """HTTP surface for the competitor study.
 
 Kept in its own APIRouter rather than appended to main.py: this is a separate
-experience from sentiment/opinions, and separating the routes is what keeps the
-two from tangling as either one grows.
+experience from opinion monitoring, and separating the routes is what keeps
+the two from tangling as either one grows.
 
-Long-running work (website scrape, analysis generation) runs synchronously and
-is expected to take tens of seconds — the UI shows staged progress for it,
-matching how the existing project discovery flow behaves. Competitor discovery
-is the exception: it runs as a background job (see discover()/discover_status()
-below) because it can take minutes once web corroboration and per-competitor
-account lookups are added up, well past any gateway timeout.
+Collection only - a study defines *who* to watch and which channels to
+collect from; it draws no conclusions. Findings generation lives in whatever
+analyzes the exported articles.
+
+Long-running work (the business-website scrape) runs synchronously and is
+expected to take tens of seconds — the UI shows staged progress for it,
+matching how the existing project discovery flow behaves. Competitor
+discovery is the exception: it runs as a background job (see
+discover()/discover_status() below) because it can take minutes once web
+corroboration and per-competitor account lookups are added up, well past any
+gateway timeout.
 """
 
 from __future__ import annotations
 
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from services.competitors import business_profile_store
-from services.competitors import competitor_analysis
 from services.competitors import competitor_discovery
-from services.competitors import competitor_document_articles
-from services.competitors import competitor_documents_store
 from services.competitors import competitors_store
-from services.competitors import document_analysis
 from services.competitors.countries import validate_countries
 from services.projects.projects_store import REPEAT_WEEKDAYS
 from psycopg.types.json import Jsonb
 import db
 from services.auth.auth import require_permission
-from services.pipeline.pipeline_runs import get_active_run_for_project, get_pipeline_run
+from services.pipeline.pipeline_runs import get_active_run_for_project
 from services.projects.projects_store import delete_project, list_sources_for_project, project_has_articles
 
 router = APIRouter(prefix="/api/competitor", tags=["competitor"])
@@ -108,21 +109,6 @@ def list_studies(user: dict = Depends(require_permission("competitors.view"))):
     }
 
 
-@router.get("/studies/{project_id}/findings/recent")
-def list_recent_study_findings(
-    project_id: int,
-    limit: int = 10,
-    offset: int = 0,
-    user: dict = Depends(require_permission("competitors.view")),
-):
-    """Paginated findings for one study, highest impact first — powers the Dashboard/Reports pulse card."""
-    _project_or_404(project_id)
-    limit = max(1, min(int(limit), 50))
-    offset = max(0, int(offset))
-    findings, total = competitor_analysis.list_recent_findings(project_id, limit=limit, offset=offset)
-    return {"findings": findings, "total": total}
-
-
 @router.post("/studies")
 def create_study(payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
     """Create a competitor-mode project. The business profile is added next."""
@@ -150,7 +136,6 @@ def get_study(project_id: int, user: dict = Depends(require_permission("competit
         "study": project,
         "profile": business_profile_store.get_profile(project_id),
         "competitors": competitors_store.competitor_overview(project_id),
-        "findings": competitor_analysis.list_findings(project_id),
     }
 
 
@@ -223,139 +208,6 @@ def update_profile(project_id: int, payload: dict, user: dict = Depends(require_
     if not profile:
         raise HTTPException(status_code=400, detail="Could not save the profile.")
     return {"profile": profile}
-
-
-# --------------------------------------------------------------------------- #
-# Documents (offline studies) - upload, then extract text in the background.
-# --------------------------------------------------------------------------- #
-@router.get("/studies/{project_id}/documents")
-def list_documents(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
-    """Poll this while any document's status is 'uploaded'/'processing' — that's
-    the only progress signal extraction has, no separate run-tracking needed."""
-    _project_or_404(project_id)
-    return {"documents": competitor_documents_store.list_documents(project_id)}
-
-
-@router.get("/documents/{document_id}/text")
-def get_document_text(document_id: int, user: dict = Depends(require_permission("competitors.view"))):
-    text = competitor_documents_store.get_document_text(document_id)
-    if text is None:
-        raise HTTPException(status_code=404, detail="No extracted text for this document.")
-    return {"text": text}
-
-
-@router.get("/documents/{document_id}/chunks")
-def list_document_chunks(document_id: int, user: dict = Depends(require_permission("competitors.view"))):
-    """Per-page/sheet detail behind a document's rolled-up status and
-    extraction_error — which part failed and why, not just that something did."""
-    return {"chunks": competitor_documents_store.list_chunks(document_id)}
-
-
-@router.post("/studies/{project_id}/documents")
-async def upload_documents(
-    project_id: int,
-    background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
-    user: dict = Depends(require_permission("competitors.manage")),
-):
-    """Save uploaded documents for an offline study and queue extraction for each.
-
-    Extraction (especially OCR on a scanned PDF) can run well past a request's
-    gateway timeout, so it happens as a background task rather than inline —
-    same reasoning as competitor discovery below. The response returns as soon
-    as files are saved; the wizard polls GET .../documents for extraction status.
-    """
-    _project_or_404(project_id)
-    if not files:
-        raise HTTPException(status_code=400, detail="Choose at least one file to upload.")
-    if len(files) > competitor_documents_store.MAX_FILES_PER_UPLOAD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Upload at most {competitor_documents_store.MAX_FILES_PER_UPLOAD} files at a time.",
-        )
-    for upload in files:
-        if not competitor_documents_store.extension_allowed(upload.filename):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"'{upload.filename}' isn't a supported type "
-                    "(pdf, doc, docx, xls, xlsx, csv, png, jpg, jpeg)."
-                ),
-            )
-
-    saved = []
-    for upload in files:
-        content = await upload.read()
-        if len(content) > competitor_documents_store.MAX_FILE_SIZE_BYTES:
-            raise HTTPException(status_code=400, detail=f"'{upload.filename}' is larger than 25 MB.")
-        record = competitor_documents_store.save_document(
-            project_id, filename=upload.filename, content=content, mime_type=upload.content_type
-        )
-        if record:
-            saved.append(record)
-            background_tasks.add_task(competitor_documents_store.process_document, record["id"])
-
-    if not saved:
-        raise HTTPException(status_code=500, detail="Could not save the uploaded documents.")
-    return {"documents": saved}
-
-
-@router.delete("/documents/{document_id}")
-def remove_document(document_id: int, user: dict = Depends(require_permission("competitors.manage"))):
-    if not competitor_documents_store.delete_document(document_id):
-        raise HTTPException(status_code=404, detail="Document not found")
-    return {"ok": True}
-
-
-# --------------------------------------------------------------------------- #
-# Document articles - candidates split out of a document's extracted text,
-# reviewed and approved before they become real articles.
-# --------------------------------------------------------------------------- #
-@router.get("/studies/{project_id}/document-articles")
-def list_document_articles(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
-    """Poll this while any document's articles_status is 'generating' — same
-    shape as list_documents for extraction, no separate run-tracking needed."""
-    _project_or_404(project_id)
-    return {"articles": competitor_document_articles.list_candidates(project_id)}
-
-
-@router.post("/document-articles/{candidate_id}/status")
-def set_document_article_status(
-    candidate_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))
-):
-    """Approving materializes the candidate into a real `articles` row
-    (see competitor_document_articles._materialize); rejecting just marks it."""
-    status = str((payload or {}).get("status") or "").strip().lower()
-    candidate = competitor_document_articles.set_status(candidate_id, status)
-    if not candidate:
-        raise HTTPException(status_code=400, detail="status must be pending, approved, or rejected.")
-    return {"article": candidate}
-
-
-@router.post("/studies/{project_id}/document-articles/approve-all")
-def approve_all_document_articles(project_id: int, user: dict = Depends(require_permission("competitors.manage"))):
-    _project_or_404(project_id)
-    return {"articles": competitor_document_articles.approve_all(project_id)}
-
-
-@router.post("/studies/{project_id}/analyze-documents")
-def analyze_documents(project_id: int, user: dict = Depends(require_permission("competitors.analyze"))):
-    """Offline studies have no competitors to name until their evidence exists.
-
-    Names the companies the approved document articles are actually about,
-    tracks them, then runs the same `generate_findings` an online study uses -
-    see document_analysis.py for why that ordering has to happen here rather
-    than at upload time.
-    """
-    _project_or_404(project_id)
-    result = document_analysis.analyze_documents(project_id)
-    if result.get("error"):
-        status = 502 if result.get("error_code") else 400
-        raise HTTPException(status_code=status, detail=result["error"])
-    return {
-        **result,
-        "findings": competitor_analysis.list_findings(project_id),
-    }
 
 
 # --------------------------------------------------------------------------- #
@@ -615,139 +467,6 @@ def validate_account(account_id: int, payload: dict, user: dict = Depends(requir
 def remove_account(account_id: int, user: dict = Depends(require_permission("competitors.manage"))):
     competitors_store.delete_account(account_id)
     return {"ok": True}
-
-
-# --------------------------------------------------------------------------- #
-# Analysis
-# --------------------------------------------------------------------------- #
-@router.post("/studies/{project_id}/analyze")
-def analyze(
-    project_id: int,
-    background_tasks: BackgroundTasks,
-    payload: dict = None,
-    user: dict = Depends(require_permission("competitors.analyze")),
-):
-    """Queue analysis as a background job and return immediately.
-
-    `scrape` in the payload is the user's explicit choice from the "Run
-    analysis" dialog: True scrapes+enriches first regardless of what's already
-    there, False skips straight to analysis on whatever evidence already
-    exists. Omitting it falls back to the old auto-detect behaviour (scrape
-    only when the project has zero articles) for any caller that predates the
-    dialog, e.g. a scheduled run.
-
-    `pipeline_run_id`, when given, scopes evidence to one already-completed
-    scrape run instead of the `period_days` date window - the "Pipeline run"
-    tab in the dialog, matching the same choice Reports offers. It always
-    implies skipping a fresh scrape: the point of picking a specific past run
-    is to look at exactly what it gathered, and a new scrape wouldn't add
-    anything to that run's articles.
-
-    One LLM call per competitor - preceded, when scraping, by a full crawl of
-    every source in the study - runs for minutes, which used to be minutes of
-    an open request showing an undifferentiated spinner. The checks that can
-    fail immediately stay here so they still answer with a real status code;
-    everything slow moves into the job, and the UI polls
-    GET .../analyze/{run_id} for live progress.
-    """
-    _project_or_404(project_id)
-    payload = payload or {}
-    period_days = max(1, min(int(payload.get("period_days") or competitor_analysis.DEFAULT_PERIOD_DAYS), 365))
-    pipeline_run_id = payload.get("pipeline_run_id") or None
-    if pipeline_run_id is not None:
-        run = get_pipeline_run(pipeline_run_id)
-        if not run or int(run.get("project_id") or 0) != int(project_id):
-            raise HTTPException(status_code=404, detail="Pipeline run not found for this study.")
-    scrape_choice = payload.get("scrape")
-    needs_scrape = (
-        False if pipeline_run_id
-        else scrape_choice if isinstance(scrape_choice, bool)
-        else not project_has_articles(project_id)
-    )
-
-    if needs_scrape:
-        if get_active_run_for_project(project_id):
-            raise HTTPException(
-                status_code=409,
-                detail="A scrape is already running for this study. Try again once it finishes.",
-            )
-        if not list_sources_for_project(project_id):
-            raise HTTPException(
-                status_code=400,
-                detail="No sources to scrape yet. Confirm at least one competitor channel before running analysis.",
-            )
-
-    # Double-clicking "Run analysis" attaches to the run already in flight
-    # rather than starting a second one against the same competitors.
-    active = competitor_analysis.get_active_analysis_run(project_id)
-    if active:
-        return {"run_id": active["run_id"], "status": active["status"]}
-
-    run_id = competitor_analysis.create_analysis_run(project_id)
-    background_tasks.add_task(
-        competitor_analysis.run_analysis_job, run_id, project_id, period_days,
-        bool(needs_scrape), pipeline_run_id,
-    )
-    return {"run_id": run_id, "status": "queued", "scraping": bool(needs_scrape)}
-
-
-@router.get("/studies/{project_id}/analyze/{run_id}")
-def analyze_status(project_id: int, run_id: str, user: dict = Depends(require_permission("competitors.view"))):
-    """Progress for one analysis job, including its live `logs`.
-
-    Findings are returned on the terminal poll so the workspace can render the
-    new cards without a second round trip, matching what the old synchronous
-    endpoint handed back.
-    """
-    _project_or_404(project_id)
-    run = competitor_analysis.get_analysis_run(run_id)
-    if not run or run["project_id"] != project_id:
-        raise HTTPException(status_code=404, detail="Analysis run not found.")
-    if run["status"] in ("success", "failed"):
-        run = {**run, "findings": competitor_analysis.list_findings(project_id)}
-    return {"run": run}
-
-
-@router.get("/studies/{project_id}/findings")
-def list_findings(project_id: int, impact: str | None = None, competitor_id: int | None = None,
-                  history: bool = False, search: str | None = None,
-                  date_from: str | None = None, date_to: str | None = None,
-                  pipeline_run_id: str | None = None,
-                  user: dict = Depends(require_permission("competitors.view"))):
-    _project_or_404(project_id)
-    return {
-        "findings": competitor_analysis.list_findings(
-            project_id, competitor_id=competitor_id, impact_level=impact, latest_only=not history,
-            search=search, date_from=date_from, date_to=date_to, pipeline_run_id=pipeline_run_id,
-        )
-    }
-
-
-@router.get("/findings/{finding_id}")
-def get_finding(finding_id: int, user: dict = Depends(require_permission("competitors.view"))):
-    """One finding as a full report, including the evidence it was filtered from."""
-    finding = competitor_analysis.get_finding(finding_id)
-    if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
-    return {
-        "finding": finding,
-        "accounts": competitors_store.list_accounts(finding["competitor_id"]),
-        "rejected_evidence": competitor_analysis.rejected_evidence(finding["competitor_id"]),
-        "history": competitor_analysis.list_findings(
-            finding["project_id"], competitor_id=finding["competitor_id"], latest_only=False,
-        ),
-    }
-
-
-@router.post("/findings/{finding_id}/validate")
-def validate_finding(finding_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
-    status = str((payload or {}).get("status") or "").strip().lower()
-    finding = competitor_analysis.set_finding_validation(
-        finding_id, status, str((payload or {}).get("notes") or "")
-    )
-    if not finding:
-        raise HTTPException(status_code=400, detail="status must be pending, validated, or rejected.")
-    return {"finding": finding}
 
 
 # --------------------------------------------------------------------------- #

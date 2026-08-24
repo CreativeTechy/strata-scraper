@@ -4,7 +4,7 @@ plain-language notes.
 
 Kept separate from pipeline_runs.py (DB access) and pipeline.py (subprocess
 orchestration) so this is a small set of pure functions - no DB, no
-subprocess, easy to unit test and reused by both enrich.py (per-source rows)
+subprocess, easy to unit test and reused by both collect.py (per-source rows)
 and pipeline.py (the run's top-level message).
 """
 
@@ -60,7 +60,7 @@ def build_fetch_note(diagnostic, scraped_count):
 
 def summarize_notable_diagnostics(diagnostics):
     """Short addendum for the pipeline run's top-level message - only
-    sources with a network-level issue (this runs before enrich.py, so it
+    sources with a network-level issue (this runs before collect.py, so it
     can't yet know which sources ended up with 0 articles - see
     build_fetch_note for the fuller per-source picture). "" if nothing to
     report."""

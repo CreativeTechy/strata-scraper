@@ -43,9 +43,10 @@ _load_dotenv()
 DATABASE_URL = db.get_database_url()
 
 # --- LLM provider ------------------------------------------------------------
-# `LLM_PROVIDER` picks which backend every AI feature (enrichment, Intelligence
-# Copilot chat, project metadata suggestions, project/source discovery) talks
-# to. Everything provider-specific - credentials, base URL, default model, and
+# `LLM_PROVIDER` picks which backend every AI feature talks to. In this app
+# that means discovery only: project metadata suggestions, project keyword/
+# hashtag/username/source discovery, and competitor discovery - the AI helps
+# decide *what to collect*, never interprets what was collected. Everything provider-specific - credentials, base URL, default model, and
 # request/response shape - is resolved here and in llm_client.py; feature
 # modules only ever call llm_client.chat_completion() and never branch on the
 # provider themselves.
@@ -158,39 +159,14 @@ LLM_API_STYLE = _active_provider["api_style"]
 LLM_API_KEY_ENV_NAME = _active_provider["api_key_env"]
 LLM_REASONING_EFFORT = _active_values["reasoning_effort"]
 
-# Competitor analysis (backend/services/competitors/ - document splitting,
-# competitor naming, and finding generation) can run against a different
-# provider than the rest of the app (enrichment, Intelligence Copilot,
-# project/source discovery), e.g. Ollama for a fully offline setup, without
-# switching everything else over. Left unset (the default), it just inherits
-# LLM_PROVIDER above - nothing changes unless this is explicitly set.
-COMPETITOR_ANALYSIS_LLM_PROVIDER = os.environ.get("COMPETITOR_ANALYSIS_LLM_PROVIDER", "").strip().lower()
-if COMPETITOR_ANALYSIS_LLM_PROVIDER not in _LLM_PROVIDER_DEFAULTS:
-    COMPETITOR_ANALYSIS_LLM_PROVIDER = LLM_PROVIDER
-
-_competitor_provider = _LLM_PROVIDER_DEFAULTS[COMPETITOR_ANALYSIS_LLM_PROVIDER]
-_competitor_values = _LLM_PROVIDER_VALUES[COMPETITOR_ANALYSIS_LLM_PROVIDER]
-COMPETITOR_LLM_API_KEY = _competitor_values["api_key"]
-COMPETITOR_LLM_CHAT_BASE_URL = _competitor_values["base_url"]
-COMPETITOR_LLM_CHAT_MODEL = _competitor_values["model"]
-COMPETITOR_LLM_API_STYLE = _competitor_provider["api_style"]
-COMPETITOR_LLM_API_KEY_ENV_NAME = _competitor_provider["api_key_env"]
-COMPETITOR_LLM_REASONING_EFFORT = _competitor_values["reasoning_effort"]
-
 # How long a single chat_completion() HTTP call waits for a response before
 # giving up (see llm_client.py's own default). Raise this for a slow remote
 # backend (e.g. a Colab-hosted Ollama instance behind an ngrok tunnel) where
-# a real response can legitimately take longer than 60s, especially under
-# ENRICH_CONCURRENCY > 1 competing for the same GPU.
+# a real response can legitimately take longer than 60s.
 try:
     LLM_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
 except ValueError:
     LLM_REQUEST_TIMEOUT_SECONDS = 60
-
-EMBEDDING_MODEL = os.environ.get(
-    "EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-).strip()
-EMBEDDING_DEVICE = os.environ.get("EMBEDDING_DEVICE", "cpu")
 
 SCHEDULER_POLL_SECONDS = int(os.environ.get("SCHEDULER_POLL_SECONDS", "30") or 30)
 SCHEDULER_STALE_RUN_MINUTES = int(os.environ.get("SCHEDULER_STALE_RUN_MINUTES", "180") or 180)
@@ -202,102 +178,6 @@ def _env_bool(name: str, default: bool) -> bool:
         return default
     return value.strip().lower() in ("1", "true", "yes", "on")
 
-
-# --- Hugging Face Inference API (optional) -----------------------------------
-HF_API_TOKEN = os.environ.get("HF_API_TOKEN", os.environ.get("HF_TOKEN", "")).strip()
-# Leave unset (the default) to use HF's shared "hf-inference" provider
-# routing - InferenceClient resolves the current host itself, so this repo
-# doesn't hardcode a URL that HF can (and has) moved. Only set this to point
-# at a dedicated HF Inference Endpoint's own URL instead.
-HF_API_BASE_URL = os.environ.get("HF_API_BASE_URL", "").strip()
-HF_API_TIMEOUT_SECONDS = float(os.environ.get("HF_API_TIMEOUT_SECONDS", "30") or 30)
-
-# Dedicated sentiment classifier (see sentiment_classifier.py) - the sole
-# source of article `overall_sentiment`/`sentiment`. The LLM is never used
-# for sentiment, so there is no toggle to fall back to it; if the classifier
-# can't run, enrich.py defaults sentiment to "neutral" and logs it instead.
-SENTIMENT_CLASSIFIER_MODEL = os.environ.get(
-    "SENTIMENT_CLASSIFIER_MODEL", "cardiffnlp/twitter-roberta-base-sentiment-latest"
-).strip()
-# "cpu", "cuda"/"cuda:0", or "auto" (use CUDA if torch reports it available, else CPU).
-# Only relevant when SENTIMENT_CLASSIFIER_PROVIDER is "local".
-SENTIMENT_CLASSIFIER_DEVICE = os.environ.get("SENTIMENT_CLASSIFIER_DEVICE", "cpu").strip()
-SENTIMENT_CONFIDENCE_THRESHOLD = float(os.environ.get("SENTIMENT_CONFIDENCE_THRESHOLD", "0.55") or 0.55)
-# "local" (default) or "hf_api" - see the Hugging Face Inference API section above.
-SENTIMENT_CLASSIFIER_PROVIDER = os.environ.get("SENTIMENT_CLASSIFIER_PROVIDER", "local").strip().lower()
-
-
-# --- Modular analysis pipeline (backend/analysis/) ---------------------------
-# One model per stage, all configurable via env var, all lazy-loaded and
-# reused across articles (see analysis/model_utils.py). Devices accept "cpu",
-# "cuda"/"cuda:0", or "auto" (CUDA if available, else CPU).
-#
-# NOTE on migration pressure: changing EMBEDDING_MODEL (above) changes vector
-# dimensionality (e.g. multilingual-e5-small is 384-dim,
-# paraphrase-multilingual-mpnet-base-v2 is 768-dim). embeddings.cosine_similarity
-# silently returns 0.0 when comparing vectors of different lengths, so existing
-# rows embedded under an old model just stop matching anything - they are not
-# flagged as stale. Re-embedding existing articles/projects after changing this
-# is a manual follow-up (no automatic migration is run here).
-
-# Zero-shot category + tone classification (MoritzLaurer/mDeBERTa-v3-base-mnli-xnli).
-CLASSIFICATION_MODEL = os.environ.get(
-    "CLASSIFICATION_MODEL", "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
-).strip()
-# Only relevant when CLASSIFICATION_PROVIDER is "local".
-CLASSIFICATION_DEVICE = os.environ.get("CLASSIFICATION_DEVICE", "cpu").strip()
-CLASSIFICATION_CONFIDENCE_THRESHOLD = float(
-    os.environ.get("CLASSIFICATION_CONFIDENCE_THRESHOLD", "0.4") or 0.4
-)
-# "local" (default) or "hf_api" - see the Hugging Face Inference API section above.
-CLASSIFICATION_PROVIDER = os.environ.get("CLASSIFICATION_PROVIDER", "local").strip().lower()
-
-# Structured extraction (summary/feedback lists/opinions/ideas/key points) now
-# goes through the configured LLM provider (llm_client.chat_completion), the
-# same one used for enrichment/Copilot/discovery - no local model is loaded
-# for this stage. STRUCTURED_EXTRACTION_MODEL/_DEVICE are no-op compatibility
-# settings kept only so old .env files with these set don't break; they are
-# not read by structured_extraction.py.
-STRUCTURED_EXTRACTION_MODEL = os.environ.get("STRUCTURED_EXTRACTION_MODEL", "").strip()
-STRUCTURED_EXTRACTION_DEVICE = os.environ.get("STRUCTURED_EXTRACTION_DEVICE", "cpu").strip()
-STRUCTURED_EXTRACTION_MAX_NEW_TOKENS = int(
-    os.environ.get("STRUCTURED_EXTRACTION_MAX_NEW_TOKENS", "900") or 900
-)
-STRUCTURED_EXTRACTION_TEMPERATURE = float(
-    os.environ.get("STRUCTURED_EXTRACTION_TEMPERATURE", "0.0") or 0.0
-)
-# One retry with a correction prompt when the first pass isn't valid JSON /
-# doesn't match the expected shape; 0 disables the retry.
-STRUCTURED_EXTRACTION_MAX_RETRIES = int(
-    os.environ.get("STRUCTURED_EXTRACTION_MAX_RETRIES", "1") or 1
-)
-
-# Optional dedicated NER model for entity extraction. Empty (default) means
-# the stage is disabled and entities fall back to whatever structured
-# extraction already produced (organizations/entities fields).
-ENTITY_EXTRACTION_MODEL = os.environ.get("ENTITY_EXTRACTION_MODEL", "").strip()
-ENTITY_EXTRACTION_DEVICE = os.environ.get("ENTITY_EXTRACTION_DEVICE", "cpu").strip()
-ENTITY_EXTRACTION_CONFIDENCE_THRESHOLD = float(
-    os.environ.get("ENTITY_EXTRACTION_CONFIDENCE_THRESHOLD", "0.5") or 0.5
-)
-
-# Chunking for long article text: applied uniformly by article_prep.py before
-# handing text to any model with a limited context window.
-ANALYSIS_CHUNK_SIZE_CHARS = int(os.environ.get("ANALYSIS_CHUNK_SIZE_CHARS", "2000") or 2000)
-ANALYSIS_CHUNK_OVERLAP_CHARS = int(os.environ.get("ANALYSIS_CHUNK_OVERLAP_CHARS", "200") or 200)
-# Hard cap on how much article text ever reaches a model, pre-chunking.
-ANALYSIS_MAX_INPUT_CHARS = int(os.environ.get("ANALYSIS_MAX_INPUT_CHARS", "20000") or 20000)
-
-# Source-language detection: metadata only (source_language/source_language_confidence
-# on the articles table) - never used to translate or alter stored text, and
-# every other stage's model is already multilingual-capable.
-LANGUAGE_DETECTION_MODEL = os.environ.get(
-    "LANGUAGE_DETECTION_MODEL", "papluca/xlm-roberta-base-language-detection"
-).strip()
-LANGUAGE_DETECTION_DEVICE = os.environ.get("LANGUAGE_DETECTION_DEVICE", "cpu").strip()
-LANGUAGE_DETECTION_CONFIDENCE_THRESHOLD = float(
-    os.environ.get("LANGUAGE_DETECTION_CONFIDENCE_THRESHOLD", "0.5") or 0.5
-)
 
 # --- Scraping proxy: optional network egress ---------------------------------
 # Any source can anti-bot-block requests from datacenter/cloud IP ranges (see
@@ -360,40 +240,14 @@ def google_cse_configured() -> bool:
 GDELT_ENABLED = os.environ.get("GDELT_ENABLED", "true").strip().lower() not in {"false", "0", "no"}
 
 
-# --- Skip re-enrichment for already-known articles ---------------------------
-# When a scraped URL is already in the `articles` table with a successful
-# analysis from the *current* enrichment version (analysis_pipeline_version ==
-# PIPELINE_VERSION - see services/articles/enrich.py), reuse that stored
-# analysis instead of paying for another LLM + embedding call. The article
-# still flows through the normal save path either way, so a project seeing it
-# for the first time still gets linked to it. Set false to force every scrape
-# run to re-enrich everything (reanalyze.py's per-article endpoint is the
-# other way to force a re-enrichment without this).
-SKIP_EXISTING_ARTICLES = _env_bool("SKIP_EXISTING_ARTICLES", True)
-
-
-# --- Streaming enrichment concurrency ----------------------------------------
-# How many articles StreamingEnrichPipeline (scraper/pipelines.py) enriches in
-# parallel, off Scrapy's reactor thread, instead of one at a time blocking the
-# whole crawl. Kept deliberately low by default rather than tuned to any one
-# provider's ceiling, since LLM_PROVIDER is user-selectable and the limiting
-# factor differs a lot by provider:
-#   - deepseek: no published per-minute limit, but a shared *concurrency* cap
-#     (500-2500 in-flight requests) at the account level, across everything
-#     else that account is doing too - not just this app.
-#   - openai: tier-based (by cumulative spend); a fresh/low-spend account's
-#     Tier 1 default is generously above this default for a small/cheap model,
-#     but nowhere near unlimited.
-#   - ollama: no external rate limit at all, but real local hardware/VRAM
-#     throughput instead - a low default avoids swamping a single local
-#     model server (and the local embedding model, which competes for the
-#     same CPU/GPU) with too many simultaneous generations.
-# Raise this if you have a well-provisioned account/host and have confirmed
-# your own provider's actual limits comfortably clear it.
-try:
-    ENRICH_CONCURRENCY = max(1, int(os.environ.get("ENRICH_CONCURRENCY", "4")))
-except ValueError:
-    ENRICH_CONCURRENCY = 4
+# --- Skip already-collected articles -----------------------------------------
+# When a scraped URL is already in the `articles` table, skip saving it again
+# instead of re-upserting a row whose text we already hold (see
+# services/articles/collect.py). Counted per source as "already scraped" so
+# the run breakdown still shows the source produced something. Set false to
+# force every run to re-save everything it scrapes, e.g. to refresh
+# fetched_at or to re-run story-group assignment over known URLs.
+SKIP_EXISTING_URLS = _env_bool("SKIP_EXISTING_URLS", True)
 
 
 # --- Google News link-decode concurrency -------------------------------------
@@ -403,10 +257,9 @@ except ValueError:
 # decode being a real network round trip (fetch the wrapper page, then a
 # signed batchexecute call) - resolved one at a time this was measured at
 # 7-11 minutes for a single feed, blocking the whole crawl for that entire
-# span. Higher than ENRICH_CONCURRENCY by default: this endpoint's own
-# rate-limiting is undocumented (unlike the LLM providers ENRICH_CONCURRENCY
-# is sized against), so this is a starting point to tune from, not a
-# researched ceiling - lower it if you see a rise in decode failures
+# span. This endpoint's own rate-limiting is undocumented, so the default is
+# a starting point to tune from, not a researched ceiling - lower it if you
+# see a rise in decode failures
 # (skipped links, not errors - see _resolve_google_news_link).
 try:
     GOOGLE_NEWS_DECODE_CONCURRENCY = max(1, int(os.environ.get("GOOGLE_NEWS_DECODE_CONCURRENCY", "8")))

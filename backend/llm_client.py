@@ -325,10 +325,10 @@ def chat_completion(*, messages, model=None, temperature=0.2, max_tokens=512, ti
 
     `api_key`/`base_url`/`api_style`/`reasoning_effort`/`api_key_env_name`
     default to the app-wide `config.LLM_*` values when omitted. Pass them
-    together (e.g. from a feature-scoped `config.COMPETITOR_LLM_*` set) to
-    route just this call through a different provider without touching the
-    provider every other caller uses - also pass a matching `model` in that
-    case, since `model`'s own default below is the app-wide one too.
+    together to route just this call through a different provider without
+    touching the provider every other caller uses - also pass a matching
+    `model` in that case, since `model`'s own default below is the app-wide
+    one too.
     """
     api_key = config.LLM_API_KEY if api_key is None else api_key
     base_url = ((config.LLM_CHAT_BASE_URL if base_url is None else base_url) or "").strip()

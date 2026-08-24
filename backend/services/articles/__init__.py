@@ -1,1 +1,1 @@
-"""Articles: read helpers, the enrichment entrypoint, saving, and (re)analysis."""
+"""Articles: read helpers, the collect entrypoint, saving, and export/import."""

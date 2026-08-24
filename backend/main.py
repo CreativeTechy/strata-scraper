@@ -1,11 +1,13 @@
 """FastAPI service that orchestrates the pipeline.
 
-The four stages live in their own modules:
-  scraper  -> scraper/spiders/source_rss.py (Scrapy)
-  enricher -> services/articles/enrich.py
-  saver    -> services/articles/store.py
+The stages live in their own modules:
+  scraper   -> scraper/spiders/source_rss.py (Scrapy)
+  collector -> services/articles/collect.py
+  saver     -> services/articles/store.py
 
 This API triggers the jobs and exposes configured sources to the dashboard.
+This app collects only - articles are stored unanalyzed, and leave through
+the JSONL export for whatever analyzes them.
 """
 
 import asyncio
@@ -24,9 +26,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import config
 import migrate
-from prompt_loader import load_prompt
 from services.competitors import competitor_api
-from services.projects import project_documents_api
 from services.auth import permissions_store
 from services.auth import sessions_store
 from services.auth import users_store
@@ -34,29 +34,15 @@ from services.auth.auth import clear_auth_cookies, get_current_user, require_any
 from services.projects.project_discovery import discover_project_links
 from services.projects.projects_ai import suggest_project_metadata
 from services.articles.articles_store import (
-    compute_overall_tone,
     export_articles,
-    get_analysis_status_counts,
-    get_article_analysis,
     get_article_stats,
-    list_analysis_errors,
     list_articles,
-    list_articles_for_idea_cluster,
-    list_idea_clusters_for_project,
 )
 from services.articles.import_jobs import (
     create_import_run,
     get_import_run,
     run_import_job,
 )
-from services.articles.reanalyze import (
-    load_article_for_reanalysis,
-    mark_processing,
-    mark_reprocess_requested,
-    reanalyze_article,
-    reanalyze_articles,
-)
-from llm_client import LLMError, chat_completion
 from services.projects.projects_store import (
     create_project,
     delete_project,
@@ -66,14 +52,12 @@ from services.projects.projects_store import (
     list_projects,
     list_projects_page,
     list_sources_for_project,
-    persist_project_embedding_for_id,
     project_ids_by_user_map,
     record_run_completion,
     set_project_sources,
     set_project_users,
     update_project,
 )
-from services.intelligence.intelligence import get_project_intelligence, get_project_keyword_existence, normalize_period
 from services.sources.sources_store import (
     bootstrap_sources,
     create_source,
@@ -97,8 +81,6 @@ from services.pipeline.scheduler import scheduler_loop
 BASE_DIR = Path(__file__).resolve().parent
 STORAGE_DIR = BASE_DIR.parent / "storage"
 
-COPILOT_SYSTEM_PROMPT = load_prompt("copilot_system_prompt.txt")
-
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Strata Scraper API")
@@ -111,11 +93,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# The competitor study is a separate experience from sentiment/opinions, so its
-# routes live in their own module rather than growing this one.
+# The competitor study is a separate experience from opinion monitoring, so
+# its routes live in their own module rather than growing this one.
 app.include_router(competitor_api.router)
-# Offline (document-upload) opinion-monitor projects - same reasoning as above.
-app.include_router(project_documents_api.router)
 
 
 @app.exception_handler(HTTPException)
@@ -124,71 +104,6 @@ async def _http_exception_handler(request: Request, exc: HTTPException):
     # existing ad hoc error bodies ({"error": ...}) so the dashboard's
     # shared formatApiError() handles them without special-casing.
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
-
-
-def _format_project_context(project: dict | None) -> str:
-    if not isinstance(project, dict):
-        return ""
-
-    parts = []
-    name = (project.get("name") or "").strip()
-    if name:
-        parts.append(f"Name: {name}")
-
-    status = (project.get("status") or "").strip()
-    if status:
-        parts.append(f"Status: {status}")
-
-    start_date = project.get("start_date")
-    if start_date:
-        parts.append(f"Start date: {start_date}")
-
-    end_date = project.get("end_date")
-    if end_date:
-        parts.append(f"End date: {end_date}")
-
-    location = (project.get("location") or "").strip()
-    if location:
-        parts.append(f"Location: {location}")
-
-    location_type = (project.get("location_type") or "").strip()
-    if location_type:
-        parts.append(f"Location type: {location_type}")
-
-    target_audience = (project.get("target_audience") or "").strip()
-    if target_audience:
-        parts.append(f"Target audience: {target_audience}")
-
-    hashtags = project.get("hashtags") or []
-    if isinstance(hashtags, str):
-        hashtags = [hashtags]
-    hashtags = [str(item).strip() for item in hashtags if str(item).strip()]
-    if hashtags:
-        parts.append(f"Hashtags: {', '.join(hashtags)}")
-
-    keywords = project.get("keywords") or []
-    if isinstance(keywords, str):
-        keywords = [keywords]
-    keywords = [str(item).strip() for item in keywords if str(item).strip()]
-    if keywords:
-        parts.append(f"Keywords: {', '.join(keywords)}")
-
-    usernames = project.get("usernames") or []
-    if isinstance(usernames, str):
-        usernames = [usernames]
-    usernames = [str(item).strip() for item in usernames if str(item).strip()]
-    if usernames:
-        parts.append(f"Usernames: {', '.join(usernames)}")
-
-    first_run_at = project.get("first_run_at")
-    if first_run_at:
-        parts.append(f"First run at: {first_run_at}")
-
-    description = (project.get("description") or "").strip()
-    if description:
-        parts.append(f"Description: {description}")
-
-    return "\n".join(parts)
 
 
 @app.on_event("startup")
@@ -499,7 +414,7 @@ def _strip_unauthorized_user_ids(payload: dict, user: dict) -> dict:
 def add_project(background_tasks: BackgroundTasks, payload: dict, user: dict = Depends(require_permission("projects.create"))):
     payload = _strip_unauthorized_user_ids(payload, user)
     try:
-        project = create_project(payload or {}, embed=False)
+        project = create_project(payload or {})
     except ValueError as e:
         return {"error": "Invalid project payload.", "detail": str(e)}
     except Exception as e:
@@ -514,7 +429,6 @@ def add_project(background_tasks: BackgroundTasks, payload: dict, user: dict = D
             "error": "Unable to create project. Check database connection settings.",
             "detail": detail or "The project request did not return a row.",
         }
-    background_tasks.add_task(persist_project_embedding_for_id, project.get("id"))
     return {"project": project}
 
 
@@ -523,7 +437,7 @@ def edit_project(project_id: int, background_tasks: BackgroundTasks, payload: di
     _ensure_project_visible(project_id, user)
     payload = _strip_unauthorized_user_ids(payload, user)
     try:
-        project = update_project(project_id, payload or {}, embed=False)
+        project = update_project(project_id, payload or {})
     except ValueError as e:
         return {"error": "Invalid project payload.", "detail": str(e)}
     except Exception as e:
@@ -538,7 +452,6 @@ def edit_project(project_id: int, background_tasks: BackgroundTasks, payload: di
             "error": "Unable to update project. Check database connection settings.",
             "detail": detail or "The update request did not return a row.",
         }
-    background_tasks.add_task(persist_project_embedding_for_id, project_id)
     return {"project": project}
 
 
@@ -615,8 +528,6 @@ def stop_pipeline_run(run_id: str, user: dict = Depends(require_permission("pipe
 @app.get("/api/articles")
 def get_articles(
     search: str | None = None,
-    sentiment: str | None = None,
-    category: str | None = None,
     project_id: int | None = None,
     source_url: str | None = None,
     limit: int = 24,
@@ -628,8 +539,6 @@ def get_articles(
 ):
     return list_articles(
         search=search,
-        sentiment=sentiment,
-        category=category,
         project_id=project_id,
         source_url=source_url,
         limit=limit,
@@ -643,52 +552,17 @@ def get_articles(
 @app.get("/api/articles/stats")
 def get_articles_stats(
     search: str | None = None,
-    category: str | None = None,
     project_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     user: dict = Depends(require_permission("articles.view")),
 ):
-    return get_article_stats(search=search, category=category, project_id=project_id, date_from=date_from, date_to=date_to)
-
-
-@app.get("/api/projects/{project_id}/intelligence")
-def get_project_intelligence_view(
-    project_id: int,
-    period: str = "30d",
-    run_id: str | None = None,
-    user: dict = Depends(require_permission("articles.view")),
-):
-    _ensure_project_visible(project_id, user)
-    project = get_project(project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
-    return get_project_intelligence(project, normalize_period(period), run_id=run_id)
-
-
-@app.get("/api/projects/{project_id}/keyword-existence")
-def get_project_keyword_existence_view(
-    project_id: int,
-    period: str = "30d",
-    source_url: str | None = None,
-    keyword: str | None = None,
-    run_id: str | None = None,
-    user: dict = Depends(require_permission("articles.view")),
-):
-    _ensure_project_visible(project_id, user)
-    project = get_project(project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
-    return get_project_keyword_existence(
-        project, normalize_period(period), source_url=source_url, keyword=keyword, run_id=run_id,
-    )
+    return get_article_stats(search=search, project_id=project_id, date_from=date_from, date_to=date_to)
 
 
 @app.get("/api/articles/export")
 def export_articles_jsonl(
     search: str | None = None,
-    sentiment: str | None = None,
-    category: str | None = None,
     project_id: int | None = None,
     source_url: str | None = None,
     sort: str = "published.desc",
@@ -702,8 +576,6 @@ def export_articles_jsonl(
         # carrying its full text and embedding) is ever held in memory at once.
         rows = export_articles(
             search=search,
-            sentiment=sentiment,
-            category=category,
             project_id=project_id,
             source_url=source_url,
             sort=sort,
@@ -802,166 +674,6 @@ def import_articles_status(run_id: str, user: dict = Depends(require_permission(
     if not run:
         raise HTTPException(status_code=404, detail="Import run not found.")
     return {"run": run}
-
-
-# --- Analysis pipeline: on-demand (re)analysis, status, ideas -------------
-
-MAX_BATCH_ANALYZE_IDS = 50
-
-
-@app.post("/api/articles/{article_id}/analyze")
-def analyze_article_endpoint(
-    article_id: int,
-    background_tasks: BackgroundTasks,
-    payload: dict | None = None,
-    user: dict = Depends(require_permission("pipeline.run")),
-):
-    """Run the analysis pipeline for one already-scraped article. Skips
-    articles that already completed successfully unless force=true is
-    passed - use POST .../reprocess to always force a fresh run regardless
-    of current status."""
-    force = bool((payload or {}).get("force"))
-    article = load_article_for_reanalysis(article_id)
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found.")
-
-    current = get_article_analysis(article_id)
-    if current and current.get("analysis_status") == "success" and not force:
-        return {"article_id": article_id, "status": "skipped", "reason": "already_analyzed", "analysis": current}
-
-    mark_processing(article_id)
-    background_tasks.add_task(reanalyze_article, article_id)
-    return {"article_id": article_id, "status": "processing"}
-
-
-@app.post("/api/articles/analyze")
-def analyze_articles_endpoint(
-    background_tasks: BackgroundTasks,
-    payload: dict,
-    user: dict = Depends(require_permission("pipeline.run")),
-):
-    """Batch version of the single-article analyze endpoint - queues
-    analysis for up to MAX_BATCH_ANALYZE_IDS articles at once and returns
-    immediately; poll GET /api/analysis/status or each article's
-    GET .../analysis for progress."""
-    payload = payload or {}
-    raw_ids = payload.get("article_ids") or []
-    force = bool(payload.get("force"))
-    if not isinstance(raw_ids, list) or not raw_ids:
-        raise HTTPException(status_code=400, detail="article_ids must be a non-empty list.")
-    if len(raw_ids) > MAX_BATCH_ANALYZE_IDS:
-        raise HTTPException(status_code=400, detail=f"At most {MAX_BATCH_ANALYZE_IDS} article_ids per request.")
-    try:
-        article_ids = [int(i) for i in raw_ids]
-    except Exception:
-        raise HTTPException(status_code=400, detail="article_ids must be integers.")
-
-    queued, skipped, not_found = [], [], []
-    for article_id in article_ids:
-        if not load_article_for_reanalysis(article_id):
-            not_found.append(article_id)
-            continue
-        current = get_article_analysis(article_id)
-        if current and current.get("analysis_status") == "success" and not force:
-            skipped.append(article_id)
-            continue
-        mark_processing(article_id)
-        queued.append(article_id)
-
-    if queued:
-        background_tasks.add_task(reanalyze_articles, queued)
-
-    return {"queued": queued, "skipped": skipped, "not_found": not_found}
-
-
-@app.post("/api/articles/{article_id}/reprocess")
-def reprocess_article_endpoint(
-    article_id: int,
-    background_tasks: BackgroundTasks,
-    user: dict = Depends(require_permission("pipeline.run")),
-):
-    """Always forces a fresh analysis run, regardless of current
-    analysis_status - distinct from POST .../analyze, which skips articles
-    that already succeeded."""
-    if not load_article_for_reanalysis(article_id):
-        raise HTTPException(status_code=404, detail="Article not found.")
-
-    reprocess_requested_at = mark_reprocess_requested(article_id)
-    background_tasks.add_task(reanalyze_article, article_id)
-    return {"article_id": article_id, "status": "processing", "reprocess_requested_at": reprocess_requested_at}
-
-
-@app.get("/api/articles/{article_id}/analysis")
-def get_article_analysis_endpoint(article_id: int, user: dict = Depends(require_permission("articles.view"))):
-    """Full analysis detail for one article: sentiment/tone/category with
-    their confidence scores, per-stage model identifiers, and
-    analysis_status/analysis_error so a failed or low-confidence result is
-    never mistaken for a confident real one."""
-    analysis = get_article_analysis(article_id)
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Article not found.")
-    return {"analysis": analysis}
-
-
-@app.get("/api/analysis/status")
-def get_analysis_status_endpoint(
-    project_id: int | None = None,
-    user: dict = Depends(require_permission("pipeline.view")),
-):
-    """Aggregate analysis_status counts (pending/processing/success/failed/
-    partial), optionally scoped to a project."""
-    if project_id is not None:
-        _ensure_project_visible(project_id, user)
-    counts = get_analysis_status_counts(project_id=project_id)
-    return {"project_id": project_id, "counts": counts, "total": sum(counts.values())}
-
-
-@app.get("/api/articles/analysis-errors")
-def get_analysis_errors_endpoint(
-    project_id: int | None = None,
-    limit: int = 24,
-    offset: int = 0,
-    user: dict = Depends(require_permission("articles.view")),
-):
-    """Paginated list of articles whose most recent analysis run failed,
-    with the stored error - the detail view behind the aggregate counts in
-    GET /api/analysis/status."""
-    if project_id is not None:
-        _ensure_project_visible(project_id, user)
-    return list_analysis_errors(project_id=project_id, limit=limit, offset=offset)
-
-
-@app.get("/api/projects/{project_id}/idea-clusters")
-def get_project_idea_clusters(
-    project_id: int,
-    limit: int = 50,
-    offset: int = 0,
-    user: dict = Depends(require_permission("articles.view")),
-):
-    """Cross-article frequent-idea clusters for a project - the persisted,
-    cross-run counterpart to the per-run rollup in insights.frequent_ideas."""
-    _ensure_project_visible(project_id, user)
-    if not get_project(project_id):
-        raise HTTPException(status_code=404, detail="Project not found.")
-    return list_idea_clusters_for_project(project_id, limit=limit, offset=offset)
-
-
-@app.get("/api/projects/{project_id}/idea-clusters/{cluster_id}/articles")
-def get_idea_cluster_articles(
-    project_id: int,
-    cluster_id: int,
-    limit: int = 10,
-    offset: int = 0,
-    user: dict = Depends(require_permission("articles.view")),
-):
-    """Representative source articles for one idea cluster."""
-    _ensure_project_visible(project_id, user)
-    if not get_project(project_id):
-        raise HTTPException(status_code=404, detail="Project not found.")
-    page = list_articles_for_idea_cluster(cluster_id, project_id, limit=limit, offset=offset)
-    if page is None:
-        raise HTTPException(status_code=404, detail="Idea cluster not found.")
-    return page
 
 
 @app.post("/api/sources")
@@ -1069,68 +781,3 @@ def delete_articles(user: dict = Depends(require_permission("articles.delete")))
             "detail": detail,
         }
     return {"ok": True}
-
-
-@app.post("/api/chat")
-async def chat(payload: dict, user: dict = Depends(require_permission())):
-    """Intelligence Copilot -> the configured LLM provider, over the filtered articles."""
-    question = str(payload.get("question", "")).strip()[:2000]
-    if not question:
-        return {"error": "Empty question"}
-    articles = (payload.get("articles") or [])[:80]
-    total = int(payload.get("total") or len(articles))
-    project = payload.get("project") if isinstance(payload, dict) else None
-    if not isinstance(project, dict):
-        project_id = payload.get("project_id") if isinstance(payload, dict) else None
-        try:
-            project_id = int(project_id) if project_id is not None else None
-        except Exception:
-            project_id = None
-        project = None
-        if project_id is not None:
-            projects = list_projects()
-            project = next((item for item in projects if int(item.get("id") or -1) == project_id), None)
-
-    project_context = _format_project_context(project)
-
-    def _article_tone_line(a):
-        writer_tone = a.get('writer_tone') or (a.get('insight_json') or {}).get('writer_tone', 'neutral')
-        article_tone = a.get('article_tone') or (a.get('insight_json') or {}).get('article_tone', 'neutral')
-        overall_tone = compute_overall_tone(article_tone, writer_tone)
-        return f"writer tone: {writer_tone} | article tone: {article_tone} | overall tone: {overall_tone}"
-
-    context = "\n".join(
-        f"{i + 1}. [{a.get('source', '?')} | {a.get('sentiment', 'neutral')} | "
-        f"{a.get('article_category') or a.get('category', 'general_article')} | "
-        f"{_article_tone_line(a)} | "
-        f"score {a.get('relevance_score', '?')}] "
-        f"{a.get('title', '')}\n   {a.get('summary', '') or (a.get('insight_json') or {}).get('summary', '')}"
-        for i, a in enumerate(articles)
-    )
-    user_prompt = (
-        (f"Project context:\n{project_context}\n\n" if project_context else "")
-        + f"There are {total} articles in the current view.\n\n"
-        + "Use the project context as background when interpreting sentiment, tone, and relevance.\n\n"
-        + f"{context or '(none)'}\n\nQuestion: {question}"
-    )
-
-    try:
-        reply = chat_completion(
-            messages=[
-                {"role": "system", "content": COPILOT_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-            max_tokens=700,
-            timeout=60,
-        )
-        return {"reply": reply}
-    except LLMError as e:
-        logger.warning("Copilot chat failed (%s): %s", e.code, e.detail or e)
-        return {"error": e.user_message, "error_code": e.code}
-    except Exception:
-        logger.exception("Copilot chat failed unexpectedly")
-        return {
-            "error": "Something went wrong while generating a response. Please try again.",
-            "error_code": "llm_provider_error",
-        }

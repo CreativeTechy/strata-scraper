@@ -22,7 +22,7 @@ dashboard/dist/
 
 # Generated pipeline artifacts
 backend/articles.json
-backend/enriched_articles.json
+backend/collected_articles.json
 
 # Runtime storage volume: scratch run dirs and user-uploaded documents.
 # storage/prompts/ is source content and stays tracked.

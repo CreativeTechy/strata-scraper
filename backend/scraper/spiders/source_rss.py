@@ -156,7 +156,8 @@ class SourceRssSpider(scrapy.Spider):
         # that never yields a single item (blocked, 404, DNS failure, ...)
         # still gets an entry - see closed()/_note_source_status() below and
         # services/pipeline/source_diagnostics.py, which merges this into the
-        # per-source breakdown enrich.py already tracks by scraped-item count.
+        # per-source breakdown the collect pipeline already tracks by
+        # scraped-item count.
         self._source_reports = {}
         self._reddit_oauth_token = None
         # Off-reactor pool for resolving Google News redirect-wrapper links
@@ -218,7 +219,7 @@ class SourceRssSpider(scrapy.Spider):
 
     def closed(self, reason):
         """Scrapy calls this once when the spider finishes. Persist the
-        per-source diagnostics to a side-channel file so enrich.py/pipeline.py
+        per-source diagnostics to a side-channel file so collect.py/pipeline.py
         can fold them into the pipeline run's data - the spider has no direct
         DB access of its own, only the run-level progress pushed via
         update_pipeline_run, which the next pipeline stage immediately

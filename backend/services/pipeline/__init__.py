@@ -1,1 +1,1 @@
-"""Scrape -> enrich -> save pipeline execution, run tracking, and scheduling."""
+"""Scrape -> validate -> save pipeline execution, run tracking, and scheduling."""

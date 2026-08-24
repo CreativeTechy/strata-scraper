@@ -11,13 +11,12 @@ from urllib.parse import unquote, urlparse, urlunparse
 import config
 import db
 from services.auth import users_store
-from embeddings import build_project_embedding_text, get_embedding
 from psycopg.types.json import Jsonb
 
 
 PROJECT_SELECT = (
     "id,name,mode,status,description,location,location_type,target_audience,hashtags,keywords,usernames,"
-    "start_date,end_date,embedding_json,embedding_model,embedding_source,embedded_at,"
+    "start_date,end_date,"
     "repeat_enabled,repeat_interval_value,repeat_interval_unit,first_run_at,repeat_weekdays,"
     "next_run_at,last_run_at,last_run_status,"
     "created_at,updated_at"
@@ -42,7 +41,6 @@ PROJECT_MUTABLE_FIELDS = (
     "first_run_at",
     "repeat_weekdays",
 )
-PROJECT_EMBEDDING_FIELDS = ("embedding_json", "embedding_model", "embedding_source", "embedded_at")
 PROJECT_SCHEDULE_FIELDS = ("next_run_at", "last_run_at", "last_run_status")
 
 REPEAT_INTERVAL_UNITS = ("minutes", "hours", "days")
@@ -92,11 +90,6 @@ def _project_select_sql():
 def _project_write_fields():
     columns = _project_columns()
     return [field for field in PROJECT_MUTABLE_FIELDS if field in columns]
-
-
-def _project_embedding_fields():
-    columns = _project_columns()
-    return [field for field in PROJECT_EMBEDDING_FIELDS if field in columns]
 
 
 def _project_schedule_fields():
@@ -184,10 +177,6 @@ def _normalize_project(row, source_ids=None, user_ids=None):
         "usernames": _clean_terms(usernames),
         "start_date": row.get("start_date"),
         "end_date": row.get("end_date"),
-        "embedding_json": row.get("embedding_json") or [],
-        "embedding_model": (row.get("embedding_model") or "").strip(),
-        "embedding_source": (row.get("embedding_source") or "").strip(),
-        "embedded_at": row.get("embedded_at"),
         "repeat_enabled": bool(row.get("repeat_enabled", False)),
         "repeat_interval_value": row.get("repeat_interval_value"),
         "repeat_interval_unit": (row.get("repeat_interval_unit") or "").strip().lower(),
@@ -310,68 +299,6 @@ def _fetch_article_project_map(project_id):
             seen.add(article_id)
             ids.append(article_id)
     return ids
-
-
-def _persist_project_embedding(project):
-    if not config.DATABASE_URL:
-        return {}
-
-    embedding_fields = _project_embedding_fields()
-    if not embedding_fields:
-        return {}
-
-    text = build_project_embedding_text(project)
-    if not text:
-        return {}
-
-    embedding = get_embedding(text)
-    if not embedding:
-        return {}
-
-    try:
-        project_id = int(project.get("id"))
-    except Exception:
-        return {}
-
-    try:
-        assignments = []
-        params = []
-        if "embedding_json" in embedding_fields:
-            assignments.append("embedding_json = %s")
-            params.append(_jsonb_param(embedding.get("embedding_json") or []))
-        if "embedding_model" in embedding_fields:
-            assignments.append("embedding_model = %s")
-            params.append(embedding.get("embedding_model") or "")
-        if "embedding_source" in embedding_fields:
-            assignments.append("embedding_source = %s")
-            params.append(embedding.get("embedding_source") or "")
-        if "embedded_at" in embedding_fields:
-            assignments.append("embedded_at = %s")
-            params.append(embedding.get("embedded_at"))
-        if not assignments:
-            return {}
-        assignments.append("updated_at = now()")
-        params.append(project_id)
-        row = db.fetch_one(
-            f"""
-            update projects
-            set {", ".join(assignments)}
-            where id = %s
-            returning {_project_select_sql()}
-            """,
-            params,
-        )
-        if isinstance(row, dict):
-            return {
-                "embedding_json": row.get("embedding_json") or embedding.get("embedding_json") or [],
-                "embedding_model": (row.get("embedding_model") or embedding.get("embedding_model") or "").strip(),
-                "embedding_source": (row.get("embedding_source") or embedding.get("embedding_source") or "").strip(),
-                "embedded_at": row.get("embedded_at") or embedding.get("embedded_at"),
-            }
-    except Exception:
-        return embedding
-
-    return embedding
 
 
 def list_projects(visible_project_ids=None):
@@ -782,17 +709,7 @@ def _set_project_users(project_id, user_ids):
         return []
 
 
-def persist_project_embedding_for_id(project_id):
-    if not config.DATABASE_URL:
-        return {}
-
-    project = get_project(project_id)
-    if not project:
-        return {}
-    return _persist_project_embedding(project)
-
-
-def create_project(project, *, embed=True):
+def create_project(project):
     if not config.DATABASE_URL:
         return None
 
@@ -825,8 +742,6 @@ def create_project(project, *, embed=True):
         if not row:
             return None
         created = _normalize_project(row)
-        if embed:
-            created.update(_persist_project_embedding(created))
         if source_ids:
             created["source_ids"] = set_project_sources(created["id"], source_ids)
         else:
@@ -843,7 +758,7 @@ def create_project(project, *, embed=True):
         raise RuntimeError(f"Database request failed: {e}") from e
 
 
-def update_project(project_id, project, *, embed=True):
+def update_project(project_id, project):
     if not config.DATABASE_URL:
         return None
 
@@ -874,8 +789,6 @@ def update_project(project_id, project, *, embed=True):
         if not row:
             return None
         normalized = _normalize_project(row)
-        if embed:
-            normalized.update(_persist_project_embedding(normalized))
         if source_ids is not None:
             normalized["source_ids"] = _set_project_sources(project_id, source_ids)
         else:
@@ -1084,7 +997,7 @@ def list_sources_for_project(project_id):
         return []
 
 
-def set_article_projects(article_ids, project_id, similarity_scores=None):
+def set_article_projects(article_ids, project_id):
     if not config.DATABASE_URL:
         return 0
 
@@ -1093,59 +1006,22 @@ def set_article_projects(article_ids, project_id, similarity_scores=None):
         return 0
 
     project_id = int(project_id)
-    score_map = {}
-    if isinstance(similarity_scores, dict):
-        for key, value in similarity_scores.items():
-            try:
-                article_key = int(key)
-            except Exception:
-                continue
-            try:
-                score_map[article_key] = float(value)
-            except Exception:
-                continue
 
     try:
         db.execute("delete from article_projects where project_id = %s and article_id = any(%s)", (project_id, article_ids))
         for article_id in article_ids:
             db.execute(
                 """
-                insert into article_projects (article_id, project_id, similarity_score)
-                values (%s, %s, %s)
+                insert into article_projects (article_id, project_id)
+                values (%s, %s)
                 on conflict (article_id, project_id) do update
-                set similarity_score = excluded.similarity_score,
-                    created_at = article_projects.created_at
+                set created_at = article_projects.created_at
                 """,
-                (article_id, project_id, score_map.get(article_id)),
+                (article_id, project_id),
             )
         return len(article_ids)
     except Exception:
         return 0
-
-
-def list_article_similarity_scores_for_project(project_id):
-    if not config.DATABASE_URL:
-        return {}
-
-    try:
-        rows = _fetch_rows(
-            "select article_id, similarity_score from article_projects where project_id = %s order by article_id asc",
-            (int(project_id),),
-        )
-    except Exception:
-        return {}
-
-    scores = {}
-    for row in rows:
-        try:
-            article_id = int(row.get("article_id"))
-        except Exception:
-            continue
-        try:
-            scores[article_id] = float(row.get("similarity_score"))
-        except Exception:
-            continue
-    return scores
 
 
 def list_article_ids_for_project(project_id):

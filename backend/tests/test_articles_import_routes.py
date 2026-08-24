@@ -33,10 +33,20 @@ class ExportSelectTests(unittest.TestCase):
         missing = [field for field in stored_article_fields() if field not in selected]
         self.assertEqual(missing, [])
 
+    # Columns whose values only mean anything inside *this* database, so the
+    # export deliberately leaves them out even though the dashboard reads
+    # them: story_id points at a local story_groups row, and the importing
+    # side regroups by body similarity itself (see store._assign_story_group).
+    LOCAL_ONLY_COLUMNS = {"story_id"}
+
     def test_export_still_carries_what_the_dashboard_list_shows(self):
         articles_store._export_select.cache_clear()
         selected = set(articles_store._export_select().split(","))
-        dropped = [field for field in articles_store.ARTICLES_SELECT.split(",") if field not in selected]
+        dropped = [
+            field
+            for field in articles_store.ARTICLES_SELECT.split(",")
+            if field not in selected and field not in self.LOCAL_ONLY_COLUMNS
+        ]
         self.assertEqual(dropped, [])
 
 

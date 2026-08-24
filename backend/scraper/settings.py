@@ -58,12 +58,12 @@ DOWNLOAD_DELAY = 1
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-# StreamingEnrichPipeline cleans/analyzes/embeds/saves each article as it's
+# StreamingCollectPipeline validates/dedups/saves each article as it's
 # scraped (see scraper/pipelines.py) - it self-disables (raises
 # NotConfigured) for a bare manual `scrapy crawl` with no PIPELINE_RUN_ID, so
 # it only actually runs for backend-triggered pipeline runs.
 ITEM_PIPELINES = {
-    "scraper.pipelines.StreamingEnrichPipeline": 300,
+    "scraper.pipelines.StreamingCollectPipeline": 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

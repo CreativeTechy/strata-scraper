@@ -18,7 +18,6 @@ from urllib.parse import urlparse
 from psycopg.types.json import Jsonb
 
 import db
-from embeddings import build_competitor_embedding_text, get_embedding
 from services.competitors.countries import COUNTRIES, validate_countries
 from services.sources.sources_store import _derive_reddit_url, _derive_telegram_url, _derive_term_url
 
@@ -259,39 +258,7 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
         """,
         (int(project_id), *[payload[field] for field in fields]),
     )
-    if row:
-        _persist_competitor_embedding(row)
     return row
-
-
-def _persist_competitor_embedding(competitor: dict) -> None:
-    """Keep the competitor's identity embedding (name + aliases + description)
-    in step with every create/update, so semantic-similarity matching in
-    competitor_analysis.py always has something current to compare articles
-    against - not just the literal-name gate. Best-effort: an unavailable
-    embedding model must not block saving the competitor itself.
-    """
-    text = build_competitor_embedding_text(competitor)
-    if not text:
-        return
-    embedding = get_embedding(text)
-    if not embedding:
-        return
-    db.execute(
-        """
-        update competitors
-           set embedding_json = %s, embedding_model = %s,
-               embedding_source = %s, embedded_at = %s
-         where id = %s
-        """,
-        (
-            Jsonb(embedding.get("embedding_json") or []),
-            embedding.get("embedding_model"),
-            embedding.get("embedding_source"),
-            embedding.get("embedded_at"),
-            int(competitor["id"]),
-        ),
-    )
 
 
 def set_competitor_status(competitor_id: int, status: str) -> dict | None:

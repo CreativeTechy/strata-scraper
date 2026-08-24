@@ -4,10 +4,10 @@ articles.
 
 Used in two places: the scraper (backend/scraper/spiders/source_rss.py), which
 is the primary chokepoint since it decides what gets yielded as a scraped
-item in the first place, and the enrichment cleaner
-(backend/services/articles/enrich.py), which is a secondary safeguard for
+item in the first place, and the collect stage's validator
+(backend/services/articles/collect.py), which is a secondary safeguard for
 anything that reaches it another way (for example a previously-generated
-articles.json re-run through enrich.py after this guard was added).
+articles.json re-run through collect.py after this guard was added).
 """
 
 import re
