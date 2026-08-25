@@ -159,14 +159,33 @@ LLM_API_STYLE = _active_provider["api_style"]
 LLM_API_KEY_ENV_NAME = _active_provider["api_key_env"]
 LLM_REASONING_EFFORT = _active_values["reasoning_effort"]
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
 # How long a single chat_completion() HTTP call waits for a response before
-# giving up (see llm_client.py's own default). Raise this for a slow remote
-# backend (e.g. a Colab-hosted Ollama instance behind an ngrok tunnel) where
-# a real response can legitimately take longer than 60s.
-try:
-    LLM_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
-except ValueError:
-    LLM_REQUEST_TIMEOUT_SECONDS = 60
+# giving up. Raise this for a slow remote backend (a self-hosted vLLM/Ollama
+# box, a Colab instance behind an ngrok tunnel) where a real response can
+# legitimately take longer than 60s.
+#
+# Call sites pass their own per-call budget, sized for a fast hosted API like
+# DeepSeek. This value is the *floor* under all of them (see
+# llm_client._resolve_timeout), so pointing the app at a slower backend is one
+# env var rather than an edit to every chat_completion() call in the codebase.
+LLM_REQUEST_TIMEOUT_SECONDS = _env_int("LLM_REQUEST_TIMEOUT_SECONDS", 60)
+
+# Serverless GPU backends (RunPod, Modal, and friends) keep no warm worker
+# between calls: the first request after an idle period blocks while a worker
+# boots and loads model weights, which on its own can outlast the entire
+# inference budget above. When this is set, a call that times out is retried
+# once with this longer timeout instead of failing - the boot the first
+# attempt paid for is done or nearly done by then, so the retry generally
+# lands on a warm worker. 0 (the default) disables the retry, which is right
+# for any always-warm provider.
+LLM_COLD_START_TIMEOUT_SECONDS = _env_int("LLM_COLD_START_TIMEOUT_SECONDS", 0)
 
 SCHEDULER_POLL_SECONDS = int(os.environ.get("SCHEDULER_POLL_SECONDS", "30") or 30)
 SCHEDULER_STALE_RUN_MINUTES = int(os.environ.get("SCHEDULER_STALE_RUN_MINUTES", "180") or 180)
@@ -177,6 +196,17 @@ def _env_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+# Hybrid-reasoning models (Qwen3 and kin) think out loud by default, writing a
+# <think>...</think> block into the response before any real answer. That costs
+# most of the token budget - and therefore most of the wall clock - on work no
+# caller here wants, since every LLM call in this app asks for a short JSON
+# object rather than a reasoned essay. Set this when the backend serves such a
+# model and it will be asked to answer directly. Only honoured by
+# OpenAI-compatible chat-completions backends that accept vLLM's
+# chat_template_kwargs (llm_client._build_request_body); harmless elsewhere.
+LLM_DISABLE_THINKING = _env_bool("LLM_DISABLE_THINKING", False)
 
 
 # --- Scraping proxy: optional network egress ---------------------------------
