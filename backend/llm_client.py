@@ -12,6 +12,8 @@ currently resolves to.
 
 from __future__ import annotations
 
+import re
+
 import requests
 
 import config
@@ -172,6 +174,27 @@ def _extract_output_text_responses(payload) -> str:
     )
 
 
+_THINK_BLOCK_RE = re.compile(r"<think[^>]*>.*?</think[^>]*>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_reasoning_block(text: str) -> str:
+    """Drop a hybrid-reasoning model's <think> block from its visible content.
+
+    Qwen3 and similar models emit their reasoning inline in `content` rather
+    than in a separate field, so the JSON every caller here asks for arrives
+    behind a <think>...</think> preamble and fails to parse. Providers that
+    split reasoning into its own field are unaffected: there is no tag to
+    match.
+    """
+    stripped = _THINK_BLOCK_RE.sub("", text).strip()
+    # An opening tag with no closing one means the budget ran out mid-thought,
+    # so there is no answer after it to keep. Report empty and let the
+    # caller's retry-with-more-room path handle it.
+    if stripped[:6].lower() == "<think":
+        return ""
+    return stripped
+
+
 def _extract_output_text_chat_completions(payload) -> str:
     """Extract text from an OpenAI-compatible chat-completions payload (DeepSeek et al.)."""
     choices = payload.get("choices") or []
@@ -181,7 +204,7 @@ def _extract_output_text_chat_completions(payload) -> str:
     choice = choices[0]
     finish_reason = choice.get("finish_reason") or "unknown"
     message = choice.get("message") or {}
-    text = (message.get("content") or "").strip()
+    text = _strip_reasoning_block(message.get("content") or "")
 
     # Normalize to the same finish_reason vocabulary _post()'s retry logic
     # already understands for the Responses API ("max_output_tokens" means
@@ -232,6 +255,42 @@ def _raise_for_status(resp):
     if status >= 500:
         raise LLMUnavailableError(detail)
     raise LLMError(detail)
+
+
+def _resolve_timeout(requested) -> int:
+    """Per-call budget, but never below the configured floor.
+
+    Call sites hardcode a timeout sized for the work they ask for against a
+    fast hosted API. `LLM_REQUEST_TIMEOUT_SECONDS` raises all of them at once
+    for a slower backend, so a caller's own number acts as a minimum rather
+    than a ceiling.
+    """
+    floor = config.LLM_REQUEST_TIMEOUT_SECONDS
+    if requested is None:
+        return floor
+    return max(int(requested), floor)
+
+
+def _post_with_cold_start_retry(url, body, timeout, *, api_key):
+    """POST, retrying a timeout once on the assumption the backend was cold.
+
+    A serverless backend spends the first request after an idle period booting
+    a worker and loading weights, so the request that pays for the boot is
+    usually the one that times out. Retrying it with a longer budget lands on
+    the now-warm worker. Any other failure is not a cold start and is raised
+    immediately.
+    """
+    try:
+        return _post(url, body, timeout, api_key=api_key)
+    except LLMTimeoutError:
+        cold_timeout = config.LLM_COLD_START_TIMEOUT_SECONDS
+        if cold_timeout <= timeout:
+            raise
+        print(
+            f"llm_client: timed out after {timeout}s; the backend was likely "
+            f"cold-starting - retrying once with timeout={cold_timeout}s"
+        )
+        return _post(url, body, cold_timeout, api_key=api_key)
 
 
 def _post(url, body, timeout, *, api_key):
@@ -286,6 +345,14 @@ def _build_request_body(*, messages, model, temperature, max_tokens, json_mode, 
         }
         if json_mode:
             body["response_format"] = {"type": "json_object"}
+        if config.LLM_DISABLE_THINKING:
+            # vLLM passes chat_template_kwargs through to the model's chat
+            # template, which is where Qwen3-style models decide whether to
+            # open a <think> block. Turning it off is the difference between
+            # spending a 1400-token budget on reasoning and spending it on the
+            # JSON the caller asked for. A backend whose template ignores the
+            # key is unaffected. See config.LLM_DISABLE_THINKING.
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         return body
 
     # "responses" style (OpenAI Responses API): no system role in `input`,
@@ -333,7 +400,7 @@ def chat_completion(*, messages, model=None, temperature=0.2, max_tokens=512, ti
     api_key = config.LLM_API_KEY if api_key is None else api_key
     base_url = ((config.LLM_CHAT_BASE_URL if base_url is None else base_url) or "").strip()
     api_style = config.LLM_API_STYLE if api_style is None else api_style
-    timeout = config.LLM_REQUEST_TIMEOUT_SECONDS if timeout is None else timeout
+    timeout = _resolve_timeout(timeout)
     reasoning_effort = config.LLM_REASONING_EFFORT if reasoning_effort is None else reasoning_effort
     api_key_env_name = config.LLM_API_KEY_ENV_NAME if api_key_env_name is None else api_key_env_name
 
@@ -351,13 +418,13 @@ def chat_completion(*, messages, model=None, temperature=0.2, max_tokens=512, ti
     )
 
     try:
-        payload = _post(base_url, body, timeout, api_key=api_key)
+        payload = _post_with_cold_start_retry(base_url, body, timeout, api_key=api_key)
     except LLMBadRequestError as exc:
         # Some models only accept the default temperature (1) and reject any
         # other value - drop it and retry once rather than failing outright.
         if "temperature" in (exc.detail or "").lower():
             body = {k: v for k, v in body.items() if k != "temperature"}
-            payload = _post(base_url, body, timeout, api_key=api_key)
+            payload = _post_with_cold_start_retry(base_url, body, timeout, api_key=api_key)
         else:
             raise
 
@@ -381,5 +448,5 @@ def chat_completion(*, messages, model=None, temperature=0.2, max_tokens=512, ti
             # Otherwise treat it as a transient glitch (stray refusal turn)
             # and retry once with the same request.
             print(f"llm_client: empty/invalid response ({exc.detail}); retrying once")
-        payload = _post(base_url, retry_body, timeout, api_key=api_key)
+        payload = _post_with_cold_start_retry(base_url, retry_body, timeout, api_key=api_key)
         return _extract_output_text(payload, api_style=api_style)

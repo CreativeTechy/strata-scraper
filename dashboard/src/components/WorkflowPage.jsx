@@ -724,30 +724,18 @@ export default function WorkflowPage({
               </div>
 
               <div className="source-mini-list" style={{ marginTop: '16px' }}>
-                <div className="mini-list-title">Live article quality</div>
+                <div className="mini-list-title">Collection snapshot</div>
                 <div className="mini-list-row">
-                  <span>Positive</span>
-                  <strong style={{ color: '#2ed573' }}>{stats.positive.toLocaleString()}</strong>
-                </div>
-                <div className="mini-list-row">
-                  <span>Negative</span>
-                  <strong style={{ color: '#ff6b6b' }}>{stats.negative.toLocaleString()}</strong>
-                </div>
-                <div className="mini-list-row">
-                  <span>Neutral</span>
-                  <strong style={{ color: '#9aa0aa' }}>{stats.neutral.toLocaleString()}</strong>
-                </div>
-                <div className="mini-list-row">
-                  <span>Mixed</span>
-                  <strong style={{ color: '#f59e0b' }}>{stats.mixed.toLocaleString()}</strong>
+                  <span>Articles Stored</span>
+                  <strong style={{ color: 'var(--primary-color)' }}>{stats.total.toLocaleString()}</strong>
                 </div>
                 <div className="mini-list-row">
                   <span>Unique Sources</span>
                   <strong style={{ color: 'var(--secondary-color)' }}>{stats.sources.toLocaleString()}</strong>
                 </div>
                 <div className="mini-list-row">
-                  <span>Average Relevance</span>
-                  <strong style={{ color: 'var(--primary-color)' }}>{stats.avg} / 10</strong>
+                  <span>Story Groups</span>
+                  <strong>{stats.grouped.toLocaleString()}</strong>
                 </div>
               </div>
 
