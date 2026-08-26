@@ -47,6 +47,12 @@ export const getProfile = (id) => request(`/studies/${id}/profile`);
 export const buildProfile = (id, body) => request(`/studies/${id}/profile`, { method: 'POST', body });
 export const saveProfile = (id, body) => request(`/studies/${id}/profile`, { method: 'PUT', body });
 
+// --- cultural analysis ------------------------------------------------------
+export const getCulturalAnalysis = (id) => request(`/studies/${id}/cultural-analysis`);
+/** Runs (or re-runs) the cultural analysis for the study's business profile —
+ *  a single LLM call, expect a similar wait to buildProfile(). */
+export const runCulturalAnalysis = (id) => request(`/studies/${id}/cultural-analysis`, { method: 'POST' });
+
 // --- competitors -----------------------------------------------------------
 /** Queues discovery as a background job; returns { run_id, status } immediately.
  *  Poll getDiscoveryStatus(id, run_id) until status is 'success' or 'failed'. */

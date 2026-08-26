@@ -5,26 +5,35 @@
  *                       so it is asked for first and its scrape is shown honestly.
  *   2. Market context — the AI's reading of the site, editable. Shown rather than
  *                       hidden because everything downstream is judged against it.
- *   3. Competitors    — manual-first: add competitors and their sources directly,
+ *   3. Cultural analysis — optional, and only shown when target countries were
+ *                       chosen in step 1: an AI assessment of how the business
+ *                       would fare in that culture (success factors, benefits,
+ *                       difficulties, and a summary). Skippable — continuing
+ *                       without running it is the skip path.
+ *   4. Competitors    — manual-first: add competitors and their sources directly,
  *                       and they are valid and scrape-ready immediately, no
  *                       confirmation step needed. "Suggest with AI" is an optional
  *                       action on the same screen; AI-suggested competitors and
  *                       their channels still need a quick review before they're
  *                       trusted the same way a manual entry already is.
- *   4. Channels       — every channel found for a tracked competitor, manual or
+ *   5. Channels       — every channel found for a tracked competitor, manual or
  *                       AI-discovered, is listed here already included (channels
  *                       are trusted by default, same as a manually-entered
  *                       competitor). Discard any that aren't actually theirs, or
  *                       add one yourself if something's missing, before moving on.
- *   5. Schedule       — how often confirmed sources get re-scraped, then finish.
+ *   6. Schedule       — how often confirmed sources get re-scraped, then finish.
  *
  * A study defines who to watch and where to collect from; it draws no
- * conclusions. Whatever analyzes the collected articles lives elsewhere.
+ * conclusions (cultural analysis is the one exception, and it's scoped to
+ * fit, not to the competitors themselves). Whatever analyzes the collected
+ * articles lives elsewhere.
  *
- * Step ids run 2..6 rather than 1..5 - the wizard used to open on a data-source
- * choice (live sources vs uploaded documents) that no longer exists. The chip
- * row numbers them by position, so this is invisible; renaming them would
- * churn every setStep call for no gain.
+ * Step ids run 2..7 rather than 1..6 - the wizard used to open on a
+ * data-source choice (live sources vs uploaded documents) that no longer
+ * exists, and id 4 (cultural analysis) is skipped in the chip row entirely
+ * when there are no target countries. The chip row numbers by position, so
+ * neither gap is visible; renaming ids would churn every setStep call for no
+ * gain.
  *
  * Long steps (scrape, discovery) run tens of seconds, so each shows staged
  * progress instead of an indeterminate spinner.
@@ -34,13 +43,13 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
-  Globe, Link2, Loader2, Plus, Radar, Search, Sparkles, Trash2, X,
+  Globe, Link2, Loader2, Plus, Radar, Search, Sparkles, Trash2, Users, X,
 } from 'lucide-react';
 import {
   PLATFORM_LABELS, SIZE_TIER_LABELS, addAccount, addCompetitorManual,
   avatarGradient, buildProfile, createStudy, discoverCompetitors, discoverTrackedAccounts,
   getProfile, initials, listAccounts, listCompetitors, listStudies,
-  pollDiscoveryRun, saveProfile, setCompetitorStatus, setSchedule, validateAccount,
+  pollDiscoveryRun, runCulturalAnalysis, saveProfile, setCompetitorStatus, setSchedule, validateAccount,
 } from '../competitorApi.js';
 import { COUNTRIES, countryLabel } from '../constants/countries.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
@@ -51,9 +60,10 @@ import '../styles/Competitors.css';
 const STEPS = [
   { id: 2, label: 'Your business', icon: Building2 },
   { id: 3, label: 'Market context', icon: Sparkles },
-  { id: 4, label: 'Competitors', icon: Radar },
-  { id: 5, label: 'Channels', icon: Link2 },
-  { id: 6, label: 'Schedule', icon: CalendarClock },
+  { id: 4, label: 'Cultural analysis', icon: Users },
+  { id: 5, label: 'Competitors', icon: Radar },
+  { id: 6, label: 'Channels', icon: Link2 },
+  { id: 7, label: 'Schedule', icon: CalendarClock },
 ];
 
 const SCRAPE_STAGES = [
@@ -71,6 +81,15 @@ const DISCOVERY_STAGES = [
   'Naming candidate competitors',
   'Filtering out duplicates and unlikely matches',
   'Ranking them by size',
+];
+
+// One synchronous LLM call against the already-derived business profile —
+// same shape as SCRAPE_STAGES above, not the discovery job's staged polling.
+const CULTURAL_STAGES = [
+  'Reading your market context',
+  'Weighing cultural fit against your target countries',
+  'Working out benefits, difficulties, and success factors',
+  'Writing the summary',
 ];
 
 // Phase 3: finding channels for whichever competitors got tracked.
@@ -326,6 +345,8 @@ export default function CompetitorOnboarding() {
   const [targetCountries, setTargetCountries] = useState([]);
   const [profile, setProfile] = useState(null);
   const [scrape, setScrape] = useState(null);
+  const [culturalAnalysis, setCulturalAnalysis] = useState(null);
+  const [culturalBusy, setCulturalBusy] = useState(false);
 
   // 'new' builds a fresh business profile (scrape+AI, or manual); 'existing'
   // reuses one already derived for a past study, skipping both.
@@ -378,7 +399,12 @@ export default function CompetitorOnboarding() {
     () => trackedCompetitors.filter((competitor) => accountsByCompetitor[competitor.id]?.length === 0).length,
     [trackedCompetitors, accountsByCompetitor],
   );
-  const visibleSteps = STEPS;
+  // The cultural-analysis step has nothing to analyze without target
+  // countries, so it's hidden entirely rather than shown empty.
+  const visibleSteps = useMemo(
+    () => (targetCountries.length ? STEPS : STEPS.filter((item) => item.id !== 4)),
+    [targetCountries.length],
+  );
   const filteredExistingBusinesses = useMemo(() => {
     const query = businessSearch.trim().toLowerCase();
     if (!query) return existingBusinesses;
@@ -543,8 +569,9 @@ export default function CompetitorOnboarding() {
     }
   };
 
-  // Step 2 -> 3: save any edits and move on. Competitors are added manually
-  // from here; AI suggestion is an optional action on that screen, not a step.
+  // Step 3 -> 4 (or -> 5 with no target countries): save any edits and move
+  // on. Competitors are added manually from here; AI suggestion is an
+  // optional action on that screen, not a step.
   const submitContext = async () => {
     setError('');
     setBusy(true);
@@ -552,11 +579,27 @@ export default function CompetitorOnboarding() {
       const saved = await saveProfile(studyId, profile);
       setProfile(saved.profile);
       await refreshCompetitors();
-      setStep(4);
+      setStep(targetCountries.length ? 4 : 5);
     } catch (caught) {
       setError(caught.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Step 4: optional — assess cultural fit for the target countries chosen in
+  // step 2. Continuing without running this is the "skip" path; nothing is
+  // required here to move on.
+  const runCultural = async () => {
+    setError('');
+    setCulturalBusy(true);
+    try {
+      const result = await runCulturalAnalysis(studyId);
+      setCulturalAnalysis(result.cultural_analysis);
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setCulturalBusy(false);
     }
   };
 
@@ -617,7 +660,7 @@ export default function CompetitorOnboarding() {
       // best-effort — see comment above.
     } finally {
       setFindingChannels(false);
-      setStep(5);
+      setStep(6);
     }
   };
 
@@ -1116,15 +1159,78 @@ export default function CompetitorOnboarding() {
               </button>
               <button type="button" className="cs-btn cs-btn-primary" onClick={submitContext} disabled={busy}>
                 {busy ? <span className="cs-spinner" /> : <ArrowRight size={15} />}
-                {busy ? 'Saving...' : 'Continue to competitors'}
+                {busy ? 'Saving...' : targetCountries.length ? 'Continue to cultural analysis' : 'Continue to competitors'}
               </button>
             </div>
           </div>
         </>
       ) : null}
 
-      {/* ---------------- Step 4: competitors ---------------- */}
+      {/* ---------------- Step 4: cultural analysis ---------------- */}
       {step === 4 ? (
+        <div className="cs-panel">
+          <h2 className="cs-panel-title"><Users size={16} /> How will you fit in?</h2>
+          <p className="cs-panel-hint">
+            Optional — an AI assessment of how well your business fits the culture(s) you&rsquo;re
+            targeting: what would help you succeed, the benefits of competing there, the difficulties
+            you&rsquo;d likely face, and other insights worth knowing. Skip this and continue any time.
+          </p>
+
+          <button type="button" className="cs-btn cs-btn-primary" onClick={runCultural} disabled={culturalBusy}>
+            {culturalBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
+            {culturalBusy ? 'Analyzing...' : culturalAnalysis ? 'Re-run analysis' : 'Run analysis'}
+          </button>
+
+          {culturalBusy ? (
+            <div className="cs-panel" style={{ marginTop: 14, background: '#fcfdff' }}>
+              <StageList stages={CULTURAL_STAGES} />
+            </div>
+          ) : null}
+
+          {!culturalBusy && culturalAnalysis ? (
+            culturalAnalysis.status === 'success' ? (
+              <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="cs-field" style={{ marginBottom: 0 }}>
+                  <label className="cs-label">Summary</label>
+                  <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>
+                </div>
+                {[
+                  ['Success factors', culturalAnalysis.success_factors],
+                  ['Benefits', culturalAnalysis.benefits],
+                  ['Challenges', culturalAnalysis.challenges],
+                  ['Other insights', culturalAnalysis.insights],
+                ].map(([label, items]) => (
+                  Array.isArray(items) && items.length ? (
+                    <div key={label} className="cs-field" style={{ marginBottom: 0 }}>
+                      <label className="cs-label">{label}</label>
+                      <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
+                        {items.map((item, index) => <li key={index}>{item}</li>)}
+                      </ul>
+                    </div>
+                  ) : null
+                ))}
+              </div>
+            ) : (
+              <div className="cs-alert cs-alert-warn" style={{ marginTop: 14 }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <span>{culturalAnalysis.error || 'The analysis could not be generated. Try running it again, or skip and continue.'}</span>
+              </div>
+            )
+          ) : null}
+
+          <div className="cs-wizard-foot">
+            <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(3)} disabled={busy || culturalBusy}>
+              <ArrowLeft size={15} /> Back
+            </button>
+            <button type="button" className="cs-btn cs-btn-primary" onClick={() => setStep(5)} disabled={culturalBusy}>
+              <ArrowRight size={15} /> {culturalAnalysis ? 'Continue' : 'Skip and continue'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ---------------- Step 5: competitors ---------------- */}
+      {step === 5 ? (
         <>
           <div className="cs-panel">
             <h2 className="cs-panel-title"><Building2 size={16} /> Add your competitors</h2>
@@ -1318,7 +1424,12 @@ export default function CompetitorOnboarding() {
             {findingChannels ? <DiscoveryLog logs={discoveryLogs} active={findingChannels} /> : null}
 
             <div className="cs-wizard-foot">
-              <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(3)} disabled={busy}>
+              <button
+                type="button"
+                className="cs-btn cs-btn-ghost"
+                onClick={() => setStep(targetCountries.length ? 4 : 3)}
+                disabled={busy}
+              >
                 <ArrowLeft size={15} /> Back
               </button>
               <button
@@ -1337,8 +1448,8 @@ export default function CompetitorOnboarding() {
         </>
       ) : null}
 
-      {/* ---------------- Step 5 (online): review channels ---------------- */}
-      {step === 5 ? (
+      {/* ---------------- Step 6 (online): review channels ---------------- */}
+      {step === 6 ? (
         <div className="cs-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
@@ -1424,18 +1535,18 @@ export default function CompetitorOnboarding() {
           }) : null}
 
           <div className="cs-wizard-foot">
-            <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(4)} disabled={busy}>
+            <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(5)} disabled={busy}>
               <ArrowLeft size={15} /> Back
             </button>
-            <button type="button" className="cs-btn cs-btn-primary" onClick={() => setStep(6)} disabled={busy}>
+            <button type="button" className="cs-btn cs-btn-primary" onClick={() => setStep(7)} disabled={busy}>
               <ArrowRight size={15} /> Continue
             </button>
           </div>
         </div>
       ) : null}
 
-      {/* ---------------- Step 5 (offline): analyze + report ---------------- */}
-      {step === 6 ? (
+      {/* ---------------- Step 7 (offline): analyze + report ---------------- */}
+      {step === 7 ? (
         <div className="cs-panel">
           <h2 className="cs-panel-title"><Globe size={16} /> Keep it current</h2>
           <p className="cs-panel-hint">
@@ -1514,7 +1625,7 @@ export default function CompetitorOnboarding() {
           </div>
 
           <div className="cs-wizard-foot">
-            <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(5)} disabled={busy}>
+            <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(6)} disabled={busy}>
               <ArrowLeft size={15} /> Back
             </button>
             <button type="button" className="cs-btn cs-btn-primary" onClick={finish} disabled={busy}>
