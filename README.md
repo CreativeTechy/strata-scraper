@@ -218,6 +218,16 @@ This repo includes a full Docker stack:
 Ports and the database name deliberately differ from strata-media's, so both
 stacks can run on one machine at the same time without colliding.
 
+### Prepare the Postgres credentials
+
+```bash
+copy .env.example .env
+```
+
+On macOS/Linux, use `cp .env.example .env` instead of `copy`. The defaults
+work as-is for local dev; if you change them, update `DATABASE_URL` in
+`backend/.env` to match (see [Required Docker env files](#required-docker-env-files)).
+
 ### Start the stack
 
 ```bash
@@ -253,11 +263,17 @@ docker compose --profile ollama up ollama-pull
 
 ### Required Docker env files
 
-The backend container reads `backend/.env`. Make sure it contains values for:
+Two separate env files are involved:
 
-- `DATABASE_URL=postgresql://scraper:scraper@db:5432/scraper`
-- Whichever LLM provider is selected via `LLM_PROVIDER` (default `deepseek`,
-  requiring `DEEPSEEK_API_KEY`)
+- The repo root's `.env` (copy from `.env.example`) sets `POSTGRES_DB`,
+  `POSTGRES_USER`, `POSTGRES_PASSWORD` - docker-compose.yml loads this
+  automatically to provision the `db` service's credentials.
+- The backend container reads `backend/.env`. Make sure it contains values
+  for:
+  - `DATABASE_URL=postgresql://scraper:scraper@db:5432/scraper` - the
+    credentials here must match the root `.env` above.
+  - Whichever LLM provider is selected via `LLM_PROVIDER` (default
+    `deepseek`, requiring `DEEPSEEK_API_KEY`)
 
 ### Adminer login
 

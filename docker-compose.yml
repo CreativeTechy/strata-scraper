@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: scraper
-      POSTGRES_USER: scraper
-      POSTGRES_PASSWORD: scraper
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -13,8 +13,11 @@ services:
     # against a socket-only temporary server and only opens the TCP port once
     # that finishes - so a socket check would report healthy while the backend
     # still cannot connect.
+    # $$POSTGRES_USER/$$POSTGRES_DB are escaped so the container's own shell
+    # substitutes them (from the environment block above) rather than compose
+    # interpolating at parse time.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U scraper -d scraper"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 3s
       timeout: 5s
       retries: 20
