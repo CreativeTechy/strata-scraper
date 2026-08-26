@@ -83,7 +83,6 @@ export const deleteAccount = (accountId) => request(`/accounts/${accountId}`, { 
 // --- scheduling ------------------------------------------------------------
 export const getSchedule = (id) => request(`/studies/${id}/schedule`);
 export const setSchedule = (id, body) => request(`/studies/${id}/schedule`, { method: 'PUT', body });
-export const syncSources = (id) => request(`/studies/${id}/sync-sources`, { method: 'POST' });
 
 // --- shared presentation helpers ------------------------------------------
 export const SIZE_TIER_LABELS = {

@@ -232,7 +232,7 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
  *  selected countries render as removable pills. Modeled on ListEditor above,
  *  since free text would let "USA" and "United States" reach the discovery
  *  prompt as different values. */
-function CountryPicker({ label, hint, values, onChange }) {
+export function CountryPicker({ label, hint, values, onChange }) {
   const [query, setQuery] = useState('');
   const selected = Array.isArray(values) ? values : [];
   const matches = query.trim()
