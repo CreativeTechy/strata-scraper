@@ -25,6 +25,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from services.competitors import business_profile_store
 from services.competitors import competitor_discovery
 from services.competitors import competitors_store
+from services.competitors import cultural_analysis_store
 from services.competitors.countries import validate_countries
 from services.projects.projects_store import REPEAT_WEEKDAYS
 from psycopg.types.json import Jsonb
@@ -137,6 +138,7 @@ def get_study(project_id: int, user: dict = Depends(require_permission("competit
         "study": project,
         "profile": business_profile_store.get_profile(project_id),
         "competitors": competitors_store.competitor_overview(project_id),
+        "cultural_analysis": cultural_analysis_store.get_analysis(project_id),
     }
 
 
@@ -209,6 +211,29 @@ def update_profile(project_id: int, payload: dict, user: dict = Depends(require_
     if not profile:
         raise HTTPException(status_code=400, detail="Could not save the profile.")
     return {"profile": profile}
+
+
+# --------------------------------------------------------------------------- #
+# Cultural analysis
+# --------------------------------------------------------------------------- #
+@router.get("/studies/{project_id}/cultural-analysis")
+def get_cultural_analysis(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
+    _project_or_404(project_id)
+    return {"cultural_analysis": cultural_analysis_store.get_analysis(project_id)}
+
+
+@router.post("/studies/{project_id}/cultural-analysis")
+def run_cultural_analysis(project_id: int, user: dict = Depends(require_permission("competitors.analyze"))):
+    """Assess how well the business fits the culture(s) it's targeting.
+
+    Requires a business profile with target countries already set — there is
+    nothing region-specific to analyze otherwise.
+    """
+    _project_or_404(project_id)
+    try:
+        return {"cultural_analysis": cultural_analysis_store.build_analysis(project_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # --------------------------------------------------------------------------- #

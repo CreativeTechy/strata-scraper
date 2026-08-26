@@ -15,12 +15,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle, BarChart3, CalendarClock, Check, ChevronRight,
   ExternalLink, Layers, Link2, Pencil, Play, Radar, RefreshCw, Search,
-  ShieldCheck, Trash2,
+  ShieldCheck, Sparkles, Trash2, Users,
 } from 'lucide-react';
 import {
   PLATFORM_LABELS, avatarGradient, deleteStudy,
-  getStudy, initials, listCompetitors, relativeTime,
+  getStudy, initials, listCompetitors, relativeTime, runCulturalAnalysis,
 } from '../competitorApi.js';
+import { countryLabel } from '../constants/countries.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import '../styles/Competitors.css';
@@ -253,6 +254,69 @@ function SourcesPanel({
   );
 }
 
+/** How well the business fits the culture(s) it's targeting — generated once
+ *  from the wizard's "Cultural analysis" step (skippable there), and
+ *  re-runnable from here. Only rendered when the profile actually has target
+ *  countries; a study with none never has anything region-specific to show. */
+function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
+  const hasResult = analysis && analysis.status === 'success';
+  return (
+    <div className="cs-panel" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 className="cs-panel-title" style={{ marginBottom: 4 }}>
+            <Users size={16} /> Cultural fit
+          </h2>
+          <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
+            Targeting {targetCountries.map(countryLabel).join(', ')}.
+          </p>
+        </div>
+        <button type="button" className="cs-btn" onClick={onRun} disabled={running}>
+          {running ? <span className="cs-spinner" /> : <Sparkles size={15} />}
+          {running ? 'Analyzing...' : hasResult ? 'Re-run analysis' : 'Run analysis'}
+        </button>
+      </div>
+
+      {!running && hasResult ? (
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="cs-field" style={{ marginBottom: 0 }}>
+            <label className="cs-label">Summary</label>
+            <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{analysis.summary}</p>
+          </div>
+          {[
+            ['Success factors', analysis.success_factors],
+            ['Benefits', analysis.benefits],
+            ['Challenges', analysis.challenges],
+            ['Other insights', analysis.insights],
+          ].map(([label, items]) => (
+            Array.isArray(items) && items.length ? (
+              <div key={label} className="cs-field" style={{ marginBottom: 0 }}>
+                <label className="cs-label">{label}</label>
+                <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
+                  {items.map((item, index) => <li key={index}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null
+          ))}
+        </div>
+      ) : null}
+
+      {!running && analysis && analysis.status !== 'success' ? (
+        <div className="cs-alert cs-alert-warn" style={{ marginTop: 14 }}>
+          <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+          <span>{analysis.error || 'The analysis could not be generated.'}</span>
+        </div>
+      ) : null}
+
+      {!running && !analysis ? (
+        <p className="cs-panel-hint" style={{ marginTop: 12, marginBottom: 0 }}>
+          Not yet analyzed — run it here, or from the study wizard.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CompetitorWorkspace() {
   const { studyId } = useParams();
   const navigate = useNavigate();
@@ -265,6 +329,8 @@ export default function CompetitorWorkspace() {
   const [deleting, setDeleting] = useState(false);
   const [profile, setProfile] = useState(null);
   const [competitors, setCompetitors] = useState([]);
+  const [culturalAnalysis, setCulturalAnalysis] = useState(null);
+  const [runningCultural, setRunningCultural] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [triggeringScrape, setTriggeringScrape] = useState(false);
@@ -289,6 +355,7 @@ export default function CompetitorWorkspace() {
         if (cancelled) return;
         setStudy(detail.study);
         setProfile(detail.profile);
+        setCulturalAnalysis(detail.cultural_analysis || null);
         setCompetitors(competitorList.competitors || []);
       } catch (caught) {
         if (!cancelled) setError(caught.message);
@@ -340,6 +407,19 @@ export default function CompetitorWorkspace() {
       setError(caught.message);
     } finally {
       setTriggeringScrape(false);
+    }
+  };
+
+  const rerunCultural = async () => {
+    setError('');
+    setRunningCultural(true);
+    try {
+      const result = await runCulturalAnalysis(studyId);
+      setCulturalAnalysis(result.cultural_analysis);
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setRunningCultural(false);
     }
   };
 
@@ -513,6 +593,15 @@ export default function CompetitorWorkspace() {
         <StatTile icon={CalendarClock} label="Last Scrape"
           value={study?.last_run_at ? relativeTime(study.last_run_at) : 'Never'} />
       </div>
+
+      {Array.isArray(profile?.target_countries) && profile.target_countries.length ? (
+        <CulturalAnalysisPanel
+          analysis={culturalAnalysis}
+          targetCountries={profile.target_countries}
+          onRun={rerunCultural}
+          running={runningCultural}
+        />
+      ) : null}
 
       <SourcesPanel
         sources={pagedSources}
