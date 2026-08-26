@@ -22,7 +22,8 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from services.projects.projects_store import list_sources_for_project, record_run_completion
+from services.competitors.competitors_store import sync_project_sources
+from services.projects.projects_store import get_project, list_sources_for_project, record_run_completion
 from services.pipeline.pipeline_runs import (
     get_pipeline_run,
     get_pipeline_run_sources,
@@ -217,6 +218,20 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
         env["PIPELINE_WORKDIR"] = str(run_path)
 
         if project_id is not None:
+            # A competitor study's confirmed channels only become scrapable once
+            # they're linked into `sources` (see competitors_store.sync_project_sources).
+            # That used to require an explicit "Sync sources" action from the
+            # dashboard; every run now does it implicitly first, so a channel
+            # confirmed just before a run is never missed and no UI action can be
+            # forgotten. Idempotent and cheap (a handful of upserts), so it's safe
+            # to run before every single pipeline run, including non-competitor ones.
+            try:
+                project = get_project(project_id)
+                if project and project.get("mode") == "competitor":
+                    sync_project_sources(project_id)
+            except Exception:
+                pass
+
             try:
                 sources = list_sources_for_project(project_id)
                 if not any(source.get("url") for source in sources):

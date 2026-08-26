@@ -15,6 +15,51 @@ function emptySource() {
   return { platform: 'web', url: '', handle: '' };
 }
 
+/** Comma-separated alternate-name editor for one competitor, e.g. "Younes
+ *  Bros, قهوة يونس" - articles naming any of these count as evidence for
+ *  that competitor. Shared by the workspace and the study edit page. */
+export function AliasEditor({ competitor, onSave }) {
+  const stored = Array.isArray(competitor.aliases) ? competitor.aliases : [];
+  const [value, setValue] = useState(stored.join(', '));
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Re-syncing from props is handled by remounting on a key of the stored
+  // aliases (see the call site), not by an effect that writes state.
+  const dirty = value !== stored.join(', ');
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await onSave(value.split(',').map((item) => item.trim()).filter(Boolean));
+      setSaved(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="cs-alias-editor">
+      <label className="cs-label" htmlFor={`cs-aliases-${competitor.id}`}>Other names</label>
+      <div className="cs-alias-editor-row">
+        <input
+          id={`cs-aliases-${competitor.id}`}
+          className="cs-input"
+          value={value}
+          placeholder="e.g. Younes Bros, قهوة يونس"
+          onChange={(event) => { setValue(event.target.value); setSaved(false); }}
+        />
+        <button type="button" className="cs-btn cs-btn-sm" onClick={save} disabled={busy || !dirty}>
+          {busy ? <span className="cs-spinner" /> : null} {saved && !dirty ? 'Saved' : 'Save'}
+        </button>
+      </div>
+      <small className="cs-row-desc">
+        Comma separated. Articles naming any of these count as evidence for this competitor.
+      </small>
+    </div>
+  );
+}
+
 /** One source row's inputs. Term-type platforms (hashtag/keyword/username) take a
  *  bare name instead of a URL — the real URL is derived server-side — so they get a
  *  single input bound to `handle` instead of the usual URL + optional-handle pair. */

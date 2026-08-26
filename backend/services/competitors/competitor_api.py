@@ -546,10 +546,3 @@ def set_schedule(project_id: int, payload: dict, user: dict = Depends(require_pe
         (enabled, value, unit, first_run, enabled, first_run, start_date, end_date, weekdays_param, int(project_id)),
     )
     return {"schedule": schedule}
-
-
-@router.post("/studies/{project_id}/sync-sources")
-def sync_sources(project_id: int, user: dict = Depends(require_permission("competitors.manage"))):
-    """Reconcile project sources with the currently-valid competitor accounts."""
-    _project_or_404(project_id)
-    return {"sources": competitors_store.sync_project_sources(project_id)}

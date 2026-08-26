@@ -8,6 +8,8 @@ import ProjectDetailPage from './components/ProjectDetailPage';
 import CompetitorStudiesPage from './components/CompetitorStudiesPage';
 import CompetitorOnboarding from './components/CompetitorOnboarding';
 import CompetitorWorkspace from './components/CompetitorWorkspace';
+import CompetitorEditPage from './components/CompetitorEditPage';
+import CompetitorsListPage from './components/CompetitorsListPage';
 import WorkflowPage from './components/WorkflowPage';
 import PipelineRunsPage from './components/PipelineRunsPage';
 import PipelineRunDetailPage from './components/PipelineRunDetailPage';
@@ -704,6 +706,22 @@ export default function App() {
             element={(
               <RequirePermission permissions={['competitors.view']}>
                 <CompetitorWorkspace />
+              </RequirePermission>
+            )}
+          />
+          <Route
+            path="/competitors/:studyId/edit"
+            element={(
+              <RequirePermission permissions={['competitors.manage']}>
+                <CompetitorEditPage />
+              </RequirePermission>
+            )}
+          />
+          <Route
+            path="/competitors/:studyId/competitors"
+            element={(
+              <RequirePermission permissions={['competitors.view']}>
+                <CompetitorsListPage />
               </RequirePermission>
             )}
           />
