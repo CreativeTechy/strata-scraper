@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeft, Check, ChevronRight, Link2, Plus, Radar,
+  AlertTriangle, ArrowLeft, Check, ChevronRight, Download, Link2, Plus, Radar,
   Search, Sparkles, Trash2,
 } from 'lucide-react';
 import {
@@ -55,6 +55,8 @@ export default function CompetitorsListPage() {
   const [discoveringChannels, setDiscoveringChannels] = useState(false);
   const [discoveryLogs, setDiscoveryLogs] = useState([]);
   const [actionError, setActionError] = useState('');
+  const [exportingCompetitors, setExportingCompetitors] = useState(false);
+  const [competitorsExportPreview, setCompetitorsExportPreview] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +207,46 @@ export default function CompetitorsListPage() {
     }
   };
 
+  // The handoff to whatever analyzes this study's exported articles - this
+  // study's own tracked competitors, so that app doesn't have to re-guess
+  // the same list. Fetches the file first so the confirmation modal can show
+  // exactly how many rows are about to download; confirming just saves the
+  // blob already in hand.
+  const prepareCompetitorsExport = async () => {
+    if (exportingCompetitors) return;
+    setActionError('');
+    setExportingCompetitors(true);
+    try {
+      const res = await fetch(`/api/competitors/export?project_id=${encodeURIComponent(studyId)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || data?.error || `Failed to export competitors (${res.status})`);
+      }
+      const blob = await res.blob();
+      const text = await blob.text();
+      const count = text.split('\n').filter((line) => line.trim()).length;
+      setCompetitorsExportPreview({ blob, count });
+    } catch (caught) {
+      setActionError(caught.message);
+    } finally {
+      setExportingCompetitors(false);
+    }
+  };
+
+  const confirmCompetitorsExport = () => {
+    if (!competitorsExportPreview) return;
+    const objectUrl = URL.createObjectURL(competitorsExportPreview.blob);
+    const anchor = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    anchor.href = objectUrl;
+    anchor.download = `competitors-${timestamp}.jsonl`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    setCompetitorsExportPreview(null);
+  };
+
   const runDiscovery = async () => {
     setActionError('');
     setDiscoveryNotice(null);
@@ -332,6 +374,16 @@ export default function CompetitorsListPage() {
               {discoveringChannels ? 'Finding channels...' : `Find channels (${stats.channellessTracked})`}
             </button>
           )}
+          <button
+            type="button"
+            className="cs-btn"
+            onClick={prepareCompetitorsExport}
+            disabled={exportingCompetitors}
+            title="Export this study's tracked competitors as JSONL, alongside its articles."
+          >
+            {exportingCompetitors ? <span className="cs-spinner" /> : <Download size={15} />}
+            {exportingCompetitors ? 'Preparing...' : 'Export competitors'}
+          </button>
         </div>
       </div>
 
@@ -576,6 +628,22 @@ export default function CompetitorsListPage() {
         }}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDeleteCompetitor}
+      />
+
+      <ConfirmModal
+        open={Boolean(competitorsExportPreview)}
+        title="Export competitors?"
+        message={
+          competitorsExportPreview
+            ? `This will download ${competitorsExportPreview.count} tracked competitor${
+                competitorsExportPreview.count === 1 ? '' : 's'
+              } for "${study?.name || 'this study'}" as JSONL.`
+            : ''
+        }
+        confirmLabel="Export"
+        cancelLabel="Cancel"
+        onClose={() => setCompetitorsExportPreview(null)}
+        onConfirm={confirmCompetitorsExport}
       />
     </div>
   );

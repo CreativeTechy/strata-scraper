@@ -261,6 +261,40 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
     return row
 
 
+# Fields safe to hand to another app, matching the columns its own
+# `competitors` table can take: excludes id/project_id (local database
+# identifiers - the importing side generates its own id and matches by the
+# project_id given to the import request, same as an article's pipeline_run_id
+# is dropped from the article export) and last_scraped_at (this app's own
+# scrape-freshness bookkeeping; the receiving app never scrapes, so its
+# `competitors` table has no such column at all).
+COMPETITOR_EXPORT_FIELDS = (
+    "name", "website", "domain", "description", "country",
+    "operates_in_countries", "aliases", "size_tier", "size_rank",
+    "size_signals", "relevance_score", "status", "discovery_source",
+    "discovery_query", "last_analyzed_at",
+)
+
+
+def export_competitors(project_id: int) -> list[dict]:
+    """Tracked competitors for a project, shaped for the JSONL handoff to
+    whatever analyzes the exported articles (see CLAUDE.md's Handoff section).
+
+    Only `tracked` competitors: `suggested`/`ignored` are this app's own
+    triage state, not something the receiving app should have to filter out
+    of its own competitor list.
+    """
+    return db.fetch_all(
+        f"""
+        select {', '.join(COMPETITOR_EXPORT_FIELDS)}
+        from competitors
+        where project_id = %s and status = 'tracked'
+        order by size_rank nulls last, lower(name)
+        """,
+        (int(project_id),),
+    )
+
+
 def set_competitor_status(competitor_id: int, status: str) -> dict | None:
     if status not in {"suggested", "tracked", "ignored"}:
         return None
