@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import config
 import migrate
 from services.competitors import competitor_api
+from services.competitors.competitors_store import export_competitors
 from services.auth import permissions_store
 from services.auth import sessions_store
 from services.auth import users_store
@@ -591,6 +592,28 @@ def export_articles_jsonl(
         "Content-Type": "application/x-ndjson; charset=utf-8",
     }
     return StreamingResponse(line_stream(), headers=headers, media_type="application/x-ndjson")
+
+
+@app.get("/api/competitors/export")
+def export_competitors_jsonl(
+    project_id: int,
+    user: dict = Depends(require_permission("competitors.view")),
+):
+    """Tracked competitors for one competitor-mode project, JSONL - the
+    companion to /api/articles/export for the same project (see CLAUDE.md's
+    Handoff section). A project's tracked-competitor list is dozens of rows at
+    most, so unlike the article export this builds the whole body in memory
+    rather than streaming a generator page by page.
+    """
+    _ensure_project_visible(project_id, user)
+    rows = export_competitors(project_id)
+    body = "".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in rows)
+    filename = "competitors-export.jsonl"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+    }
+    return Response(content=body, headers=headers, media_type="application/x-ndjson")
 
 
 MAX_IMPORT_BYTES = 256 * 1024 * 1024

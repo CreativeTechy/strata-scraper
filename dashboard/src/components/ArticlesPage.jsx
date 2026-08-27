@@ -174,6 +174,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [error, setError] = useState('');
   const [deletingAll, setDeletingAll] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingCompetitors, setExportingCompetitors] = useState(false);
+  const [competitorsExportPreview, setCompetitorsExportPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importRun, setImportRun] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -366,6 +368,48 @@ export default function ArticlesPage({ project = null, projectId = null, project
     }
   };
 
+  // Companion to handleExportJsonl: the tracked competitors for the project
+  // currently in scope, so the same handoff that carries articles to whatever
+  // analyzes them also carries who this study is watching. Only meaningful
+  // for a competitor-mode project - the button that calls this is hidden
+  // otherwise. Fetches the file first so the confirmation modal can show
+  // exactly how many rows are about to download; confirming just saves the
+  // blob already in hand.
+  const handleExportCompetitorsJsonl = async () => {
+    if (exportingCompetitors || !activeProject) return;
+    setExportingCompetitors(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/competitors/export?project_id=${encodeURIComponent(activeProject.id)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || data?.error || `Failed to export competitors (${res.status})`);
+      }
+      const blob = await res.blob();
+      const text = await blob.text();
+      const count = text.split('\n').filter((line) => line.trim()).length;
+      setCompetitorsExportPreview({ blob, count });
+    } catch (err) {
+      setError(err?.message || 'Failed to export competitors.');
+    } finally {
+      setExportingCompetitors(false);
+    }
+  };
+
+  const confirmExportCompetitorsJsonl = () => {
+    if (!competitorsExportPreview) return;
+    const objectUrl = URL.createObjectURL(competitorsExportPreview.blob);
+    const anchor = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    anchor.href = objectUrl;
+    anchor.download = `competitors-${timestamp}.jsonl`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    setCompetitorsExportPreview(null);
+  };
+
   // Imports one file end to end: queues the backend job, then polls it to
   // completion, rendering its counters and throughput as they arrive.
   // `batchLabel` (e.g. "File 2 of 3: foo.jsonl") is stamped onto each polled
@@ -528,6 +572,22 @@ export default function ArticlesPage({ project = null, projectId = null, project
           }}
         />
 
+        <ConfirmModal
+          open={Boolean(competitorsExportPreview)}
+          title="Export competitors?"
+          message={
+            competitorsExportPreview
+              ? `This will download ${competitorsExportPreview.count} tracked competitor${
+                  competitorsExportPreview.count === 1 ? '' : 's'
+                } for "${activeProject?.name || 'this project'}" as JSONL.`
+              : ''
+          }
+          confirmLabel="Export"
+          cancelLabel="Cancel"
+          onClose={() => setCompetitorsExportPreview(null)}
+          onConfirm={confirmExportCompetitorsJsonl}
+        />
+
         <div className="articles-filters-row">
           <div className="glass-card articles-filter-panel">
             <select
@@ -665,6 +725,17 @@ export default function ArticlesPage({ project = null, projectId = null, project
               <Download size={16} />
               {exporting ? 'Exporting...' : 'Export JSONL'}
             </button>
+            {activeProject?.mode === 'competitor' && (
+              <button
+                className="btn-secondary"
+                onClick={handleExportCompetitorsJsonl}
+                disabled={loading || exportingCompetitors || deletingAll}
+                title="Export this study's tracked competitors as JSONL, alongside its articles."
+              >
+                <Download size={16} />
+                {exportingCompetitors ? 'Preparing...' : 'Export competitors'}
+              </button>
+            )}
             {canImport && (
               <>
                 <input
