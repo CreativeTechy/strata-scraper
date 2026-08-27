@@ -107,6 +107,12 @@ values only mean something inside the database that produced them:
 - `story_id` - names a row in this database's `story_groups`. The importing
   side regroups by body similarity itself.
 
+`source_run_snapshot` is `pipeline_run_id`'s exportable twin, for anything on
+the other side that still wants to know which run collected an article: a
+denormalized `{id, started_at, project_id}` copy of the run, captured once at
+save time rather than a live reference, so it round-trips through the export
+with no FK to violate.
+
 Every exported article carries `analysis_status='pending'`, which is what makes
 strata-media's analyze step pick it up: it skips anything already marked
 `success`, and that is the column's own database default.
