@@ -28,7 +28,7 @@ ARTICLE_COLUMNS = (
     "source_language", "source_language_confidence", "embedding_dimensions",
     "analysis_status", "analysis_error", "analysis_started_at", "analysis_finished_at",
     "analysis_attempt_count", "reprocess_requested_at", "content_hash",
-    "pipeline_run_id",
+    "pipeline_run_id", "source_run_snapshot",
 )
 
 LEGACY_ARTICLE_COLUMNS = (
@@ -96,6 +96,7 @@ ARTICLE_MUTABLE_FIELDS = (
     "reprocess_requested_at",
     "content_hash",
     "pipeline_run_id",
+    "source_run_snapshot",
 )
 ARTICLE_JSON_FIELDS = {
     "insight_json",
@@ -135,6 +136,13 @@ def _jsonb_param(value):
     if value is None:
         value = []
     return Jsonb(value)
+
+
+def _jsonb_object_param(value):
+    """Like _jsonb_param, but for an object-shaped column (source_run_snapshot)
+    rather than the list-shaped ones ARTICLE_JSON_FIELDS covers - a missing
+    value has to stay SQL NULL here, not fall back to `[]`."""
+    return Jsonb(value) if isinstance(value, dict) else None
 
 
 def _null_if_blank(value):
@@ -375,6 +383,8 @@ def _article_row(article):
             # `article` (e.g. a row written before this field
             # existed) can never silently mark something verified.
             value = is_trusted_domain(row.get("source_url") or row.get("url"))
+        elif field == "source_run_snapshot":
+            value = _jsonb_object_param(row.get("source_run_snapshot"))
         params.append(value)
     return fields, tuple(params)
 
@@ -387,7 +397,11 @@ def _upsert_article_row(article):
     values_sql = ", ".join(["%s"] * len(fields))
     returning_sql = _article_returning_sql()
 
-    updates = [f"{field} = excluded.{field}" for field in fields if field not in ("url", "pipeline_run_id")]
+    updates = [
+        f"{field} = excluded.{field}"
+        for field in fields
+        if field not in ("url", "pipeline_run_id", "source_run_snapshot")
+    ]
     if not updates:
         # An article carrying nothing but its URL would otherwise build
         # `do update set` with an empty assignment list - a syntax error.
@@ -404,6 +418,14 @@ def _upsert_article_row(article):
         # the incoming value only fills in when there was none yet (a brand
         # new article, or a legacy pre-tracking row).
         updates.append("pipeline_run_id = coalesce(articles.pipeline_run_id, excluded.pipeline_run_id)")
+    if "source_run_snapshot" in fields:
+        # Same first-writer-wins reasoning as pipeline_run_id just above -
+        # this is that column's exportable twin, so it has to stay in sync
+        # with it rather than drift to whichever run most recently re-saved
+        # the URL.
+        updates.append(
+            "source_run_snapshot = coalesce(articles.source_run_snapshot, excluded.source_run_snapshot)"
+        )
     # Advanced only when the body actually differs, which is what makes
     # "this page changed" distinguishable from "we crawled this page again".
     # Every SET expression is evaluated against the pre-update row, so
@@ -462,6 +484,26 @@ def _source_key(article):
     return (article.get("source_name") or article.get("source") or "unknown").strip() or "unknown"
 
 
+@lru_cache(maxsize=8)
+def _source_run_snapshot(run_id):
+    """The {id, started_at, project_id} snapshot stamped onto every article
+    this run saves (see save_articles below). Cached per run_id: a live
+    scrape calls save_articles once per item, and the run's own identity
+    fields don't change over its lifetime, so this avoids a pipeline_runs
+    round trip per article."""
+    from services.pipeline.pipeline_runs import get_pipeline_run
+
+    run = get_pipeline_run(run_id)
+    if not run:
+        return None
+    started_at = run.get("started_at")
+    return {
+        "id": run_id,
+        "started_at": started_at.isoformat() if hasattr(started_at, "isoformat") else started_at,
+        "project_id": run.get("project_id"),
+    }
+
+
 def save_articles(articles, batch_size=50, project_id=None, run_id=None):
     """Upserts articles and returns (total_saved, saved_count_by_source).
 
@@ -480,7 +522,12 @@ def save_articles(articles, batch_size=50, project_id=None, run_id=None):
     (so stats can be scoped to one run). Same fallback: the
     scrape subprocess's call sites never pass it, so it resolves from
     PIPELINE_RUN_ID; callers outside a scrape run leave it None, which
-    `_upsert_article_row` treats as "don't touch the existing value".
+    `_upsert_article_row` treats as "don't touch the existing value". It also
+    stamps `source_run_snapshot`, a denormalized copy of that run's identity -
+    unlike `pipeline_run_id` (a local FK, dropped from the JSONL export), the
+    snapshot is self-contained and survives export/import, which is how an
+    app downstream of this one's export can still tell which run collected a
+    given article.
     """
     if not config.DATABASE_URL:
         print("Database credentials not set, skipping upload.")
@@ -513,6 +560,9 @@ def save_articles(articles, batch_size=50, project_id=None, run_id=None):
             for article in source_batch:
                 if run_id:
                     article["pipeline_run_id"] = run_id
+                    snapshot = _source_run_snapshot(run_id)
+                    if snapshot:
+                        article["source_run_snapshot"] = snapshot
                 row = _upsert_article_row(article)
                 if row:
                     _assign_story_group(article, row)

@@ -34,7 +34,10 @@ ARTICLES_SELECT = (
 #   pipeline_run_id - a foreign key into this database's `pipeline_runs`.
 #     Exported, every row fails `articles_pipeline_run_id_fkey` on the
 #     importing side, which has no such run - and the import reports success
-#     having saved nothing. The receiving app assigns its own provenance.
+#     having saved nothing. source_run_snapshot (NOT excluded below) is this
+#     column's exportable twin: a denormalized {id, started_at, project_id}
+#     copy set alongside it, self-contained rather than a live FK, so it is
+#     the one that actually reaches the receiving app.
 #
 # story_id is excluded for the same reason but never reaches here: it isn't
 # one of the columns the upsert writes (see store.ARTICLE_MUTABLE_FIELDS), and
