@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-import db
+from app.core import db
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors import business_profile_store
@@ -138,7 +138,7 @@ def build_analysis(project_id: int) -> dict:
 
     derived = derive_cultural_analysis(profile, target_countries)
 
-    import config
+    from app.core import settings as config
     from datetime import datetime, timezone
 
     saved = upsert_analysis(project_id, {

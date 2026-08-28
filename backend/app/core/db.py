@@ -8,6 +8,7 @@ from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 
 def get_database_url() -> str:
@@ -28,13 +29,39 @@ def get_database_url() -> str:
     return f"postgresql://{auth}{host}:{port}/{name}"
 
 
-def connect():
-    conninfo = get_database_url()
-    if not conninfo:
-        raise RuntimeError("DATABASE_URL is missing.")
-    conn = psycopg.connect(conninfo)
+def _configure(conn: psycopg.Connection) -> None:
     conn.row_factory = dict_row
-    return conn
+
+
+_pool: ConnectionPool | None = None
+
+
+def _get_pool() -> ConnectionPool:
+    global _pool
+    if _pool is None:
+        conninfo = get_database_url()
+        if not conninfo:
+            raise RuntimeError("DATABASE_URL is missing.")
+        _pool = ConnectionPool(
+            conninfo,
+            min_size=int(os.environ.get("DB_POOL_MIN_SIZE", "1")),
+            max_size=int(os.environ.get("DB_POOL_MAX_SIZE", "10")),
+            configure=_configure,
+            open=True,
+        )
+    return _pool
+
+
+def close_pool() -> None:
+    """Close the pool so the process can shut down cleanly."""
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
+
+
+def connect():
+    return _get_pool().connection()
 
 
 @contextmanager

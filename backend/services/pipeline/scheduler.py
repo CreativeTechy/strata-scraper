@@ -9,7 +9,7 @@ pipeline path /scrape uses, reusing pipeline_runs.py for the duplicate-run guard
 import asyncio
 import uuid
 
-import config
+from app.core import settings as config
 from services.projects.projects_store import claim_due_project, list_due_projects, list_sources_for_project
 from services.pipeline.pipeline import run_scraper_pipeline
 from services.pipeline.pipeline_runs import create_pipeline_run, get_active_run_for_project

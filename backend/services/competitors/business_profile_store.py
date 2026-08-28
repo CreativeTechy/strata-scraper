@@ -19,7 +19,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-import db
+from app.core import db
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import country_label, validate_countries
@@ -282,7 +282,7 @@ def build_profile(project_id: int, values: dict) -> dict:
     }
     derived = derive_profile(name, website, description, scrape["text"])
 
-    import config
+    from app.core import settings as config
     from datetime import datetime, timezone
 
     merged = {

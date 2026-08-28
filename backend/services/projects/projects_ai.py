@@ -6,7 +6,7 @@ import json
 import re
 from collections import Counter
 
-import config
+from app.core import settings as config
 from llm_client import chat_completion
 
 STOPWORDS = {

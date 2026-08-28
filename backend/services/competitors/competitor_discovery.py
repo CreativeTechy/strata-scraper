@@ -42,11 +42,11 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
-import config
+from app.core import settings as config
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import COUNTRIES, country_label, validate_countries
-from services.competitors.job_runs import ACTIVE_STATUSES, JobRegistry
+from app.core.jobs import ACTIVE_STATUSES, JobRegistry
 from services.projects.project_discovery import (
     OPINION_QUERY_SITES, _lightweight_fetch, _normalize_url, _search_bing, _search_duckduckgo,
 )
@@ -891,7 +891,7 @@ def discovery_model() -> str:
 # with_accounts) a further LLM call per competitor - easily minutes end to end
 # once the model is running slow, well past any gateway timeout. It runs as a
 # FastAPI BackgroundTask instead of inline in the request handler, tracked in
-# the shared in-process registry (services/competitors/job_runs.py) that
+# the shared in-process registry (app/core/jobs.py) that
 # competitor analysis now uses too - see that module for why these runs are not
 # persisted the way the scrape pipeline's are.
 _discovery_runs = JobRegistry("Queued for competitor discovery.")

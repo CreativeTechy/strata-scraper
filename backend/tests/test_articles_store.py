@@ -121,13 +121,13 @@ class BulkPagingTests(unittest.TestCase):
             for patcher in patchers:
                 patcher.stop()
 
-    def test_search_scan_reaches_its_own_limit_not_the_api_page_cap(self):
-        rows = self._run(900, lambda: articles_store._fetch_all_articles(limit=articles_store.SEARCH_SCAN_LIMIT))
-        self.assertEqual(len(rows), 900)
-
-    def test_search_scan_still_stops_at_search_scan_limit(self):
-        rows = self._run(2500, lambda: articles_store._fetch_all_articles(limit=articles_store.SEARCH_SCAN_LIMIT))
-        self.assertEqual(len(rows), articles_store.SEARCH_SCAN_LIMIT)
+    def test_export_with_search_pages_past_the_old_bounded_scan_limit(self):
+        """Search used to route through a 1000-row bounded scan and silently
+        cap a filtered export there - search is now plain SQL pagination via
+        _fetch_articles like any other filter, so this must page just as far
+        as the unfiltered export does."""
+        rows = self._run(2500, lambda: list(articles_store.export_articles(search="lebanon")))
+        self.assertEqual(len(rows), 2500)
 
 
 if __name__ == "__main__":

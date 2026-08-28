@@ -16,11 +16,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import lru_cache
-import re
 
-import config
-import db
-from services.projects.projects_store import list_article_ids_for_project
+from app.core import settings as config
+from app.core import db
 
 ARTICLES_SELECT = (
     "id,url,source,source_url,title,author,published,published_at,text,fetched_at,"
@@ -81,16 +79,15 @@ SORTABLE_COLUMNS = {
 }
 
 MAX_LIMIT = 100
-# Page size for internal readers that walk the whole result set (export,
-# search scan). Distinct from MAX_LIMIT, which caps what one *API* response
-# may return and must not silently cap a bulk read: a loop that asks
-# _fetch_articles for more than its ceiling gets a short page back and reads
-# that as "no more rows", stopping at MAX_LIMIT. Bulk callers therefore pass
+# Page size for internal readers that walk the whole result set (the export).
+# Distinct from MAX_LIMIT, which caps what one *API* response may return and
+# must not silently cap a bulk read: a loop that asks _fetch_articles for
+# more than its ceiling gets a short page back and reads that as "no more
+# rows", stopping at MAX_LIMIT. Bulk callers therefore pass
 # max_limit=BULK_PAGE_SIZE so the page they ask for is the page they get.
 BULK_PAGE_SIZE = 500
 DEFAULT_LIMIT = 24
 DEFAULT_SORT = "published.desc"
-SEARCH_SCAN_LIMIT = 1000
 
 
 def _normalize_text(value: str | None) -> str:
@@ -161,23 +158,31 @@ def _where_parts(search=None, project_id=None, date_from=None, date_to=None, sou
 
     term = _normalize_text(search)
     if term:
-        escaped = term.replace(",", " ").replace("%", "").replace("*", "")
-        pattern = f"%{escaped}%"
-        clauses.append(
-            "("
-            "title ilike %s or text ilike %s or "
-            "source ilike %s or source_url ilike %s or author ilike %s"
-            ")"
-        )
-        params.extend([pattern] * 5)
+        # search_vector (migrations/0004_articles_search_vector.sql) is a
+        # generated, GIN-indexed tsvector over title/author/source/text -
+        # Postgres ranks and counts matches directly instead of the old
+        # bounded in-Python scan over an ILIKE prefilter.
+        clauses.append("search_vector @@ websearch_to_tsquery('english', %s)")
+        params.append(term)
 
     if project_id is not None:
-        article_ids = list_article_ids_for_project(project_id)
-        if not article_ids:
-            clauses.append("id = -1")
-        else:
-            clauses.append("id = any(%s)")
-            params.append(article_ids)
+        # A correlated exists() rather than materialising every article id for
+        # the project in Python and shipping it as an `id = any(%s)` array -
+        # that array grows without bound with the collection (~290k ints/year
+        # at 800 articles/day) and gets rebuilt on every list/stats/export
+        # call. Postgres can use article_projects_project_idx /
+        # project_sources_project_idx directly instead.
+        clauses.append(
+            "("
+            "exists (select 1 from article_projects ap where ap.article_id = articles.id and ap.project_id = %s) "
+            "or exists ("
+            "select 1 from project_sources ps "
+            "inner join sources s on s.id = ps.source_id "
+            "where ps.project_id = %s and s.url = articles.source_url"
+            ")"
+            ")"
+        )
+        params.extend([project_id, project_id])
 
     source_url_value = _normalize_text(source_url)
     if source_url_value:
@@ -186,12 +191,12 @@ def _where_parts(search=None, project_id=None, date_from=None, date_to=None, sou
 
     date_from_value = _normalize_date_bound(date_from)
     if date_from_value:
-        clauses.append("coalesce(published, created_at) >= %s")
+        clauses.append("coalesce(published_at, created_at) >= %s")
         params.append(date_from_value)
 
     date_to_value = _normalize_date_bound(date_to)
     if date_to_value:
-        clauses.append("coalesce(published, created_at) <= %s")
+        clauses.append("coalesce(published_at, created_at) <= %s")
         params.append(date_to_value)
 
     scraped_from_value = _normalize_date_bound(scraped_from)
@@ -213,7 +218,6 @@ def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order
     if not config.DATABASE_URL:
         return [], 0
 
-    field, direction = _normalize_sort(order)
     limit = _normalize_limit(limit, max_limit=max_limit)
     offset = _normalize_offset(offset)
     where_sql, params = _where_parts(
@@ -226,173 +230,44 @@ def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order
         scraped_to=scraped_to,
     )
 
-    try:
-        rows = db.fetch_all(
-            f"""
-            select {select}
-            from articles
-            {where_sql}
-            order by {field} {direction}
-            limit %s offset %s
-            """,
-            (*params, limit, offset),
-        )
-        count_row = db.fetch_one(
-            f"""
-            select count(*)::int as total
-            from articles
-            {where_sql}
-            """,
-            tuple(params),
-        )
-        total = int((count_row or {}).get("total") or len(rows))
-        return rows, total
-    except Exception:
-        return [], 0
-
-
-def _fetch_all_articles(search=None, project_id=None, *, select=ARTICLES_SELECT, order=DEFAULT_SORT, limit=SEARCH_SCAN_LIMIT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
-    if not config.DATABASE_URL:
-        return []
-
-    rows = []
-    page_size = BULK_PAGE_SIZE
-    offset = 0
-    limit = max(1, min(int(limit or SEARCH_SCAN_LIMIT), SEARCH_SCAN_LIMIT))
-
-    while len(rows) < limit:
-        want = min(page_size, limit - len(rows))
-        batch, _ = _fetch_articles(
-            limit=want,
-            offset=offset,
-            search=search,
-            project_id=project_id,
-            order=order,
-            select=select,
-            date_from=date_from,
-            date_to=date_to,
-            source_url=source_url,
-            scraped_from=scraped_from,
-            scraped_to=scraped_to,
-            max_limit=page_size,
-        )
-        if not batch:
-            break
-        rows.extend(batch)
-        # A page shorter than the one asked for is the end of the result set -
-        # compare against `want`, not page_size, since the final page is
-        # deliberately trimmed to the remaining budget.
-        if len(batch) < want:
-            break
-        offset += len(batch)
-
-    return rows[:limit]
-
-
-def _article_search_blob(row: dict) -> str:
-    parts = [
-        row.get("title"),
-        row.get("text"),
-        row.get("source"),
-        row.get("source_url"),
-        row.get("author"),
-    ]
-    return " ".join(_normalize_text(value).lower() for value in parts if _normalize_text(value))
-
-
-def _score_search_row(row: dict, search: str):
-    """Keyword relevance for one row: what fraction of the query's words
-    appear in it, with a bonus when the whole phrase does."""
-    search_text = _normalize_text(search).lower()
-    if not search_text:
-        return 0.0, False
-
-    blob = _article_search_blob(row)
-    if not blob:
-        return 0.0, False
-
-    tokens = [token for token in re.split(r"\W+", search_text) if len(token) > 1]
-    keyword_hits = sum(1 for token in tokens if token in blob)
-    exact_phrase_hit = search_text in blob
-    score = 0.0
-    if tokens:
-        score = min(1.0, keyword_hits / len(tokens))
-    elif exact_phrase_hit:
-        score = 1.0
-    if exact_phrase_hit:
-        score = min(1.0, score + 0.1)
-
-    return score, exact_phrase_hit or keyword_hits > 0
-
-
-def _rank_search_rows(rows, search: str):
+    # A search term always ranks by relevance - the caller's requested sort
+    # doesn't apply to a keyword match the way it does to a plain listing.
     search_text = _normalize_text(search)
-    if not search_text or not rows:
-        return rows, []
+    if search_text:
+        order_sql = "ts_rank(search_vector, websearch_to_tsquery('english', %s)) desc"
+        order_params = (*params, search_text)
+    else:
+        field, direction = _normalize_sort(order)
+        order_sql = f"{field} {direction}"
+        order_params = params
 
-    ranked = []
-    matched_rows = []
-    for index, row in enumerate(rows):
-        score, matched = _score_search_row(row, search_text)
-        ranked.append((score, matched, index, row))
-        if matched:
-            matched_rows.append(row)
-
-    ranked_rows = [
-        row
-        for score, matched, index, row in sorted(ranked, key=lambda item: (-item[0], item[2]))
-        if matched or score > 0
-    ]
-    if not ranked_rows:
-        ranked_rows = [row for _, _, _, row in sorted(ranked, key=lambda item: (-item[0], item[2]))[:50]]
-        matched_rows = ranked_rows
-    return ranked_rows, matched_rows
-
-
-def _search_results(search=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, select=ARTICLES_SELECT):
-    """Rank a bounded scan (SEARCH_SCAN_LIMIT rows) by keyword relevance.
-
-    The scan is deliberately unfiltered by `search` - the SQL ilike in
-    _where_parts is a coarse prefilter that can't rank, so the scoring pass
-    below is what orders the result. Anything past SEARCH_SCAN_LIMIT is not
-    considered."""
-    rows = _fetch_all_articles(
-        project_id=project_id,
-        select=select,
-        order=DEFAULT_SORT,
-        limit=SEARCH_SCAN_LIMIT,
-        date_from=date_from,
-        date_to=date_to,
-        source_url=source_url,
-        scraped_from=scraped_from,
-        scraped_to=scraped_to,
+    rows = db.fetch_all(
+        f"""
+        select {select}
+        from articles
+        {where_sql}
+        order by {order_sql}
+        limit %s offset %s
+        """,
+        (*order_params, limit, offset),
     )
-    ranked_rows, _ = _rank_search_rows(rows, search)
-    return ranked_rows, len(ranked_rows)
+    count_row = db.fetch_one(
+        f"""
+        select count(*)::int as total
+        from articles
+        {where_sql}
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or len(rows))
+    return rows, total
 
 
 def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
     limit = _normalize_limit(limit)
     offset = _normalize_offset(offset)
     field, direction = _normalize_sort(sort)
-
     search_text = _normalize_text(search)
-    if search_text:
-        rows, total = _search_results(
-            search=search_text,
-            project_id=project_id,
-            source_url=source_url,
-            scraped_from=scraped_from,
-            scraped_to=scraped_to,
-        )
-        rows = rows[offset:offset + limit]
-        return {
-            "articles": rows,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "sort": "relevance.desc",
-        }
 
     rows, total = _fetch_articles(
         limit=limit,
@@ -405,12 +280,15 @@ def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, s
         scraped_from=scraped_from,
         scraped_to=scraped_to,
     )
+    # _fetch_articles ranks by relevance itself whenever `search` is set,
+    # ignoring the requested sort - this label just reflects that back.
+    sort_label = "relevance.desc" if search_text else f"{field}.{direction}"
     return {
         "articles": rows,
         "total": total,
         "limit": limit,
         "offset": offset,
-        "sort": f"{field}.{direction}",
+        "sort": sort_label,
     }
 
 
@@ -425,23 +303,11 @@ def export_articles(search=None, project_id=None, sort=DEFAULT_SORT, source_url=
     receiving immediately.
 
     Callers that genuinely need them all at once can still wrap it in list().
+    A search term pages through _fetch_articles exactly like the unfiltered
+    case - there is no separate bounded-scan path here, so a filtered export
+    can no longer silently cap out early.
     """
     select = _export_select()
-    search_text = _normalize_text(search)
-    if search_text:
-        # The ranked path scores a bounded scan (SEARCH_SCAN_LIMIT) as a whole,
-        # so this page is already materialized - stream it out as one chunk.
-        rows, _ = _search_results(
-            search=search_text,
-            project_id=project_id,
-            source_url=source_url,
-            scraped_from=scraped_from,
-            scraped_to=scraped_to,
-            select=select,
-        )
-        yield from rows
-        return
-
     page_size = BULK_PAGE_SIZE
     offset = 0
     field, direction = _normalize_sort(sort)
@@ -486,32 +352,29 @@ def get_article_stats(search=None, project_id=None, date_from=None, date_to=None
         date_to=date_to,
     )
 
-    try:
-        totals = db.fetch_one(
-            f"""
-            select count(*)::int as total,
-                   min(fetched_at) as first_scraped_at,
-                   max(fetched_at) as last_scraped_at
-            from articles
-            {where_sql}
-            """,
-            tuple(params),
-        ) or {}
-        sources = db.fetch_all(
-            f"""
-            select coalesce(nullif(source, ''), 'unknown') as source,
-                   count(*)::int as count,
-                   max(fetched_at) as last_scraped_at
-            from articles
-            {where_sql}
-            group by 1
-            order by count desc, source asc
-            limit 50
-            """,
-            tuple(params),
-        ) or []
-    except Exception:
-        return empty
+    totals = db.fetch_one(
+        f"""
+        select count(*)::int as total,
+               min(fetched_at) as first_scraped_at,
+               max(fetched_at) as last_scraped_at
+        from articles
+        {where_sql}
+        """,
+        tuple(params),
+    ) or {}
+    sources = db.fetch_all(
+        f"""
+        select coalesce(nullif(source, ''), 'unknown') as source,
+               count(*)::int as count,
+               max(fetched_at) as last_scraped_at
+        from articles
+        {where_sql}
+        group by 1
+        order by count desc, source asc
+        limit 50
+        """,
+        tuple(params),
+    ) or []
 
     return {
         "total": int(totals.get("total") or 0),

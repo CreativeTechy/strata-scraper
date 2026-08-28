@@ -6,15 +6,15 @@ a one-place change.
 """
 
 import os
-from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from trafilatura.feeds import find_feed_urls
+from . import db
 
-import db
-
-BASE_DIR = Path(__file__).resolve().parent
+# This file lives at backend/app/core/settings.py, three levels under
+# backend/ - BASE_DIR must still resolve to backend/ itself, since that's
+# where .env actually lives (see CLAUDE.md: "loads backend/.env manually").
+BASE_DIR = Path(__file__).resolve().parents[2]
 DOTENV_FILE = BASE_DIR / ".env"
 
 def _load_dotenv():
@@ -409,68 +409,3 @@ def _resolve_source_type(source_type_input: str, url: str) -> str:
     return inferred_type or "rss"
 
 
-def _normalize_source_record(row):
-    url = (row.get("url") or "").strip()
-    name = (row.get("name") or "").strip()
-    source_type = _resolve_source_type(row.get("source_type") or "", url)
-    return {
-        "id": row.get("id"),
-        "url": url,
-        "name": name,
-        "enabled": bool(row.get("enabled", True)),
-        "source_type": source_type,
-        "created_at": row.get("created_at"),
-        "updated_at": row.get("updated_at"),
-        "source": row.get("source", "database"),
-    }
-
-
-@lru_cache(maxsize=256)
-def _discover_feed_urls(url: str):
-    """Return discovered feed URLs for a homepage, or [] if none are found."""
-    if not url:
-        return []
-    try:
-        discovered = find_feed_urls(url)
-        if isinstance(discovered, list):
-            return [u.strip() for u in discovered if u and u.strip()]
-    except Exception:
-        pass
-    return []
-
-
-def load_source_records():
-    """Return configured source records with source_type preserved.
-
-    Scoped to the project's assigned sources when PIPELINE_PROJECT_ID is set
-    (the scraper subprocess always has this when a project was selected -
-    see run_scraper_pipeline), otherwise every source in the table.
-    """
-    if not DATABASE_URL:
-        return []
-
-    project_id = os.environ.get("PIPELINE_PROJECT_ID", "").strip()
-    try:
-        if project_id:
-            records = db.fetch_all(
-                """
-                select s.id, s.url, s.name, s.enabled, s.source_type, s.created_at, s.updated_at
-                from sources s
-                inner join project_sources ps on ps.source_id = s.id
-                where ps.project_id = %s
-                order by s.created_at asc
-                """,
-                (int(project_id),),
-            )
-        else:
-            records = db.fetch_all(
-                """
-                select id, url, name, enabled, source_type, created_at, updated_at
-                from sources
-                order by created_at asc
-                """
-            )
-    except Exception:
-        return []
-
-    return [_normalize_source_record({**row, "source": "database"}) for row in records]

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import bcrypt
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 from services.auth import permissions_store
 
 STATUSES = ("active", "disabled")

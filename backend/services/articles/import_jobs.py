@@ -10,7 +10,7 @@ therefore get the identical project link, story grouping and idea-cluster
 treatment a scraped one does.
 
 Progress is reported the way competitor discovery/analysis report theirs (see
-job_runs.JobRegistry): a process-local run the UI polls, carrying counters and
+app/core/jobs.py's JobRegistry): a process-local run the UI polls, carrying counters and
 an append-only log. Nothing here is worth resuming after a restart - the upsert
 is keyed on url, so a failed import is simply re-run.
 """
@@ -22,7 +22,7 @@ import os
 import time
 
 from services.articles.store import ARTICLE_MUTABLE_FIELDS, save_articles
-from services.competitors.job_runs import JobRegistry
+from app.core.jobs import JobRegistry
 
 # Rows per upsert batch. Deliberately smaller than the export's page size: each
 # saved article also writes its project link, story group and idea clusters, so

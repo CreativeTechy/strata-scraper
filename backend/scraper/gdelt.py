@@ -9,7 +9,7 @@ import time
 
 import requests
 
-import config
+from app.core import settings as config
 
 GDELT_DOC_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 

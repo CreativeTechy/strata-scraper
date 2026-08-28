@@ -8,7 +8,7 @@ pages (blogs, forums, retailer/brand pages, ...) that mention the keyword.
 
 import requests
 
-import config
+from app.core import settings as config
 
 CSE_URL = "https://customsearch.googleapis.com/customsearch/v1"
 

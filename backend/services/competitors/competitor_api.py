@@ -29,7 +29,7 @@ from services.competitors import cultural_analysis_store
 from services.competitors.countries import validate_countries
 from services.projects.projects_store import REPEAT_WEEKDAYS
 from psycopg.types.json import Jsonb
-import db
+from app.core import db
 from services.auth.auth import require_permission
 from services.pipeline.pipeline_runs import get_active_run_for_project
 from services.projects.projects_store import delete_project, list_sources_for_project, project_has_articles
