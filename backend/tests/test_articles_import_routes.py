@@ -89,7 +89,7 @@ class ExportRouteTests(unittest.TestCase):
 
     def test_the_response_is_one_json_object_per_line(self):
         rows = [{"id": i, "url": f"https://example.com/{i}", "title": f"T{i}"} for i in range(3)]
-        with patch("main.export_articles", return_value=iter(rows)):
+        with patch("api.routers.articles.export_articles", return_value=iter(rows)):
             res = self.client.get("/api/articles/export")
 
         self.assertEqual(res.status_code, 200)
@@ -106,7 +106,7 @@ class ExportRouteTests(unittest.TestCase):
                 pulled.append(i)
                 yield {"id": i, "url": f"https://example.com/{i}"}
 
-        with patch("main.export_articles", return_value=lazy_rows()):
+        with patch("api.routers.articles.export_articles", return_value=lazy_rows()):
             self.assertEqual(pulled, [])  # the generator is not drained up front
             res = self.client.get("/api/articles/export")
 
@@ -248,7 +248,7 @@ class ImportRouteTests(unittest.TestCase):
         self.assertRegex(messages[-1], r"Imported 50 articles in .+ \(\d[\d,]*/s\)\.")
 
     def test_project_scope_is_passed_through_to_the_saver(self):
-        with patch("main._ensure_project_visible") as ensure_visible:
+        with patch("api.routers.articles.ensure_project_visible") as ensure_visible:
             queued, run = self._import([json.dumps({"url": "https://example.com/a"})], data={"project_id": "7"})
 
         self.assertEqual(queued["project_id"], 7)
@@ -267,7 +267,7 @@ class ImportRouteTests(unittest.TestCase):
             seen["path"] = path
             return real_run(run_id, path, project_id)
 
-        with patch("main.run_import_job", side_effect=capture):
+        with patch("api.routers.articles.run_import_job", side_effect=capture):
             self._import([json.dumps({"url": "https://example.com/a"})])
 
         self.assertFalse(os.path.exists(seen["path"]))

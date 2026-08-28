@@ -8,8 +8,8 @@ from functools import lru_cache
 from typing import Iterable
 from urllib.parse import unquote, urlparse, urlunparse
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 from services.auth import users_store
 from psycopg.types.json import Jsonb
 
@@ -281,24 +281,6 @@ def _fetch_source_url_map():
         if key:
             mapping[key].append(source_id)
     return mapping
-
-
-def _fetch_article_project_map(project_id):
-    rows = _fetch_rows(
-        "select article_id from article_projects where project_id = %s order by article_id asc",
-        (int(project_id),),
-    )
-    ids = []
-    seen = set()
-    for row in rows:
-        try:
-            article_id = int(row.get("article_id"))
-        except Exception:
-            continue
-        if article_id not in seen:
-            seen.add(article_id)
-            ids.append(article_id)
-    return ids
 
 
 def list_projects(visible_project_ids=None):
@@ -1022,51 +1004,6 @@ def set_article_projects(article_ids, project_id):
         return len(article_ids)
     except Exception:
         return 0
-
-
-def list_article_ids_for_project(project_id):
-    if not config.DATABASE_URL:
-        return []
-
-    ids = []
-    seen = set()
-
-    for article_id in _fetch_article_project_map(project_id):
-        if article_id in seen:
-            continue
-        seen.add(article_id)
-        ids.append(article_id)
-
-    source_ids = list_project_source_ids(project_id)
-    if not source_ids:
-        return ids
-
-    try:
-        rows = _fetch_rows(
-            """
-            select a.id
-            from articles a
-            inner join sources f on f.url = a.source_url
-            inner join project_sources ef on ef.source_id = f.id
-            where ef.project_id = %s
-            order by a.id asc
-            """,
-            (int(project_id),),
-        )
-    except Exception:
-        rows = []
-
-    for row in rows:
-        try:
-            article_id = int(row.get("id"))
-        except Exception:
-            continue
-        if article_id in seen:
-            continue
-        seen.add(article_id)
-        ids.append(article_id)
-
-    return ids
 
 
 def list_project_ids_for_source_url(source_url):

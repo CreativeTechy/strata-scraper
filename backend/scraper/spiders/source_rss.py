@@ -4,9 +4,9 @@ Generic source spider: RSS discovery -> web/social page fetch -> trafilatura ext
 Run from the backend/ directory:
     scrapy crawl source_rss -O <output-file>
 
-Sources come from Supabase via config.load_source_records() (scoped to the
-selected project's sources when PIPELINE_PROJECT_ID is set), so adding/removing
-a publisher does not require code changes. The
+Sources come from Postgres via sources_store.load_source_records() (scoped to
+the selected project's sources when PIPELINE_PROJECT_ID is set), so adding/
+removing a publisher does not require code changes. The
 spider never hand-writes CSS selectors per site -- trafilatura extracts
 title/date/text generically, so one spider covers every publisher.
 """
@@ -27,8 +27,7 @@ import trafilatura
 from googlenewsdecoder import gnewsdecoder
 from trafilatura.feeds import find_feed_urls
 
-import config
-from config import load_source_records
+from app.core import settings as config
 from content_guard import (
     TWEET_STATUS_RE,
     is_blocked_domain,
@@ -49,6 +48,7 @@ from scraper.social_sources import (
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
 from services.pipeline.pipeline_runs import update_pipeline_run
+from services.sources.sources_store import load_source_records
 
 PIPELINE_RUN_ID = os.environ.get("PIPELINE_RUN_ID", "").strip()
 
@@ -251,7 +251,31 @@ class SourceRssSpider(scrapy.Spider):
                     "falling back to the public reddit.com .json endpoints for this run."
                 )
 
-        for record in load_source_records():
+        try:
+            records = load_source_records()
+        except Exception as exc:
+            # Scrapy's engine swallows any exception raised out of start()
+            # (logs it via the spider_error path and just finishes the crawl
+            # with zero requests, exit code 0) - so a DB blip here would
+            # otherwise surface as a "successful" run that scraped nothing,
+            # indistinguishable from the sources genuinely having nothing.
+            # Marking the run failed directly (the spider already has this
+            # one DB write path via update_pipeline_run/_push_progress) is
+            # what makes the crawl-level failure visible instead of silent.
+            self.logger.error("Failed to load source records: %s", exc)
+            if PIPELINE_RUN_ID:
+                try:
+                    update_pipeline_run(
+                        PIPELINE_RUN_ID,
+                        status="failed",
+                        stage="error",
+                        error=f"Failed to load source records: {exc}",
+                    )
+                except Exception as update_exc:
+                    self.logger.debug("Could not mark run failed: %s", update_exc)
+            return
+
+        for record in records:
             if not record.get("enabled", True):
                 continue
             url = (record.get("url") or "").strip()

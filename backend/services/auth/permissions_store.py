@@ -8,7 +8,7 @@ editing the permission matrix. `is_system` roles can't be deleted.
 
 from __future__ import annotations
 
-import db
+from app.core import db
 
 ROLE_SELECT = "id, name, description, is_system, full_access, created_at, updated_at"
 

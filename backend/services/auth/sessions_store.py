@@ -10,8 +10,8 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 
 SESSION_SELECT = "token_hash,user_id,csrf_token,created_at,last_seen_at,expires_at"
 

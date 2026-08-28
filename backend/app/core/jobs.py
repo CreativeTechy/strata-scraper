@@ -9,6 +9,13 @@ Deliberately in-process rather than Postgres. These are one-shot steps a user
 is sitting in front of, not durable scheduled work like the scrape pipeline
 (which does persist, via `pipeline_runs`) - if the backend restarts mid-run
 there is nothing worth resuming, the UI just needs to let the user retry.
+
+SINGLE-PROCESS ONLY, same constraint as services/pipeline/pipeline.py's
+_active_processes: with more than one backend worker/replica, a status-poll
+request can land on a worker that never ran this job and 404, roughly half
+the time with two workers. Fine at this app's current volume; do not add
+`--workers N` or run more than one replica without moving this to Postgres
+first.
 """
 
 from __future__ import annotations

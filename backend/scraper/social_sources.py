@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import requests
 
-import config
+from app.core import settings as config
 from content_guard import is_reddit_blocked_payload
 
 # --- Proxy support (optional) ---------------------------------------------

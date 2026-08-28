@@ -36,7 +36,7 @@ from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-import config
+from app.core import settings as config
 from content_guard import is_blocked_article, is_tweet_url
 from services.projects.projects_store import get_project
 from services.pipeline.pipeline_runs import update_pipeline_run, upsert_pipeline_run_source_stats

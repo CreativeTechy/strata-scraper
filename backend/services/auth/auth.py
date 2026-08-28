@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request, Response
 
-import config
+from app.core import settings as config
 from services.auth import permissions_store
 from services.auth import sessions_store
 from services.auth import users_store

@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 from psycopg.types.json import Jsonb
 
-import db
+from app.core import db
 from services.competitors.countries import COUNTRIES, validate_countries
 from services.sources.sources_store import _derive_reddit_url, _derive_telegram_url, _derive_term_url
 

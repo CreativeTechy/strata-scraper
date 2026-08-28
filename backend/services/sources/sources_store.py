@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import re
 from urllib.parse import parse_qs, quote_plus, urlparse
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 from services.projects.projects_store import set_source_projects, list_source_project_ids
+from ssrf_guard import check_url_is_safe
 
 
 SOURCE_SELECT = "id,url,name,enabled,source_type,limited,created_at,updated_at"
@@ -257,6 +259,10 @@ def create_source(source):
     project_ids = source.get("project_ids") or [] if isinstance(source, dict) else []
     if not payload["url"]:
         return None
+    # Not caught by the except Exception below - an unsafe URL is a rejection,
+    # not a "check your database connection" failure, and main.py surfaces it
+    # to the caller as such (see UnsafeUrlError handling there).
+    check_url_is_safe(payload["url"])
 
     try:
         row = db.fetch_one(
@@ -297,6 +303,8 @@ def update_source(source_id, source):
     default_limited = existing["limited"] if existing else False
     payload = _upsert_payload(source, default_limited=default_limited)
     project_ids = source.get("project_ids") if isinstance(source, dict) else None
+    if payload["url"]:
+        check_url_is_safe(payload["url"])
 
     try:
         row = db.fetch_one(
@@ -351,3 +359,59 @@ def diagnose_source_setup():
         return ""
     except Exception as e:
         return f"Database request failed: {e}"
+
+
+def _normalize_source_record(row):
+    # Deliberately separate from _normalize_record() above: this feeds the
+    # spider (see load_source_records()), which already falls back to the
+    # raw URL for an empty name at its own call site - defaulting the name
+    # here too (the way _normalize_record does for the dashboard's source
+    # list) would just be a second, redundant place making the same choice.
+    url = (row.get("url") or "").strip()
+    name = (row.get("name") or "").strip()
+    source_type = config._resolve_source_type(row.get("source_type") or "", url)
+    return {
+        "id": row.get("id"),
+        "url": url,
+        "name": name,
+        "enabled": bool(row.get("enabled", True)),
+        "source_type": source_type,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+        "source": row.get("source", "database"),
+    }
+
+
+def load_source_records():
+    """Return configured source records with source_type preserved, for the
+    scraper subprocess (see scraper/spiders/source_rss.py's start()).
+
+    Scoped to the project's assigned sources when PIPELINE_PROJECT_ID is set
+    (the scraper subprocess always has this when a project was selected -
+    see run_scraper_pipeline), otherwise every source in the table.
+    """
+    if not config.DATABASE_URL:
+        return []
+
+    project_id = os.environ.get("PIPELINE_PROJECT_ID", "").strip()
+    if project_id:
+        records = db.fetch_all(
+            """
+            select s.id, s.url, s.name, s.enabled, s.source_type, s.created_at, s.updated_at
+            from sources s
+            inner join project_sources ps on ps.source_id = s.id
+            where ps.project_id = %s
+            order by s.created_at asc
+            """,
+            (int(project_id),),
+        )
+    else:
+        records = db.fetch_all(
+            """
+            select id, url, name, enabled, source_type, created_at, updated_at
+            from sources
+            order by created_at asc
+            """
+        )
+
+    return [_normalize_source_record({**row, "source": "database"}) for row in records]

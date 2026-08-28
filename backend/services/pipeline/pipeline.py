@@ -45,6 +45,19 @@ IS_WINDOWS = platform.system() == "Windows"
 # Tracks the live Popen for each run so a stop request can reach the actual
 # OS process, plus which run_ids have been asked to cancel (checked between
 # stages so a stop that arrives mid-run still lands on "cancelled").
+#
+# SINGLE-PROCESS ONLY: this state lives in this process's memory, not
+# Postgres. With more than one backend worker/replica, a "Stop run" request
+# can land on a worker that never registered the process and silently no-op
+# (see cancel_pipeline_run()'s `return False` when the run_id isn't in
+# _active_processes here). app/core/jobs.py's JobRegistry has
+# the same constraint for import/discovery progress polling. This is fine at
+# this app's current volume (see the architecture review's scalability
+# section) - MIGRATE_ON_STARTUP exists to support several replicas for
+# *schema* purposes, not this state - but do not add `--workers N` or run
+# more than one replica without first moving this to Postgres (there's
+# already a working model for it: pipeline_runs) and switching cancellation
+# to a polled `cancel_requested_at` column.
 _active_processes = {}
 _cancel_requested = set()
 _registry_lock = threading.Lock()
@@ -293,18 +306,36 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
             # StreamingCollectPipeline respectively) - read the current row
             # back rather than a stats file no longer written anywhere.
             final_run = get_pipeline_run(run_id) or {}
-            _finish_run(
-                run_id,
-                project_id,
-                status="success",
-                stage="done",
-                message=completion_message,
-                articles_scraped=int(final_run.get("articles_scraped") or 0),
-                articles_cleaned=int(final_run.get("articles_cleaned") or 0),
-                articles_saved=int(final_run.get("articles_saved") or 0),
-                finished_at=datetime.now(timezone.utc).isoformat(),
-            )
-            print("Pipeline complete!")
+            # Scrapy exits 0 even when the spider's start() raised (e.g. a DB
+            # blip while loading sources) - it swallows the error and just
+            # finishes with zero requests. The spider marks the run "failed"
+            # itself in that case (see source_rss.py's start()), so a run
+            # already recorded as failed must not be overwritten with success
+            # just because the subprocess exit code looked clean.
+            if final_run.get("status") == "failed":
+                # Only finished_at/completion bookkeeping is ours to set here -
+                # status/stage/message/error are the spider's own diagnosis and
+                # must survive, not get clobbered by the generic success text.
+                print(f"Pipeline {run_id} already marked failed by the spider; not overwriting with success.")
+                _finish_run(
+                    run_id,
+                    project_id,
+                    status="failed",
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+            else:
+                _finish_run(
+                    run_id,
+                    project_id,
+                    status="success",
+                    stage="done",
+                    message=completion_message,
+                    articles_scraped=int(final_run.get("articles_scraped") or 0),
+                    articles_cleaned=int(final_run.get("articles_cleaned") or 0),
+                    articles_saved=int(final_run.get("articles_saved") or 0),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+                print("Pipeline complete!")
         except PipelineCancelled:
             _finish_run(
                 run_id,

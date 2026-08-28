@@ -32,7 +32,7 @@ from collections import Counter, defaultdict
 
 from scrapy.exceptions import NotConfigured
 
-import config
+from app.core import settings as config
 from services.articles import collect
 from services.articles.store import get_existing_urls, save_articles
 from services.pipeline.pipeline_runs import update_pipeline_run

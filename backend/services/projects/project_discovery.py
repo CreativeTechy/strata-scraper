@@ -16,10 +16,12 @@ from urllib.parse import parse_qs, quote_plus, urlparse, unquote, urlunparse
 import requests
 from parsel import Selector
 
-import config
+from app.core import settings as config
+from integrations.extraction.feeds import discover_feed_urls
 from llm_client import chat_completion
 from services.sources.sources_store import _default_name, create_source
 from services.projects.projects_store import set_project_sources
+from ssrf_guard import is_url_safe
 
 SEARCH_HEADERS = {
     "User-Agent": (
@@ -419,6 +421,11 @@ def _ai_source_suggestions(project):
 def _lightweight_fetch(url):
     if not url:
         return None
+    # url comes from the LLM's own suggestions here, but those are prompted
+    # from attacker-influenceable project terms - the same SSRF exposure as a
+    # user-supplied source URL, just one hop removed.
+    if not is_url_safe(url):
+        return None
 
     headers = {"User-Agent": "StrataProjectDiscovery/1.0", "Accept": "*/*"}
     try:
@@ -477,7 +484,7 @@ def _resolve_source(item):
     if kind == "domain":
         parsed = urlparse(normalized)
         root_url = f"{parsed.scheme or 'https'}://{parsed.netloc or parsed.path}".rstrip("/")
-        feed_urls = config._discover_feed_urls(root_url)
+        feed_urls = discover_feed_urls(root_url)
         if feed_urls:
             for feed_url in feed_urls[:1]:
                 resolved.append(
@@ -500,7 +507,7 @@ def _resolve_source(item):
     if kind == "rss" or _looks_like_feed_url(final_url, content_type):
         feed_urls = [final_url]
         if not _looks_like_feed_url(final_url, content_type):
-            resolved_feeds = config._discover_feed_urls(final_url)
+            resolved_feeds = discover_feed_urls(final_url)
             if resolved_feeds:
                 feed_urls = resolved_feeds[:1]
         for feed_url in feed_urls[:1]:
@@ -525,7 +532,7 @@ def _resolve_source(item):
         )
         return resolved
 
-    resolved_feeds = config._discover_feed_urls(final_url)
+    resolved_feeds = discover_feed_urls(final_url)
     if resolved_feeds:
         for feed_url in resolved_feeds[:1]:
             resolved.append(

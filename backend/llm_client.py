@@ -16,7 +16,7 @@ import re
 
 import requests
 
-import config
+from app.core import settings as config
 
 
 class LLMError(Exception):

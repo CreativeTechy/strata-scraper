@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from functools import lru_cache
 import hashlib
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 import dedup
 from services.projects.projects_store import list_project_ids_for_source_url, set_article_projects
 from psycopg.types.json import Jsonb
 from timestamps import parse_published
 from trusted_sources import is_trusted_domain
+
+logger = logging.getLogger(__name__)
 
 ARTICLE_COLUMNS = (
     "url", "source", "source_url", "title", "author", "published",
@@ -670,13 +673,16 @@ def save_articles(articles, batch_size=50, project_id=None, run_id=None):
     return sent, dict(saved_by_source)
 
 
-def delete_all_articles():
+def delete_all_articles(actor=None):
     if not config.DATABASE_URL:
         print("Database credentials not set, skipping article delete.")
         return 0
 
     try:
+        count_row = db.fetch_one("select count(*)::int as total from articles")
+        total = int((count_row or {}).get("total") or 0)
         db.execute("delete from articles")
+        logger.warning("DELETE ALL ARTICLES: %s row(s) removed by %r.", total, actor)
         return 1
     except Exception as e:
         _log_db_error("  article delete error", e)

@@ -46,9 +46,14 @@ DOWNLOAD_DELAY = 1
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    "scraper.middlewares.ScraperDownloaderMiddleware": 543,
-#}
+# SsrfProtectionMiddleware re-checks every request's resolved address right
+# before it's fetched, rejecting private/loopback/link-local/reserved
+# destinations - see scraper/middlewares.py and backend/ssrf_guard.py. Early
+# in the chain (100) so it runs before other middlewares spend effort on a
+# request that's about to be dropped anyway.
+DOWNLOADER_MIDDLEWARES = {
+    "scraper.middlewares.SsrfProtectionMiddleware": 100,
+}
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html

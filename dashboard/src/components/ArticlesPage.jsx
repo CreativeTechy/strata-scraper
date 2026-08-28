@@ -16,6 +16,11 @@ const SORT_OPTIONS = [
 
 const PAGE_SIZES = [12, 24, 48, 96];
 
+// Must match backend/main.py's DELETE_ALL_ARTICLES_CONFIRMATION exactly - the
+// API rejects the request without it, so a typed confirmation replaces what
+// used to be a plain confirm dialog's default-button click.
+const DELETE_ALL_CONFIRMATION = 'DELETE ALL ARTICLES';
+
 const VIEW_MODES = [
   { value: 'card', label: 'Cards', icon: LayoutGrid },
   { value: 'list', label: 'List', icon: List },
@@ -180,6 +185,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [importRun, setImportRun] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
   const [viewMode, setViewMode] = useState(() => {
     try {
       return window.localStorage.getItem('articles-view-mode') === 'list' ? 'list' : 'card';
@@ -312,7 +318,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
     setDeletingAll(true);
     setError('');
     try {
-      const res = await fetch('/api/articles', { method: 'DELETE' });
+      const res = await fetch(`/api/articles?confirm=${encodeURIComponent(DELETE_ALL_CONFIRMATION)}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
         throw new Error(data?.detail || data?.error || `Failed to delete articles (${res.status})`);
@@ -562,15 +568,39 @@ export default function ArticlesPage({ project = null, projectId = null, project
             background: 'linear-gradient(135deg, #ff4757, #e03131)',
             boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',
           }}
+          confirmDisabled={deletingAll || deleteAllConfirmText !== DELETE_ALL_CONFIRMATION}
           onClose={() => {
-            if (!deletingAll) setShowDeleteAllModal(false);
+            if (!deletingAll) {
+              setShowDeleteAllModal(false);
+              setDeleteAllConfirmText('');
+            }
           }}
           onConfirm={async () => {
-            if (deletingAll) return;
+            if (deletingAll || deleteAllConfirmText !== DELETE_ALL_CONFIRMATION) return;
             setShowDeleteAllModal(false);
+            setDeleteAllConfirmText('');
             await handleDeleteAll();
           }}
-        />
+        >
+          <label style={{ display: 'block', marginTop: '0.5rem' }}>
+            Type <strong>{DELETE_ALL_CONFIRMATION}</strong> to confirm:
+            <input
+              type="text"
+              value={deleteAllConfirmText}
+              onChange={(event) => setDeleteAllConfirmText(event.target.value)}
+              autoComplete="off"
+              style={{
+                display: 'block',
+                width: '100%',
+                marginTop: '0.4rem',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border, #ccc)',
+                fontSize: '0.95rem',
+              }}
+            />
+          </label>
+        </ConfirmModal>
 
         <ConfirmModal
           open={Boolean(competitorsExportPreview)}

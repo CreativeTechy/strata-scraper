@@ -36,7 +36,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import db
+from app.core import db
 
 BASE_DIR = Path(__file__).resolve().parent
 BASELINE_FILE = BASE_DIR / "schema.sql"

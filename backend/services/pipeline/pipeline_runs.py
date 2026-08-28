@@ -2,8 +2,8 @@
 
 import uuid
 
-import config
-import db
+from app.core import settings as config
+from app.core import db
 
 
 RUN_COLUMNS = "id,pipeline,project_id,status,stage,message,articles_scraped,articles_cleaned,articles_saved,crawl_pages,error,started_at,finished_at,cancel_requested_at,cancelled_at,has_detail,scrape_started_at,scrape_finished_at,clean_started_at,clean_finished_at,created_at,updated_at"
