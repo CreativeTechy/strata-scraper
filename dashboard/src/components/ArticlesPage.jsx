@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, FolderInput, Layers, X } from 'lucide-react';
+import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, Layers, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import ImportOptionsModal from './articles/ImportOptionsModal.jsx';
+import ExportOptionsModal from './articles/ExportOptionsModal.jsx';
 import { useAuth } from '../auth/useAuth.js';
 import '../styles/Articles.css';
 
@@ -186,6 +188,9 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [reloadToken, setReloadToken] = useState(0);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showExportArticlesConfirm, setShowExportArticlesConfirm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     try {
       return window.localStorage.getItem('articles-view-mode') === 'list' ? 'list' : 'card';
@@ -618,6 +623,53 @@ export default function ArticlesPage({ project = null, projectId = null, project
           onConfirm={confirmExportCompetitorsJsonl}
         />
 
+        <ExportOptionsModal
+          open={showExportModal}
+          articlesCount={total}
+          showCompetitorsOption={activeProject?.mode === 'competitor'}
+          competitorProjectName={activeProject?.name}
+          onClose={() => setShowExportModal(false)}
+          onChooseArticles={() => {
+            setShowExportModal(false);
+            setShowExportArticlesConfirm(true);
+          }}
+          onChooseCompetitors={() => {
+            setShowExportModal(false);
+            handleExportCompetitorsJsonl();
+          }}
+        />
+
+        <ConfirmModal
+          open={showExportArticlesConfirm}
+          title="Export articles?"
+          message={`This will export ${total.toLocaleString()} article${total === 1 ? '' : 's'} matching your current filters as a JSONL file.`}
+          confirmLabel={exporting ? 'Exporting...' : 'Export'}
+          cancelLabel="Cancel"
+          onClose={() => {
+            if (!exporting) setShowExportArticlesConfirm(false);
+          }}
+          onConfirm={async () => {
+            if (exporting) return;
+            setShowExportArticlesConfirm(false);
+            await handleExportJsonl();
+          }}
+        />
+
+        <ImportOptionsModal
+          open={showImportModal}
+          hasProject={projectFilter !== 'all'}
+          disabled={importing}
+          onClose={() => setShowImportModal(false)}
+          onChooseFiles={() => {
+            setShowImportModal(false);
+            importInputRef.current?.click();
+          }}
+          onChooseFolder={() => {
+            setShowImportModal(false);
+            importFolderInputRef.current?.click();
+          }}
+        />
+
         <div className="articles-filters-row">
           <div className="glass-card articles-filter-panel">
             <select
@@ -751,21 +803,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 </option>
               ))}
             </select>
-            <button className="btn-secondary" onClick={handleExportJsonl} disabled={loading || exporting || deletingAll}>
-              <Download size={16} />
-              {exporting ? 'Exporting...' : 'Export JSONL'}
+            <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={loading || exporting || exportingCompetitors || deletingAll}>
+              <Upload size={16} />
+              {exporting || exportingCompetitors ? 'Exporting...' : 'Export'}
             </button>
-            {activeProject?.mode === 'competitor' && (
-              <button
-                className="btn-secondary"
-                onClick={handleExportCompetitorsJsonl}
-                disabled={loading || exportingCompetitors || deletingAll}
-                title="Export this study's tracked competitors as JSONL, alongside its articles."
-              >
-                <Download size={16} />
-                {exportingCompetitors ? 'Preparing...' : 'Export competitors'}
-              </button>
-            )}
             {canImport && (
               <>
                 <input
@@ -776,19 +817,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   onChange={handleImportFile}
                   style={{ display: 'none' }}
                 />
-                <button
-                  className="btn-secondary"
-                  onClick={() => importInputRef.current?.click()}
-                  disabled={loading || importing || deletingAll}
-                  title={
-                    projectFilter === 'all'
-                      ? 'Import one or more JSONL exports. Articles are not linked to a project.'
-                      : 'Import one or more JSONL exports into the project currently in scope.'
-                  }
-                >
-                  <Upload size={16} />
-                  {importing ? 'Importing...' : 'Import JSONL'}
-                </button>
                 <input
                   ref={importFolderInputRef}
                   type="file"
@@ -800,45 +828,14 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 />
                 <button
                   className="btn-secondary"
-                  onClick={() => importFolderInputRef.current?.click()}
+                  onClick={() => setShowImportModal(true)}
                   disabled={loading || importing || deletingAll}
-                  title={
-                    projectFilter === 'all'
-                      ? 'Import every JSONL export in a folder. Articles are not linked to a project.'
-                      : 'Import every JSONL export in a folder into the project currently in scope.'
-                  }
                 >
-                  <FolderInput size={16} />
-                  {importing ? 'Importing...' : 'Import Folder'}
+                  <Download size={16} />
+                  {importing ? 'Importing...' : 'Import'}
                 </button>
               </>
             )}
-            <div className="articles-pagination" role="navigation" aria-label="Articles pagination">
-              <button className="btn-secondary" onClick={() => setOffset((prev) => Math.max(0, prev - limit))} disabled={!hasPrev || loading}>
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {pageNumbers.map((page, index) =>
-                page === '...' ? (
-                  <span key={`ellipsis-${index}`} className="articles-page-ellipsis">
-                    &hellip;
-                  </span>
-                ) : (
-                  <button
-                    key={page}
-                    type="button"
-                    className={`articles-page-btn ${page === currentPage ? 'active' : ''}`}
-                    onClick={() => goToPage(page)}
-                    disabled={loading}
-                    aria-current={page === currentPage ? 'page' : undefined}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
-              <button className="btn-secondary" onClick={() => setOffset((prev) => prev + limit)} disabled={!hasNext || loading}>
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1020,6 +1017,35 @@ export default function ArticlesPage({ project = null, projectId = null, project
               </div>
             )}
           </>
+        )}
+
+        {!isInitialLoading && articles.length > 0 && (
+          <div className="articles-pagination" role="navigation" aria-label="Articles pagination">
+            <button className="btn-secondary" onClick={() => setOffset((prev) => Math.max(0, prev - limit))} disabled={!hasPrev || loading}>
+              <ChevronLeft size={16} /> Previous
+            </button>
+            {pageNumbers.map((page, index) =>
+              page === '...' ? (
+                <span key={`ellipsis-${index}`} className="articles-page-ellipsis">
+                  &hellip;
+                </span>
+              ) : (
+                <button
+                  key={page}
+                  type="button"
+                  className={`articles-page-btn ${page === currentPage ? 'active' : ''}`}
+                  onClick={() => goToPage(page)}
+                  disabled={loading}
+                  aria-current={page === currentPage ? 'page' : undefined}
+                >
+                  {page}
+                </button>
+              )
+            )}
+            <button className="btn-secondary" onClick={() => setOffset((prev) => prev + limit)} disabled={!hasNext || loading}>
+              Next <ChevronRight size={16} />
+            </button>
+          </div>
         )}
       </div>
     </div>
