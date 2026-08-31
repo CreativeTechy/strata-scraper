@@ -30,6 +30,7 @@ import migrate
 from api.deps import ensure_project_visible
 from api.errors import AppError
 from api.routers import articles as articles_router
+from api.routers import dashboard as dashboard_router
 from api.routers import pipeline as pipeline_router
 from api.routers import projects as projects_router
 from api.routers import roles as roles_router
@@ -70,6 +71,7 @@ app.include_router(sources_router.router)
 app.include_router(projects_router.router)
 app.include_router(pipeline_router.router)
 app.include_router(articles_router.router)
+app.include_router(dashboard_router.router)
 
 
 @app.exception_handler(HTTPException)

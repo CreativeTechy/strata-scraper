@@ -1,0 +1,91 @@
+.dashboard-stats-grid {
+  /* Opinion-monitor projects render 3 stat cards, competitor studies 4 - the
+     shared .admin-stats-grid is a fixed 4-column grid (right for its other
+     users, which always have exactly 4 cards), so it leaves a dangling empty
+     column here whenever there are fewer. auto-fit collapses unused tracks
+     and lets the real cards stretch to fill the row either way. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 4px;
+}
+
+.dashboard-chart-wrap {
+  width: 100%;
+  height: 260px;
+}
+
+.dashboard-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dashboard-source-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-source-row-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-source-row-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-source-row-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.dashboard-source-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-source-pagination .btn-secondary {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.dashboard-source-pagination-label {
+  color: var(--text-light);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dashboard-attention-reason {
+  color: var(--text-light);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* "Articles by source" and "Sources needing attention" sit side by side and
+   should always match height, regardless of which has more rows - the shared
+   .report-section-row defaults to align-items: start (a taller left section
+   must not stretch a shorter right one there), so this pairing opts back into
+   stretch instead of overriding the shared rule for every future use of it. */
+.dashboard-paired-row {
+  align-items: stretch;
+}
+
+.dashboard-paired-row > .report-section {
+  height: 100%;
+}
+
