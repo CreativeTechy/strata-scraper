@@ -51,10 +51,12 @@ databases**; see [Handing data to strata-media](#handing-data-to-strata-media).
    detail page polls for updates, so a source's results appear as soon as that
    source finishes, without waiting for the whole run.
 
-The `/dashboard` page is a deliberate "coming soon" placeholder: the numbers
-worth charting in a collection app are collection metrics (volume by source over
-time, coverage gaps, fetch failures), and those aren't built yet. Articles and
-Pipeline Runs already show the underlying data.
+The `/dashboard` page is a per-project collection-health overview: total
+articles and sources (plus tracked competitors for a competitor-mode project),
+a line chart of articles saved per pipeline run, an articles-by-source
+breakdown, and a "needing attention" list of sources (or, for a competitor
+study, competitors) that were blocked, errored, or returned nothing on the
+most recent run.
 
 ### What the LLM is used for
 
