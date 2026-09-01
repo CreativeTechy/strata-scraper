@@ -46,6 +46,7 @@ from scraper.social_sources import (
     reddit_oauth_request_url,
 )
 from scraper.gdelt import gdelt_search
+from scraper.scrapedo import scrapedo_render_url
 from scraper.web_search import google_cse_search
 from services.pipeline.pipeline_runs import update_pipeline_run
 from services.sources.sources_store import load_source_records
@@ -78,6 +79,24 @@ def _is_google_news_link(url):
     return urlparse(url or "").netloc.lower().removeprefix("www.") == "news.google.com"
 
 
+def _is_x_gated_page(source_type, url):
+    """True for an X page that shows nothing at all to a logged-out fetch -
+    a "hashtag" source, or a "social"/"username" source whose URL is
+    actually an x.com/search page rather than a profile (confirmed by hand:
+    unlike a profile page, which X still server-renders a few /status/
+    links into, both of these come back as X's login/signup wall even
+    through a real headless-browser render - see config.X_SESSION_COOKIE).
+    These are the only source shapes start() routes through scrape.do."""
+    if source_type not in {"hashtag", "social", "username"}:
+        return False
+    parsed = urlparse(url or "")
+    if parsed.netloc.lower().removeprefix("www.") not in {"x.com", "twitter.com"}:
+        return False
+    if source_type == "hashtag":
+        return True
+    return parsed.path.rstrip("/") == "/search"
+
+
 # Response headers worth surfacing on a blocked fetch - which anti-bot/CDN
 # vendor issued the block (Server/Via/CF-*), and any hint about how long to
 # back off (Retry-After) - a bare status code alone doesn't say why.
@@ -87,11 +106,17 @@ _BLOCK_DETAIL_HEADERS = (
 )
 
 
-def _describe_blocked_response(response):
+def _describe_blocked_response(response, display_url=None):
     """Full diagnostic detail for a blocked (401/403/429) response: headers
     that identify the blocking vendor/reason plus a short body preview (an
     HTML challenge page reads very differently from a JSON API error, and
-    that distinction is lost if only the status code is kept)."""
+    that distinction is lost if only the status code is kept).
+
+    `display_url` overrides response.url in the returned text - pass
+    response.meta.get("link_base_url") whenever the fetch actually went
+    through scrape.do's wrapper URL, which carries the scrape.do token in
+    its query string and must never end up in a log line, source_
+    diagnostics.json, or the dashboard's fetch_note column verbatim."""
     headers = {}
     for name in _BLOCK_DETAIL_HEADERS:
         value = response.headers.get(name)
@@ -101,7 +126,7 @@ def _describe_blocked_response(response):
         body_preview = response.text[:300].strip().replace("\n", " ")
     except Exception:
         body_preview = ""
-    parts = [f"HTTP {response.status} for {response.url}."]
+    parts = [f"HTTP {response.status} for {display_url or response.url}."]
     if headers:
         parts.append(f"Headers: {headers}.")
     if body_preview:
@@ -288,26 +313,55 @@ class SourceRssSpider(scrapy.Spider):
             # up in source_diagnostics.json - not just ones that errored back.
             self._note_source_status(source_name, url)
             fetch_url = url
+            # Set only when fetch_url points at scrape.do's wrapper URL
+            # instead of the real page - parse_social_page needs this to
+            # resolve the relative tweet links X emits, since response.url
+            # would otherwise be api.scrape.do's, not x.com's. Also doubles
+            # as the display URL for logging (see below) - never log
+            # fetch_url itself once it's a scrape.do URL, since it carries
+            # the scrape.do token in its query string.
+            link_base_url = None
+            request_headers = None
             if source_type == "reddit":
                 fetch_url = (
                     (reddit_oauth_request_url(url) if self._reddit_oauth_token else reddit_fetch_url(url))
                     or url
                 )
+                request_headers = reddit_oauth_headers(self._reddit_oauth_token)
+            elif _is_x_gated_page(source_type, url) and config.scrapedo_configured():
+                # See _is_x_gated_page - this page shows nothing to a
+                # logged-out fetch, so render it through scrape.do instead.
+                # If a real X session cookie is configured too (see
+                # config.X_SESSION_COOKIE - opt-in, real account risk),
+                # scrape.do injects it via setCookies (see scrapedo.py's
+                # docstring for why not a plain Cookie header) so X treats
+                # the render as an authenticated browser instead of gating
+                # it. Either way, parse_social_page's existing
+                # /status/-link extraction then just works unmodified on
+                # the rendered HTML, same as it already does for a profile
+                # page.
+                rendered_url = scrapedo_render_url(
+                    url, cookies=config.X_SESSION_COOKIE if config.x_session_cookie_configured() else None
+                )
+                if rendered_url:
+                    fetch_url = rendered_url
+                    link_base_url = url
             self.logger.info(
                 "Seed %s (%s) -> %s",
                 source_name,
                 source_type,
-                fetch_url,
+                f"scrape.do render of {link_base_url}" if link_base_url else fetch_url,
             )
             yield scrapy.Request(
                 fetch_url,
                 callback=self.parse_source,
                 errback=self._on_request_error,
-                headers=reddit_oauth_headers(self._reddit_oauth_token) if source_type == "reddit" else None,
+                headers=request_headers,
                 meta={
                     "source_url": url,
                     "source_type": source_type,
                     "source_name": source_name,
+                    "link_base_url": link_base_url,
                     # "rss"/"keyword" sources are syndication feeds (or, for
                     # "keyword", a Google News RSS search feed - see
                     # sources_store._derive_term_url) the publisher already
@@ -442,6 +496,11 @@ class SourceRssSpider(scrapy.Spider):
         source_type = (response.meta.get("source_type") or "rss").strip().lower()
         source_name = response.meta.get("source_name")
         source_url = response.meta.get("source_url")
+        # Set only when this fetch went through scrape.do (see start()) -
+        # response.url is then api.scrape.do's wrapper URL, which carries
+        # the scrape.do token in its query string, so every log/diagnostic
+        # line below must display this instead of response.url whenever set.
+        display_url = response.meta.get("link_base_url") or response.url
 
         # Root-request status gate, for every source type: this is the one
         # request per configured source that stands for "is this source
@@ -450,12 +509,12 @@ class SourceRssSpider(scrapy.Spider):
         # deliberately do NOT feed into this, since one dead link among many
         # is normal web noise, not a sign the whole source is broken.
         if response.status in self.BLOCKED_STATUS_CODES:
-            detail = _describe_blocked_response(response)
+            detail = _describe_blocked_response(response, display_url=display_url)
             self.logger.warning(
                 "Source blocked (HTTP %s) - likely anti-bot protection against this server's "
                 "network, not a problem with the source URL itself: %s",
                 response.status,
-                response.url,
+                display_url,
             )
             # Explicit print (not just self.logger) so this is visible in
             # whatever captures this subprocess's stdout, regardless of the
@@ -467,7 +526,7 @@ class SourceRssSpider(scrapy.Spider):
         if source_type == "telegram" and is_telegram_channel_unavailable(response.status):
             self.logger.info(
                 "Telegram channel unavailable (redirected - private, not a channel, or missing): %s",
-                response.url,
+                display_url,
             )
             self._note_source_status(
                 source_name, source_url, http_status=response.status,
@@ -475,8 +534,8 @@ class SourceRssSpider(scrapy.Spider):
             )
             return
         if response.status >= 400:
-            detail = _describe_blocked_response(response)
-            self.logger.warning("HTTP %s fetching source: %s", response.status, response.url)
+            detail = _describe_blocked_response(response, display_url=display_url)
+            self.logger.warning("HTTP %s fetching source: %s", response.status, display_url)
             print(f"[source_rss] HTTP ERROR source={source_name!r} {detail}")
             self._note_source_status(source_name, source_url, http_status=response.status, note=detail)
             return
@@ -484,7 +543,7 @@ class SourceRssSpider(scrapy.Spider):
         content_type = (response.headers.get(b"Content-Type") or b"").decode("utf-8", "ignore").lower()
         self.logger.info(
             "Response %s [%s] from %s",
-            response.url,
+            display_url,
             source_type,
             content_type or "unknown content-type",
         )
@@ -699,19 +758,24 @@ class SourceRssSpider(scrapy.Spider):
         """Best-effort extraction for X/Twitter sources."""
         self._progress_pages += 1
         self._push_progress()
-        self.logger.info("Social page %s -> extracting", response.url)
 
         source_type = (response.meta.get("source_type") or "social").strip().lower()
         source_name = response.meta.get("source_name")
         source_url = response.meta.get("source_url")
+        # Only set when this response came back via scrape.do (see start())
+        # - response.url is then api.scrape.do's wrapper URL (carrying the
+        # scrape.do token, never safe to log), not x.com's, so relative
+        # links need the real page URL to resolve correctly too.
+        link_base_url = response.meta.get("link_base_url")
+        self.logger.info("Social page %s -> extracting", link_base_url or response.url)
 
-        yield from self._yield_article(response)
+        yield from self._yield_article(response, url_override=link_base_url)
 
         seen = set()
         for href in response.css('a[href*="/status/"]::attr(href)').getall():
             if len(seen) >= 40:
                 break
-            link = urljoin(response.url, href.split("#")[0].strip())
+            link = urljoin(link_base_url or response.url, href.split("#")[0].strip())
             if not link or link in seen:
                 continue
             seen.add(link)
@@ -730,27 +794,31 @@ class SourceRssSpider(scrapy.Spider):
                 },
             )
 
-        if source_type == "hashtag" and not seen and not config.google_cse_configured():
+        if (
+            _is_x_gated_page(source_type, source_url)
+            and not seen
+            and not config.google_cse_configured()
+            and not config.x_session_cookie_configured()
+        ):
             # Unlike a profile page (x.com/<handle>), which X still
             # server-renders a few /status/ links into for crawlers/SEO, a
-            # hashtag/search page (x.com/hashtag/<tag>) is a pure
-            # client-rendered shell with zero tweet content in the raw HTML -
-            # confirmed by hand against the live site. Without Google CSE
-            # configured (see start()'s hashtag tier, which discovers tweet
-            # links a different way), there's nothing left that can find
-            # tweets for this source, so this is worth calling out as a
-            # known limitation rather than a transient fetch failure. Once
-            # CSE is configured this note no longer fires - the CSE tier's
-            # own results (or lack thereof) speak for themselves via the
-            # normal scraped-count diagnostics.
+            # hashtag page or an x.com/search page requires a logged-in
+            # session to show any content at all - confirmed by hand,
+            # including through scrape.do's own headless-browser render
+            # (see config.X_SESSION_COOKIE). scrape.do alone (no session
+            # cookie) will keep rendering the same login wall, so it's
+            # deliberately not enough on its own to suppress this note -
+            # only an actual cookie, or the CSE tier sidestepping this page
+            # entirely, changes the outcome.
             self._note_source_status(
                 source_name,
                 source_url,
                 note=(
-                    "X hashtag pages are rendered client-side after login and expose no "
-                    "tweets to an unauthenticated crawler. Configure GOOGLE_CSE_API_KEY/"
-                    "GOOGLE_CSE_ENGINE_ID to discover tweet links via search instead, or "
-                    "try an X profile/username source."
+                    "X hashtag/search pages require a logged-in session and expose no tweets "
+                    "otherwise, even when rendered. Configure GOOGLE_CSE_API_KEY/GOOGLE_CSE_ENGINE_ID "
+                    "to discover tweet links via search instead, X_SESSION_COOKIE (with "
+                    "SCRAPEDO_API_KEY) to render as a real logged-in session, or try an X "
+                    "profile/username source."
                 ),
             )
 
@@ -895,19 +963,25 @@ class SourceRssSpider(scrapy.Spider):
             "fetched_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    def _yield_article(self, response):
-        if is_blocked_domain(response.url):
+    def _yield_article(self, response, url_override=None):
+        """`url_override` stands in for response.url when the fetch actually
+        went through a wrapper URL (currently only scrape.do's hashtag-page
+        rendering - see parse_social_page) that doesn't reflect the page's
+        real identity."""
+        effective_url = url_override or response.url
+
+        if is_blocked_domain(effective_url):
             # Google's own domains (search, consent, accounts, policy pages)
             # never host editorial content - skip before spending time on
             # trafilatura extraction.
-            self.logger.info("Skipping Google domain (not an article): %s", response.url)
+            self.logger.info("Skipping Google domain (not an article): %s", effective_url)
             return
 
-        source_name = response.meta.get("source_name") or urlparse(response.url).netloc
+        source_name = response.meta.get("source_name") or urlparse(effective_url).netloc
 
-        status_match = TWEET_STATUS_RE.search(response.url or "")
+        status_match = TWEET_STATUS_RE.search(effective_url or "")
         if status_match:
-            tweet = self._hydrate_tweet(response.url)
+            tweet = self._hydrate_tweet(effective_url)
             if tweet:
                 tweet["source_name"] = source_name
                 yield tweet
@@ -917,7 +991,7 @@ class SourceRssSpider(scrapy.Spider):
 
         extracted = trafilatura.extract(
             response.text,
-            url=response.url,
+            url=effective_url,
             output_format="json",
             with_metadata=True,
             include_comments=False,
@@ -932,14 +1006,14 @@ class SourceRssSpider(scrapy.Spider):
             # Defense in depth: a cookie/consent interstitial reached via
             # redirect (e.g. from a link that ends up on google.com) can carry
             # a non-Google response.url, so also check the extracted title.
-            self.logger.info("Skipping consent/interstitial page (title match): %s", response.url)
+            self.logger.info("Skipping consent/interstitial page (title match): %s", effective_url)
             return
         if len(text) < 300:  # skip stubs/galleries/redirect shells
             return
 
         yield {
-            "url": response.url,
-            "source": urlparse(response.url).netloc,
+            "url": effective_url,
+            "source": urlparse(effective_url).netloc,
             "source_url": response.meta.get("source_url"),
             "source_name": source_name,
             "title": doc.get("title"),

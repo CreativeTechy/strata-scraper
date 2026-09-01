@@ -262,6 +262,50 @@ def google_cse_configured() -> bool:
     return bool(GOOGLE_CSE_API_KEY and GOOGLE_CSE_ENGINE_ID)
 
 
+# --- Scrape.do (optional) -----------------------------------------------
+# Rendering tier for X pages that show nothing to a logged-out fetch: a
+# "hashtag" source, or a "social"/"username" source whose URL is actually an
+# x.com/search page rather than a profile (see scraper/scrapedo.py and
+# source_rss.py's start()/parse_social_page). This only ever replaces that
+# page's own fetch - profile pages (still server-rendered by X for a few
+# /status/ links) and individual tweet content (fetched via fxtwitter, see
+# _hydrate_tweet) are untouched either way. Unconfigured (the default)
+# leaves hashtag sources depending solely on GOOGLE_CSE_API_KEY/
+# GOOGLE_CSE_ENGINE_ID. Get a token at https://dashboard.scrape.do/.
+SCRAPEDO_API_KEY = os.environ.get("SCRAPEDO_API_KEY", "").strip()
+
+
+def scrapedo_configured() -> bool:
+    return bool(SCRAPEDO_API_KEY)
+
+
+# --- X session cookie (optional, requires SCRAPEDO_API_KEY) -----------------
+# CONFIRMED BY HAND (2026-09-01): rendering an x.com/hashtag or x.com/search
+# page through scrape.do with a real headless browser still comes back with
+# X's login/signup modal and zero actual content - X gates these pages
+# behind an authenticated session for every visitor, not just bots, so
+# JS rendering alone cannot reach them. The only way around that is to
+# render as an actual logged-in session: set this to the raw Cookie-header
+# value from a real X account's browser session (DevTools -> Application ->
+# Cookies -> x.com; at minimum `auth_token` and `ct0`, e.g.
+# "auth_token=...; ct0=..."), and source_rss.py forwards it as a request
+# header (never in a logged URL) alongside the scrape.do render.
+#
+# This carries real account risk: it is scraping automation running under a
+# real X account's identity, which is exactly what X's ToS and anti-automation
+# systems are watching for, up to and including suspending that account. Use
+# a dedicated/disposable X account for this, never a primary one, and treat
+# the cookie value itself as a credential - it grants full session access to
+# whatever account it belongs to, not just read access to search results.
+# Unset (the default) leaves scrape.do rendering hashtag/search pages
+# logged-out, which - per the above - will keep returning nothing.
+X_SESSION_COOKIE = os.environ.get("X_SESSION_COOKIE", "").strip()
+
+
+def x_session_cookie_configured() -> bool:
+    return bool(X_SESSION_COOKIE)
+
+
 # --- GDELT (optional, on by default) -----------------------------------------
 # Free, no-key news-search tier for "keyword" sources (see scraper/gdelt.py) -
 # GDELT's own global news index, queried alongside (not instead of) the
