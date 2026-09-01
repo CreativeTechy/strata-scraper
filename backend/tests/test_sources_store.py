@@ -119,5 +119,41 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
         self.assertEqual(payload["url"], "")
 
 
+class PipelineSourceScopeTests(unittest.TestCase):
+    def test_manual_run_allowlist_is_applied_inside_the_project_scope(self):
+        captured = {}
+
+        def fake_fetch_all(sql, params=()):
+            captured["sql"] = sql
+            captured["params"] = params
+            return []
+
+        env = {"PIPELINE_PROJECT_ID": "7", "PIPELINE_SOURCE_IDS": "4,2,4"}
+        with patch.dict(os.environ, env, clear=False), \
+             patch.object(sources_store.config, "DATABASE_URL", "postgresql://test"), \
+             patch.object(sources_store.db, "fetch_all", side_effect=fake_fetch_all):
+            sources_store.load_source_records()
+
+        self.assertIn("ps.project_id = %s", captured["sql"])
+        self.assertIn("s.id = any(%s::bigint[])", captured["sql"])
+        self.assertEqual(captured["params"], (7, [2, 4]))
+
+    def test_missing_allowlist_keeps_all_project_sources(self):
+        captured = {}
+
+        def fake_fetch_all(sql, params=()):
+            captured["sql"] = sql
+            captured["params"] = params
+            return []
+
+        with patch.dict(os.environ, {"PIPELINE_PROJECT_ID": "7"}, clear=False), \
+             patch.dict(os.environ, {"PIPELINE_SOURCE_IDS": ""}), \
+             patch.object(sources_store.config, "DATABASE_URL", "postgresql://test"), \
+             patch.object(sources_store.db, "fetch_all", side_effect=fake_fetch_all):
+            sources_store.load_source_records()
+
+        self.assertNotIn("id = any", captured["sql"])
+        self.assertEqual(captured["params"], (7,))
+
 if __name__ == "__main__":
     unittest.main()

@@ -114,16 +114,19 @@ export default function App() {
     return projects.filter((project) => selectedIds.has(Number(project.id)));
   }, [projects, workflowSelectedProjectIds]);
 
-  const workflowSelectedSourceUrls = useMemo(() => {
-    const urls = new Set();
-    workflowSelectedProjects.forEach((project) => {
-      (project.source_ids || []).forEach((sourceId) => {
-        const source = sources.find((item) => Number(item.id) === Number(sourceId));
-        if (source?.url) urls.add(source.url);
-      });
-    });
-    return [...urls];
-  }, [sources, workflowSelectedProjects]);
+  const workflowProjectSourceIds = useMemo(() => (
+    workflowSelectedProjectIds.length
+      ? (projects.find((project) => Number(project.id) === Number(workflowSelectedProjectIds[0]))?.source_ids || [])
+          .map((sourceId) => Number(sourceId))
+      : []
+  ), [projects, workflowSelectedProjectIds]);
+  const workflowProjectSourceIdsKey = workflowProjectSourceIds.join(',');
+  const workflowSelectedSources = useMemo(() => {
+    const selectedSourceIds = new Set(
+      workflowProjectSourceIdsKey.split(',').filter(Boolean).map((sourceId) => Number(sourceId))
+    );
+    return sources.filter((source) => selectedSourceIds.has(Number(source.id)));
+  }, [sources, workflowProjectSourceIdsKey]);
 
   const isTerminalPipelineStatus = (status) => ['success', 'failed', 'cancelled'].includes(String(status || '').toLowerCase());
   const activePipelineRun = useMemo(
@@ -338,7 +341,7 @@ export default function App() {
     loadWorkflowArticles(workflowSelectedProjectIds);
   }, [isAuthenticated, pathname, workflowSelectedProjectIds]);
 
-  const runScraper = async (projectIds = workflowSelectedProjectIds) => {
+  const runScraper = async (projectIds = workflowSelectedProjectIds, sourceIds = null) => {
     const normalizedProjectIds = normalizeWorkflowSelection(Array.isArray(projectIds) ? projectIds : [projectIds]);
     if (normalizedProjectIds.length === 0) return;
     stopPolling();
@@ -346,10 +349,12 @@ export default function App() {
     try {
       const runIds = [];
       for (const projectId of normalizedProjectIds) {
+        const requestPayload = { project_id: projectId };
+        if (Array.isArray(sourceIds)) requestPayload.source_ids = sourceIds;
         const res = await fetch('/scrape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: projectId }),
+          body: JSON.stringify(requestPayload),
         });
         if (!res.ok) throw new Error(`Scrape request failed: ${res.status}`);
         const data = await res.json().catch(() => ({}));
@@ -554,10 +559,11 @@ export default function App() {
 
   const renderWorkflowRoute = () => (
     <WorkflowPage
+      key={workflowSelectedProjectIds[0] || 'no-project'}
       articles={workflowArticles}
       isScraping={isScraping}
       onRunScraper={runScraper}
-      sources={workflowSelectedSourceUrls}
+      sources={workflowSelectedSources}
       projects={projects}
       selectedProjects={workflowSelectedProjects}
       selectedProjectIds={workflowSelectedProjectIds}

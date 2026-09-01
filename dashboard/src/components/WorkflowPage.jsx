@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../auth/useAuth.js';
@@ -42,6 +42,19 @@ const TypeIcon = ({ type }) => {
   return <Link2 size={18} />;
 };
 
+const seedRows = (sources) => (sources || []).map((source) => {
+  const sourceType = String(source?.source_type || '').toLowerCase();
+  return {
+    id: Number(source.id),
+    sourceId: Number(source.id),
+    platform: ['social', 'username', 'hashtag'].includes(sourceType) ? 'x' : 'web',
+    type: sourceType === 'keyword' ? 'keywords' : 'link',
+    value: source.url || source.name || '',
+    name: source.name || source.url || `Source #${source.id}`,
+    enabled: source.enabled !== false,
+  };
+});
+
 function prettyStage(stage) {
   if (!stage) return 'queued';
   if (stage === 'done') return 'completed';
@@ -71,15 +84,8 @@ export default function WorkflowPage({
   const canRunScraper = hasPermission('pipeline.run');
   const canStopScraper = hasPermission('pipeline.stop');
 
-  const seedRows = (list) =>
-    (list.length ? list : []).map((url, i) => ({
-      id: i + 1,
-      platform: 'web',
-      type: 'link',
-      value: url,
-    }));
-
-  const [rows, setRows] = useState(() => seedRows(sources));
+  const rows = useMemo(() => seedRows(sources), [sources]);
+  const [excludedSourceIds, setExcludedSourceIds] = useState(() => new Set());
   const [runs, setRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState('');
@@ -100,10 +106,6 @@ export default function WorkflowPage({
       setIsStopping(false);
     }
   };
-
-  useEffect(() => {
-    if (sources.length) setRows(seedRows(sources));
-  }, [sources]);
 
   useEffect(() => {
     if (isScraping && !wasScrapingRef.current) {
@@ -158,6 +160,16 @@ export default function WorkflowPage({
   const hasData = articles.length > 0;
   const workflowState = isScraping ? 'cleaning' : (hasData ? 'ready' : 'idle');
   const selectedProjectCount = selectedProjectIds.length;
+  const selectedSourceIds = useMemo(
+    () => new Set(
+      rows
+        .filter((row) => row.enabled && !excludedSourceIds.has(row.sourceId))
+        .map((row) => row.sourceId)
+    ),
+    [excludedSourceIds, rows]
+  );
+  const selectedSourceCount = selectedSourceIds.size;
+  const enabledSourceCount = rows.filter((row) => row.enabled).length;
   const projectLabel = useMemo(() => {
     if (selectedProjects.length === 0) return projects.length ? 'select a project' : 'no projects available';
     return selectedProjects[0].name || '1 project';
@@ -216,8 +228,13 @@ export default function WorkflowPage({
     ].filter(Boolean).join(':');
   };
 
-  const updateRow = (id, field, value) => {
-    setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  const toggleSource = (sourceId) => {
+    setExcludedSourceIds((current) => {
+      const next = new Set(current);
+      if (next.has(sourceId)) next.delete(sourceId);
+      else next.add(sourceId);
+      return next;
+    });
   };
 
   const cleanupProgressLabel = useMemo(() => {
@@ -250,9 +267,11 @@ export default function WorkflowPage({
     onChangeSelectedProjectIds([id]);
   };
 
-  const runLabel = selectedProjectCount > 0
-    ? 'Run Extractor for Project'
-    : 'Select a Project to Run';
+  const runLabel = selectedProjectCount > 0 && selectedSourceCount > 0
+    ? `Run ${selectedSourceCount} Source${selectedSourceCount === 1 ? '' : 's'}`
+    : selectedProjectCount > 0
+      ? 'Select at Least One Source'
+      : 'Select a Project to Run';
 
   return (
     <div className="workflow-layout">
@@ -365,8 +384,11 @@ export default function WorkflowPage({
               <div className="get-rows-header">
                 <div className="get-rows-header-copy">
                   <strong>Sources</strong>
-                  <span>Paste URLs here or switch a row to keywords</span>
+                  <span>Choose which saved project sources to include in this run</span>
                 </div>
+                <span className="panel-chip muted">
+                  {selectedSourceCount} of {enabledSourceCount} selected
+                </span>
                 <button
                   type="button"
                   className="workflow-project-toggle"
@@ -403,46 +425,35 @@ export default function WorkflowPage({
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="get-row"
+                        className={`get-row ${row.enabled ? '' : 'disabled'}`}
                       >
-                        <div style={{ position: 'relative', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <div style={{ position: 'absolute', pointerEvents: 'none', color: 'var(--text-light)' }}>
-                            <PlatformIcon platform={row.platform} />
-                          </div>
-                          <select
-                            value={row.platform}
-                            onChange={(e) => updateRow(row.id, 'platform', e.target.value)}
-                            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer', position: 'absolute', left: 0, top: 0 }}
-                          >
-                            <option value="web">Web RSS</option>
-                            <option value="x">X (Twitter)</option>
-                            <option value="facebook">Facebook</option>
-                          </select>
+                        <input
+                          type="checkbox"
+                          className="workflow-source-checkbox"
+                          checked={selectedSourceIds.has(row.sourceId)}
+                          onChange={() => toggleSource(row.sourceId)}
+                          disabled={isScraping || !row.enabled}
+                          aria-label={`Include ${row.name} in this run`}
+                        />
+
+                        <div className="row-icon">
+                          <PlatformIcon platform={row.platform} />
                         </div>
 
                         <div className="row-input-wrapper">
                           <input
                             type="text"
                             className="row-input"
-                            placeholder={row.type === 'link' ? 'Paste URL...' : 'Enter keywords...'}
                             value={row.value}
-                            onChange={(e) => updateRow(row.id, 'value', e.target.value)}
+                            readOnly
+                            title={row.name}
                           />
                         </div>
 
-                        <div style={{ position: 'relative', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <div style={{ position: 'absolute', pointerEvents: 'none', color: 'var(--text-light)' }}>
-                            <TypeIcon type={row.type} />
-                          </div>
-                          <select
-                            value={row.type}
-                            onChange={(e) => updateRow(row.id, 'type', e.target.value)}
-                            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer', position: 'absolute', left: 0, top: 0 }}
-                          >
-                            <option value="link">Link</option>
-                            <option value="keywords">Keywords</option>
-                          </select>
+                        <div className="row-icon">
+                          <TypeIcon type={row.type} />
                         </div>
+                        {!row.enabled ? <span className="panel-chip muted">Disabled</span> : null}
                       </motion.div>
                     ))}
                   </motion.div>
@@ -471,8 +482,8 @@ export default function WorkflowPage({
                 <button
                   className="btn-primary"
                   style={{ opacity: isScraping ? 0.7 : 1, flex: 1 }}
-                  onClick={() => onRunScraper?.(selectedProjectIds)}
-                  disabled={isScraping || selectedProjectCount === 0 || !canRunScraper}
+                  onClick={() => onRunScraper?.(selectedProjectIds, [...selectedSourceIds])}
+                  disabled={isScraping || selectedProjectCount === 0 || selectedSourceCount === 0 || !canRunScraper}
                   title={canRunScraper ? undefined : 'Requires the pipeline.run permission.'}
                 >
                   {isScraping ? (

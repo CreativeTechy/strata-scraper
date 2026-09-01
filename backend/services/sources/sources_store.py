@@ -394,24 +394,43 @@ def load_source_records():
         return []
 
     project_id = os.environ.get("PIPELINE_PROJECT_ID", "").strip()
+    raw_source_ids = os.environ.get("PIPELINE_SOURCE_IDS", "").strip()
+    selected_source_ids = None
+    if raw_source_ids:
+        try:
+            selected_source_ids = sorted({
+                int(value.strip())
+                for value in raw_source_ids.split(",")
+                if value.strip() and int(value.strip()) > 0
+            })
+        except ValueError:
+            # A malformed internal scope must match nothing, never widen a
+            # supposedly restricted run to every project source.
+            selected_source_ids = []
+
     if project_id:
-        records = db.fetch_all(
-            """
+        sql = """
             select s.id, s.url, s.name, s.enabled, s.source_type, s.created_at, s.updated_at
             from sources s
             inner join project_sources ps on ps.source_id = s.id
             where ps.project_id = %s
-            order by s.created_at asc
-            """,
-            (int(project_id),),
-        )
+        """
+        params = [int(project_id)]
+        if selected_source_ids is not None:
+            sql += " and s.id = any(%s::bigint[])"
+            params.append(selected_source_ids)
+        sql += " order by s.created_at asc"
+        records = db.fetch_all(sql, tuple(params))
     else:
-        records = db.fetch_all(
-            """
+        sql = """
             select id, url, name, enabled, source_type, created_at, updated_at
             from sources
-            order by created_at asc
-            """
-        )
+        """
+        params = []
+        if selected_source_ids is not None:
+            sql += " where id = any(%s::bigint[])"
+            params.append(selected_source_ids)
+        sql += " order by created_at asc"
+        records = db.fetch_all(sql, tuple(params))
 
     return [_normalize_source_record({**row, "source": "database"}) for row in records]

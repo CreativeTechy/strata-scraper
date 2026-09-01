@@ -202,7 +202,11 @@ def _finish_run(run_id, project_id, **fields):
         record_run_completion(project_id, status=fields.get("status"), completed_at=datetime.now(timezone.utc))
 
 
-def run_scraper_pipeline(run_id: str, project_id: int | None = None):
+def run_scraper_pipeline(
+    run_id: str,
+    project_id: int | None = None,
+    source_ids: list[int] | None = None,
+):
     """Scrape, validate, and save - all within one `scrapy crawl`
     subprocess (see scraper/pipelines.py's StreamingCollectPipeline)."""
     if _is_cancel_requested(run_id):
@@ -222,6 +226,11 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
     env["PIPELINE_RUN_ID"] = run_id
     if project_id is not None:
         env["PIPELINE_PROJECT_ID"] = str(project_id)
+    if source_ids is not None:
+        # The API has already validated that these sources belong to the
+        # project. The subprocess boundary only supports strings, so use a
+        # compact comma-separated allowlist for load_source_records().
+        env["PIPELINE_SOURCE_IDS"] = ",".join(str(int(source_id)) for source_id in source_ids)
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"run-{run_id}-", dir=RUNS_DIR) as run_dir:
         run_path = Path(run_dir)
