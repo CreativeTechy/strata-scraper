@@ -52,7 +52,7 @@ class StreamingCollectPipeline:
         self.project = collect._load_project()
         self.seen_urls = set()
         self.scraped_by_source = Counter()
-        self.removed_by_source = defaultdict(lambda: {"duplicate": 0, "blocked": 0})
+        self.removed_by_source = defaultdict(lambda: {"duplicate": 0, "content_filtered": 0})
         self.date_filtered_by_source = Counter()
         self.skipped_existing_by_source = Counter()
         self.kept_by_source = Counter()

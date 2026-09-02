@@ -346,8 +346,10 @@ execute function public.set_updated_at();
 -- in at the end of the crawl instead: whether a source was reachable at all is
 -- only knowable once the whole crawl closes, and a source blocked at the
 -- network level before any article existed would otherwise have no row here at
--- all. "blocked" already means something else on this table (count of articles
--- rejected by content_guard), hence network_blocked rather than reusing it.
+-- all. "content_filtered" is a different, unrelated count (articles rejected
+-- by content_guard for being too short/titleless/a consent page - nothing to
+-- do with the source being blocked), hence network_blocked rather than a name
+-- that could be confused with it.
 create table if not exists public.pipeline_run_sources (
     run_id           text not null references public.pipeline_runs(id) on delete cascade,
     source           text not null,
@@ -356,7 +358,7 @@ create table if not exists public.pipeline_run_sources (
     source_url       text,
     scraped          integer not null default 0,
     duplicate        integer not null default 0,
-    blocked          integer not null default 0,
+    content_filtered integer not null default 0,
     date_filtered    integer not null default 0,
     skipped_existing integer not null default 0,
     kept             integer not null default 0,

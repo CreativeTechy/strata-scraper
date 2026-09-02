@@ -57,15 +57,15 @@ def _normalize_source_stat(row):
         "source_url": row.get("source_url"),
         "scraped": row.get("scraped") or 0,
         "duplicate": row.get("duplicate") or 0,
-        "blocked": row.get("blocked") or 0,
+        "content_filtered": row.get("content_filtered") or 0,
         "date_filtered": row.get("date_filtered") or 0,
         "skipped_existing": row.get("skipped_existing") or 0,
         "kept": row.get("kept") or 0,
         "saved": row.get("saved") or 0,
         # Fetch-time diagnostics (was this source reachable at all this run) -
-        # see services/pipeline/source_diagnostics.py. "blocked" above is an
-        # unrelated count (articles rejected by content_guard), hence
-        # network_blocked rather than reusing that name here.
+        # see services/pipeline/source_diagnostics.py. "content_filtered" above
+        # is an unrelated count (articles rejected by content_guard), hence
+        # network_blocked rather than a name that could be confused with it.
         "http_status": row.get("http_status"),
         "network_blocked": bool(row.get("network_blocked")),
         "fetch_note": row.get("fetch_note") or "",
@@ -260,7 +260,7 @@ def get_pipeline_run_sources(run_id):
     try:
         rows = db.fetch_all(
             """
-            select source, source_url, scraped, duplicate, blocked, date_filtered, skipped_existing, kept, saved,
+            select source, source_url, scraped, duplicate, content_filtered, date_filtered, skipped_existing, kept, saved,
                    http_status, network_blocked, fetch_note
             from pipeline_run_sources
             where run_id = %s
@@ -275,7 +275,7 @@ def get_pipeline_run_sources(run_id):
 
 def upsert_pipeline_run_source_stats(run_id, source_stats):
     """Persist the per-source breakdown for a run. `source_stats` is a dict of
-    source name -> {scraped, duplicate, blocked, date_filtered, skipped_existing,
+    source name -> {scraped, duplicate, content_filtered, date_filtered, skipped_existing,
     kept, saved, http_status, network_blocked, fetch_note}. Called repeatedly
     during a run by the collect pipeline, which re-pushes the whole snapshot
     each time an article finishes."""
@@ -288,14 +288,14 @@ def upsert_pipeline_run_source_stats(run_id, source_stats):
             db.execute(
                 """
                 insert into pipeline_run_sources
-                    (run_id, source, source_url, scraped, duplicate, blocked, date_filtered, skipped_existing,
+                    (run_id, source, source_url, scraped, duplicate, content_filtered, date_filtered, skipped_existing,
                      kept, saved, http_status, network_blocked, fetch_note)
                 values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 on conflict (run_id, source) do update set
                     source_url = excluded.source_url,
                     scraped = excluded.scraped,
                     duplicate = excluded.duplicate,
-                    blocked = excluded.blocked,
+                    content_filtered = excluded.content_filtered,
                     date_filtered = excluded.date_filtered,
                     skipped_existing = excluded.skipped_existing,
                     kept = excluded.kept,
@@ -311,7 +311,7 @@ def upsert_pipeline_run_source_stats(run_id, source_stats):
                     counts.get("source_url") or None,
                     int(counts.get("scraped") or 0),
                     int(counts.get("duplicate") or 0),
-                    int(counts.get("blocked") or 0),
+                    int(counts.get("content_filtered") or 0),
                     int(counts.get("date_filtered") or 0),
                     int(counts.get("skipped_existing") or 0),
                     int(counts.get("kept") or 0),
