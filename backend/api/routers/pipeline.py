@@ -86,8 +86,23 @@ def trigger_scrape(background_tasks: BackgroundTasks, payload: dict | None = Non
         else:
             raise HTTPException(status_code=400, detail="Select a project before running the scraper.")
 
-    if not list_sources_for_project(project_id):
+    project_sources = list_sources_for_project(project_id)
+    if not project_sources:
         raise HTTPException(status_code=400, detail="Assign at least one source to the selected project before scraping.")
+
+    source_ids = None
+    if "source_ids" in payload:
+        raw_source_ids = payload.get("source_ids")
+        if not isinstance(raw_source_ids, list) or not raw_source_ids:
+            raise HTTPException(status_code=400, detail="Select at least one source to scrape.")
+        try:
+            requested_ids = {int(value) for value in raw_source_ids}
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid source selection.")
+        project_source_ids = {int(source["id"]) for source in project_sources}
+        source_ids = list(requested_ids & project_source_ids)
+        if not source_ids:
+            raise HTTPException(status_code=400, detail="None of the selected sources belong to this project.")
 
     active_run = get_active_run_for_project(project_id)
     if active_run:
@@ -99,7 +114,7 @@ def trigger_scrape(background_tasks: BackgroundTasks, payload: dict | None = Non
 
     run = create_pipeline_run(status="queued", stage="queued", message="Queued for execution.", project_id=project_id)
     run_id = run["id"] if run else uuid.uuid4().hex
-    background_tasks.add_task(run_scraper_pipeline, run_id, project_id)
+    background_tasks.add_task(run_scraper_pipeline, run_id, project_id, source_ids)
     return {
         "message": "Scraper pipeline triggered. It will save to local PostgreSQL when finished.",
         "run_id": run_id,

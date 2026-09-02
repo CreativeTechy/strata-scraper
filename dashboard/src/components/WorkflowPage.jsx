@@ -6,8 +6,6 @@ import {
   Globe,
   AtSign,
   Share2,
-  Link2,
-  Type,
   Plus,
   ArrowRight,
   DownloadCloud,
@@ -29,17 +27,10 @@ import {
 } from 'lucide-react';
 import '../styles/Workflow.css';
 
-const PlatformIcon = ({ platform }) => {
-  if (platform === 'web') return <Globe size={18} />;
-  if (platform === 'x') return <AtSign size={18} />;
-  if (platform === 'facebook') return <Share2 size={18} />;
-  return <Globe size={18} />;
-};
-
-const TypeIcon = ({ type }) => {
-  if (type === 'link') return <Link2 size={18} />;
-  if (type === 'keywords') return <Type size={18} />;
-  return <Link2 size={18} />;
+const SourceTypeIcon = ({ sourceType }) => {
+  if (sourceType === 'x' || sourceType === 'username' || sourceType === 'hashtag') return <AtSign size={16} />;
+  if (sourceType === 'facebook') return <Share2 size={16} />;
+  return <Globe size={16} />;
 };
 
 function prettyStage(stage) {
@@ -71,15 +62,36 @@ export default function WorkflowPage({
   const canRunScraper = hasPermission('pipeline.run');
   const canStopScraper = hasPermission('pipeline.stop');
 
-  const seedRows = (list) =>
-    (list.length ? list : []).map((url, i) => ({
-      id: i + 1,
-      platform: 'web',
-      type: 'link',
-      value: url,
-    }));
+  const sourceIds = useMemo(
+    () => sources.map((source) => Number(source.id)).filter((id) => Number.isFinite(id)),
+    [sources]
+  );
+  // Keyed on the *set* of ids (not the sources array reference) so switching
+  // back to a project doesn't wipe an in-progress selection on every render -
+  // only when the actual sources available to check change does the
+  // selection reset to "all checked" (the required default).
+  const sourceIdsKey = useMemo(() => [...sourceIds].sort((a, b) => a - b).join(','), [sourceIds]);
+  const [checkedSourceIds, setCheckedSourceIds] = useState(() => new Set(sourceIds));
 
-  const [rows, setRows] = useState(() => seedRows(sources));
+  useEffect(() => {
+    setCheckedSourceIds(new Set(sourceIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceIdsKey]);
+
+  const toggleSourceChecked = (id) => {
+    const numId = Number(id);
+    setCheckedSourceIds((current) => {
+      const next = new Set(current);
+      if (next.has(numId)) next.delete(numId);
+      else next.add(numId);
+      return next;
+    });
+  };
+
+  const allSourcesChecked = sources.length > 0 && checkedSourceIds.size === sources.length;
+  const selectAllSources = () => setCheckedSourceIds(new Set(sourceIds));
+  const deselectAllSources = () => setCheckedSourceIds(new Set());
+
   const [runs, setRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState('');
@@ -100,10 +112,6 @@ export default function WorkflowPage({
       setIsStopping(false);
     }
   };
-
-  useEffect(() => {
-    if (sources.length) setRows(seedRows(sources));
-  }, [sources]);
 
   useEffect(() => {
     if (isScraping && !wasScrapingRef.current) {
@@ -216,10 +224,6 @@ export default function WorkflowPage({
     ].filter(Boolean).join(':');
   };
 
-  const updateRow = (id, field, value) => {
-    setRows(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  };
-
   const cleanupProgressLabel = useMemo(() => {
     const scraped = Math.max(0, Number(currentRun?.articles_scraped) || 0);
     const cleaned = Math.max(0, Number(currentRun?.articles_cleaned) || 0);
@@ -250,9 +254,11 @@ export default function WorkflowPage({
     onChangeSelectedProjectIds([id]);
   };
 
-  const runLabel = selectedProjectCount > 0
-    ? 'Run Extractor for Project'
-    : 'Select a Project to Run';
+  const runLabel = selectedProjectCount === 0
+    ? 'Select a Project to Run'
+    : checkedSourceIds.size === 0
+      ? 'Select at Least One Source'
+      : 'Run Extractor for Project';
 
   return (
     <div className="workflow-layout">
@@ -365,25 +371,39 @@ export default function WorkflowPage({
               <div className="get-rows-header">
                 <div className="get-rows-header-copy">
                   <strong>Sources</strong>
-                  <span>Paste URLs here or switch a row to keywords</span>
+                  <span>
+                    {sources.length
+                      ? `${checkedSourceIds.size} of ${sources.length} selected - scraping only runs for checked sources`
+                      : 'No sources assigned to this project yet'}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  className="workflow-project-toggle"
-                  onClick={() => setIsSourceListCollapsed((current) => !current)}
-                  aria-expanded={!isSourceListCollapsed}
-                  aria-controls="workflow-source-list"
-                >
-                  {isSourceListCollapsed ? (
-                    <>
-                      Expand sources <ChevronDown size={14} />
-                    </>
-                  ) : (
-                    <>
-                      Collapse sources <ChevronUp size={14} />
-                    </>
-                  )}
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="workflow-project-toggle"
+                    onClick={allSourcesChecked ? deselectAllSources : selectAllSources}
+                    disabled={isScraping || sources.length === 0}
+                  >
+                    {allSourcesChecked ? 'Deselect all' : 'Select all'}
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-project-toggle"
+                    onClick={() => setIsSourceListCollapsed((current) => !current)}
+                    aria-expanded={!isSourceListCollapsed}
+                    aria-controls="workflow-source-list"
+                  >
+                    {isSourceListCollapsed ? (
+                      <>
+                        Expand sources <ChevronDown size={14} />
+                      </>
+                    ) : (
+                      <>
+                        Collapse sources <ChevronUp size={14} />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <AnimatePresence initial={false}>
@@ -391,60 +411,40 @@ export default function WorkflowPage({
                   <motion.div
                     key="workflow-source-list"
                     id="workflow-source-list"
-                    className="get-rows"
+                    className="workflow-source-list"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {rows.map((row) => (
-                      <motion.div
-                        key={row.id}
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="get-row"
-                      >
-                        <div style={{ position: 'relative', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <div style={{ position: 'absolute', pointerEvents: 'none', color: 'var(--text-light)' }}>
-                            <PlatformIcon platform={row.platform} />
-                          </div>
-                          <select
-                            value={row.platform}
-                            onChange={(e) => updateRow(row.id, 'platform', e.target.value)}
-                            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer', position: 'absolute', left: 0, top: 0 }}
-                          >
-                            <option value="web">Web RSS</option>
-                            <option value="x">X (Twitter)</option>
-                            <option value="facebook">Facebook</option>
-                          </select>
-                        </div>
-
-                        <div className="row-input-wrapper">
-                          <input
-                            type="text"
-                            className="row-input"
-                            placeholder={row.type === 'link' ? 'Paste URL...' : 'Enter keywords...'}
-                            value={row.value}
-                            onChange={(e) => updateRow(row.id, 'value', e.target.value)}
-                          />
-                        </div>
-
-                        <div style={{ position: 'relative', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <div style={{ position: 'absolute', pointerEvents: 'none', color: 'var(--text-light)' }}>
-                            <TypeIcon type={row.type} />
-                          </div>
-                          <select
-                            value={row.type}
-                            onChange={(e) => updateRow(row.id, 'type', e.target.value)}
-                            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer', position: 'absolute', left: 0, top: 0 }}
-                          >
-                            <option value="link">Link</option>
-                            <option value="keywords">Keywords</option>
-                          </select>
-                        </div>
-                      </motion.div>
-                    ))}
+                    {sources.length === 0 ? (
+                      <div className="panel-empty" style={{ marginTop: 0 }}>
+                        <ShieldCheck size={16} />
+                        <span>No sources assigned to this project yet. Add one to start scraping.</span>
+                      </div>
+                    ) : (
+                      sources.map((source) => {
+                        const id = Number(source.id);
+                        const isChecked = checkedSourceIds.has(id);
+                        return (
+                          <label key={id} className={`workflow-source-item ${isChecked ? 'selected' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleSourceChecked(id)}
+                              disabled={isScraping}
+                            />
+                            <div className="workflow-source-icon">
+                              <SourceTypeIcon sourceType={source.source_type} />
+                            </div>
+                            <div className="workflow-source-copy">
+                              <strong>{source.name || source.url}</strong>
+                              {source.name ? <span>{source.url}</span> : null}
+                            </div>
+                          </label>
+                        );
+                      })
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div
@@ -454,7 +454,9 @@ export default function WorkflowPage({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    Source URLs are collapsed. Expand them to edit or review the source list.
+                    {sources.length
+                      ? `${checkedSourceIds.size} of ${sources.length} sources selected. Expand to review or change the selection.`
+                      : 'No sources to show. Expand to add one.'}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -471,9 +473,15 @@ export default function WorkflowPage({
                 <button
                   className="btn-primary"
                   style={{ opacity: isScraping ? 0.7 : 1, flex: 1 }}
-                  onClick={() => onRunScraper?.(selectedProjectIds)}
-                  disabled={isScraping || selectedProjectCount === 0 || !canRunScraper}
-                  title={canRunScraper ? undefined : 'Requires the pipeline.run permission.'}
+                  onClick={() => onRunScraper?.(selectedProjectIds, [...checkedSourceIds])}
+                  disabled={isScraping || selectedProjectCount === 0 || checkedSourceIds.size === 0 || !canRunScraper}
+                  title={
+                    !canRunScraper
+                      ? 'Requires the pipeline.run permission.'
+                      : selectedProjectCount > 0 && checkedSourceIds.size === 0
+                        ? 'Select at least one source to run.'
+                        : undefined
+                  }
                 >
                   {isScraping ? (
                     <><RefreshCw size={16} className="spin" /> Running...</>

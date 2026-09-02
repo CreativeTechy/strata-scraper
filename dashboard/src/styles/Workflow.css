@@ -527,6 +527,75 @@
   flex: 1;
 }
 
+.workflow-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.workflow-source-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.workflow-source-item:hover {
+  border-color: rgba(46, 134, 222, 0.22);
+  transform: translateY(-1px);
+}
+
+.workflow-source-item.selected {
+  background: linear-gradient(135deg, rgba(46, 134, 222, 0.08), rgba(255, 255, 255, 0.9));
+  border-color: rgba(46, 134, 222, 0.28);
+}
+
+.workflow-source-item input[type="checkbox"] {
+  accent-color: var(--secondary-color);
+  flex-shrink: 0;
+}
+
+.workflow-source-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.workflow-source-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.workflow-source-copy strong {
+  color: var(--text-dark);
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-source-copy span {
+  color: var(--text-light);
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workflow-project-topline {
   display: flex;
   justify-content: space-between;

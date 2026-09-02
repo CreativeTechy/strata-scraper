@@ -202,9 +202,15 @@ def _finish_run(run_id, project_id, **fields):
         record_run_completion(project_id, status=fields.get("status"), completed_at=datetime.now(timezone.utc))
 
 
-def run_scraper_pipeline(run_id: str, project_id: int | None = None):
+def run_scraper_pipeline(run_id: str, project_id: int | None = None, source_ids: list[int] | None = None):
     """Scrape, validate, and save - all within one `scrapy crawl`
-    subprocess (see scraper/pipelines.py's StreamingCollectPipeline)."""
+    subprocess (see scraper/pipelines.py's StreamingCollectPipeline).
+
+    source_ids, when given, narrows the run to that subset of the project's
+    sources - the checked sources the user picked on the workflow page (see
+    trigger_scrape). None means every source assigned to the project, as
+    before (the scheduler never passes this).
+    """
     if _is_cancel_requested(run_id):
         _finish_run(
             run_id,
@@ -222,6 +228,8 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
     env["PIPELINE_RUN_ID"] = run_id
     if project_id is not None:
         env["PIPELINE_PROJECT_ID"] = str(project_id)
+    if source_ids:
+        env["PIPELINE_SOURCE_IDS"] = ",".join(str(int(source_id)) for source_id in source_ids)
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"run-{run_id}-", dir=RUNS_DIR) as run_dir:
         run_path = Path(run_dir)
@@ -247,6 +255,9 @@ def run_scraper_pipeline(run_id: str, project_id: int | None = None):
 
             try:
                 sources = list_sources_for_project(project_id)
+                if source_ids:
+                    selected_ids = {int(source_id) for source_id in source_ids}
+                    sources = [source for source in sources if int(source.get("id")) in selected_ids]
                 if not any(source.get("url") for source in sources):
                     _finish_run(
                         run_id,
