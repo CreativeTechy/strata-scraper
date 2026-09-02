@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key")
@@ -51,42 +51,10 @@ class ArticleFromTweetTests(unittest.TestCase):
         self.assertEqual(article["source"], "x.com")
 
 
-class RunActorTests(unittest.TestCase):
-    def test_returns_empty_list_when_not_configured(self):
-        with patch.object(config, "APIFY_API_TOKEN", ""):
-            self.assertEqual(apify_twitter._run_actor("apidojo/tweet-scraper", {}), [])
-
-    def test_returns_empty_list_on_request_exception(self):
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_twitter.requests.post", side_effect=Exception("boom")
-        ):
-            self.assertEqual(apify_twitter._run_actor("apidojo/tweet-scraper", {}), [])
-
-    def test_returns_empty_list_when_dataset_response_is_not_a_list(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"error": "not found"}
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_twitter.requests.post", return_value=mock_response
-        ):
-            self.assertEqual(apify_twitter._run_actor("apidojo/tweet-scraper", {}), [])
-
-    def test_returns_dataset_items_on_success(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = [{"url": "u", "fullText": "t"}]
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_twitter.requests.post", return_value=mock_response
-        ) as mock_post:
-            result = apify_twitter._run_actor("apidojo/tweet-scraper", {"searchTerms": ["#ev"]})
-            self.assertEqual(result, [{"url": "u", "fullText": "t"}])
-            called_url = mock_post.call_args.args[0]
-            self.assertIn("apidojo~tweet-scraper", called_url)
-            self.assertEqual(mock_post.call_args.kwargs["params"], {"token": "token"})
-
-
 class ApifyTwitterSearchPostsTests(unittest.TestCase):
     def test_normalizes_dataset_items(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_twitter, "_run_actor", return_value=[{"url": "u", "fullText": "t", "author": {"userName": "ev"}}]
+            apify_twitter, "run_actor_sync", return_value=[{"url": "u", "fullText": "t", "author": {"userName": "ev"}}]
         ):
             articles = apify_twitter.apify_twitter_search_posts("#ev", "https://x.com/hashtag/ev", "ev")
             self.assertEqual(len(articles), 1)
@@ -94,11 +62,27 @@ class ApifyTwitterSearchPostsTests(unittest.TestCase):
 
     def test_drops_items_that_fail_normalization(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_twitter, "_run_actor", return_value=[{"fullText": "no url"}, {"url": "u2", "fullText": "t2"}]
+            apify_twitter, "run_actor_sync", return_value=[{"fullText": "no url"}, {"url": "u2", "fullText": "t2"}]
         ):
             articles = apify_twitter.apify_twitter_search_posts("ev fires", "search-url", "ev fires")
             self.assertEqual(len(articles), 1)
             self.assertEqual(articles[0]["url"], "u2")
+
+    def test_propagates_billing_error_from_run_actor_sync(self):
+        from scraper.apify_common import ApifyBillingError
+
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            apify_twitter, "run_actor_sync", side_effect=ApifyBillingError("no subscription")
+        ):
+            with self.assertRaises(ApifyBillingError):
+                apify_twitter.apify_twitter_search_posts("#ev", "https://x.com/hashtag/ev", "ev")
+
+    def test_uses_its_own_timeout(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            config, "APIFY_TWITTER_SEARCH_TIMEOUT_SECONDS", 90
+        ), patch.object(apify_twitter, "run_actor_sync", return_value=[]) as mock_run:
+            apify_twitter.apify_twitter_search_posts("#ev", "https://x.com/hashtag/ev", "ev")
+            self.assertEqual(mock_run.call_args.kwargs["timeout"], 90)
 
 
 if __name__ == "__main__":

@@ -45,12 +45,14 @@ from scraper.social_sources import (
     reddit_oauth_headers,
     reddit_oauth_request_url,
 )
+from scraper.apify_common import ApifyBillingError
 from scraper.apify_linkedin import (
     apify_linkedin_page_posts,
     apify_linkedin_search_posts,
     linkedin_kind,
     linkedin_search_query,
 )
+from scraper.apify_reddit import apify_reddit_posts
 from scraper.apify_twitter import apify_twitter_search_posts
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
@@ -308,12 +310,16 @@ class SourceRssSpider(scrapy.Spider):
                     )
                     continue
                 kind = linkedin_kind(url)
-                if kind == "search":
-                    articles = apify_linkedin_search_posts(linkedin_search_query(url) or source_name, url, source_name)
-                elif kind in {"company", "profile"}:
-                    articles = apify_linkedin_page_posts(url, url, source_name)
-                else:
-                    self._note_source_status(source_name, url, note=f"Unrecognized LinkedIn source URL: {url!r}")
+                try:
+                    if kind == "search":
+                        articles = apify_linkedin_search_posts(linkedin_search_query(url) or source_name, url, source_name)
+                    elif kind in {"company", "profile"}:
+                        articles = apify_linkedin_page_posts(url, url, source_name)
+                    else:
+                        self._note_source_status(source_name, url, note=f"Unrecognized LinkedIn source URL: {url!r}")
+                        continue
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
                     continue
                 self.logger.info("LinkedIn %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
                 for article in articles:
@@ -340,6 +346,38 @@ class SourceRssSpider(scrapy.Spider):
                 self.logger.info("Tweet source %r -> 1 post via fxtwitter", source_name)
                 self._progress_articles += 1
                 yield tweet
+                self._push_progress()
+                continue
+
+            if source_type == "reddit" and config.apify_configured():
+                # Apify's Reddit-scraper actor (apify_reddit.py) is a
+                # strictly better path than the plain reddit.com/*.json
+                # request below once it's configured - Reddit blocks that
+                # endpoint outright for most requesters (confirmed live,
+                # 403 from every request observed so far, proxied or not),
+                # so running it alongside Apify adds nothing but a
+                # guaranteed-blocked entry in source_diagnostics.json and
+                # the dashboard's "needing attention" list. Skipped
+                # entirely instead - same replaces-the-seed-request
+                # treatment as "linkedin" above, not the run-alongside
+                # treatment "keyword"/"hashtag" give their own Apify tier
+                # (those two have no equivalent single-request tier to
+                # replace). Unconfigured, reddit sources fall through to
+                # the plain fetch unchanged - REDDIT_PROXY_URL/
+                # SCRAPE_PROXY_URL (see proxy_meta below) can still make
+                # that fetch succeed on its own.
+                try:
+                    apify_posts = apify_reddit_posts(url, url, source_name)
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
+                    apify_posts = []
+                if apify_posts:
+                    self.logger.info(
+                        "Reddit %r -> %d post(s) via Apify", source_name, len(apify_posts)
+                    )
+                for post in apify_posts:
+                    self._progress_articles += 1
+                    yield post
                 self._push_progress()
                 continue
 
@@ -460,7 +498,11 @@ class SourceRssSpider(scrapy.Spider):
                 # tweet text directly in its dataset, so unlike the hashtag
                 # CSE tier below, this yields articles straight away rather
                 # than a URL to hydrate via fxtwitter.com.
-                apify_tweets = apify_twitter_search_posts(source_name, url, source_name)
+                try:
+                    apify_tweets = apify_twitter_search_posts(source_name, url, source_name)
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
+                    apify_tweets = []
                 if apify_tweets:
                     self.logger.info(
                         "Keyword %r -> %d tweet(s) via Apify", source_name, len(apify_tweets)
@@ -516,7 +558,11 @@ class SourceRssSpider(scrapy.Spider):
                     # the hashtag - full tweet text comes back in the
                     # actor's own dataset, so these are yielded as articles
                     # straight away rather than URLs to hydrate.
-                    apify_tweets = apify_twitter_search_posts(f"#{tag}", url, source_name)
+                    try:
+                        apify_tweets = apify_twitter_search_posts(f"#{tag}", url, source_name)
+                    except ApifyBillingError as exc:
+                        self._note_source_status(source_name, url, note=str(exc))
+                        apify_tweets = []
                     if apify_tweets:
                         self.logger.info(
                             "Hashtag %r -> %d tweet(s) via Apify", source_name, len(apify_tweets)

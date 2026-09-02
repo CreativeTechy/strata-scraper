@@ -281,6 +281,14 @@ GDELT_ENABLED = os.environ.get("GDELT_ENABLED", "true").strip().lower() not in {
 # (the default), "linkedin" sources report 0 articles with an explanatory
 # fetch note rather than a silent miss - same contract as the CSE/GDELT tiers.
 APIFY_API_TOKEN = os.environ.get("APIFY_API_TOKEN", "").strip()
+# A synchronous actor run (fetch + scrape a JS-rendered page) routinely takes
+# tens of seconds, well past a normal HTTP request's budget - see
+# apify_common.run_actor_sync's poll loop. Each Apify tier below has its own
+# actor(s) and therefore its own timeout var, since different actors are
+# observed to genuinely need different budgets (see APIFY_REDDIT_SEARCH_
+# TIMEOUT_SECONDS below); this is only the fallback default each of those
+# defaults to when its own var is unset, not itself passed to any actor call.
+APIFY_TIMEOUT_SECONDS = _env_int("APIFY_TIMEOUT_SECONDS", 120)
 # Both default actors are from the same vendor (harvestapi) and return dataset
 # items in the same post shape (linkedinUrl/content/author/postedAt), so one
 # normalizer covers both - see apify_linkedin.py's _article_from_post. Override
@@ -289,10 +297,8 @@ APIFY_API_TOKEN = os.environ.get("APIFY_API_TOKEN", "").strip()
 APIFY_LINKEDIN_POSTS_ACTOR = os.environ.get("APIFY_LINKEDIN_POSTS_ACTOR", "harvestapi/linkedin-company-posts").strip()
 APIFY_LINKEDIN_SEARCH_ACTOR = os.environ.get("APIFY_LINKEDIN_SEARCH_ACTOR", "harvestapi/linkedin-post-search").strip()
 APIFY_LINKEDIN_MAX_POSTS = _env_int("APIFY_LINKEDIN_MAX_POSTS", 20)
-# A synchronous actor run (fetch + scrape LinkedIn's own JS-rendered pages)
-# routinely takes tens of seconds, well past a normal HTTP request's budget -
-# see apify_linkedin.py's run-sync-get-dataset-items call.
-APIFY_TIMEOUT_SECONDS = _env_int("APIFY_TIMEOUT_SECONDS", 120)
+APIFY_LINKEDIN_POSTS_TIMEOUT_SECONDS = _env_int("APIFY_LINKEDIN_POSTS_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+APIFY_LINKEDIN_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_LINKEDIN_SEARCH_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
 
 
 def apify_configured() -> bool:
@@ -300,16 +306,39 @@ def apify_configured() -> bool:
 
 
 # --- Apify (optional) - Twitter/X scraping tier ------------------------------
-# Reuses APIFY_API_TOKEN/APIFY_TIMEOUT_SECONDS above - this only adds the
-# actor id and result cap for "keyword"/"hashtag" X sources (see
-# scraper/apify_twitter.py). Runs alongside the existing Google-CSE
-# tweet-link-discovery tier for "hashtag" sources, not instead of it: CSE
-# finds tweet URLs to hydrate via fxtwitter.com, this gets full tweet content
-# directly from the search actor's own dataset, so a miss in one doesn't cost
-# the other. Unconfigured (the default), this tier is silently skipped - a
-# keyword/hashtag source's other tiers already report their own diagnostics.
+# Reuses APIFY_API_TOKEN above - this only adds the actor id, result cap, and
+# timeout for "keyword"/"hashtag" X sources (see scraper/apify_twitter.py).
+# Runs alongside the existing Google-CSE tweet-link-discovery tier for
+# "hashtag" sources, not instead of it: CSE finds tweet URLs to hydrate via
+# fxtwitter.com, this gets full tweet content directly from the search
+# actor's own dataset, so a miss in one doesn't cost the other. Unconfigured
+# (the default), this tier is silently skipped - a keyword/hashtag source's
+# other tiers already report their own diagnostics.
 APIFY_TWITTER_SEARCH_ACTOR = os.environ.get("APIFY_TWITTER_SEARCH_ACTOR", "apidojo/tweet-scraper").strip()
 APIFY_TWITTER_MAX_TWEETS = _env_int("APIFY_TWITTER_MAX_TWEETS", 20)
+APIFY_TWITTER_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_TWITTER_SEARCH_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+
+
+# --- Apify (optional) - Reddit scraping tier ---------------------------------
+# Reuses APIFY_API_TOKEN above - this only adds the actor id, result cap, and
+# timeout for "reddit" sources (see scraper/apify_reddit.py). Runs alongside
+# the existing direct reddit.com/oauth.reddit.com .json tier, not instead of
+# it: Reddit's public endpoints get rate-limited or blocked outright without
+# REDDIT_OAUTH_CLIENT_ID/SECRET configured, so this is independent
+# best-effort coverage, the same relationship the Apify Twitter tier above
+# has to the Google CSE tweet-link tier. Unconfigured (the default), this
+# tier is silently skipped - a reddit source's direct-fetch tier already
+# reports its own diagnostics.
+APIFY_REDDIT_SEARCH_ACTOR = os.environ.get("APIFY_REDDIT_SEARCH_ACTOR", "trudax/reddit-scraper-lite").strip()
+APIFY_REDDIT_MAX_ITEMS = _env_int("APIFY_REDDIT_MAX_ITEMS", 20)
+# A live subreddit routinely takes well past APIFY_TIMEOUT_SECONDS's default
+# (observed 180s+ against a moderately active subreddit, vs. the 120s
+# default) - confirmed live: a run that had genuinely succeeded with real
+# posts was still discarded as empty because scraper/apify_common.py's
+# run_actor_sync gave up polling at the shorter deadline. Defaults higher
+# than the other actors' timeout vars for that reason, not to
+# APIFY_TIMEOUT_SECONDS itself.
+APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS", 240)
 
 
 # --- Skip already-collected articles -----------------------------------------
