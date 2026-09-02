@@ -8,10 +8,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Building2, CalendarClock, ChevronRight, LayoutGrid, List, Plus, Radar, Search,
+  Building2, CalendarClock, ChevronRight, LayoutGrid, List, Plus, Radar, Search,
   Sparkles, X,
 } from 'lucide-react';
 import { avatarGradient, initials, listStudies, relativeTime } from '../competitorApi.js';
+import ErrorNotice from './ErrorNotice';
 import '../styles/Competitors.css';
 
 const STATUS_FILTERS = [
@@ -153,11 +154,7 @@ export default function CompetitorStudiesPage() {
         </div>
       </div>
 
-      {error ? (
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorNotice error={error} context="load competitor studies" />
 
       {loading ? (
         <div className="cs-card-grid">

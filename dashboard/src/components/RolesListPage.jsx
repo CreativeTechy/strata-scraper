@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, ShieldPlus, Trash2, Pencil } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import { useAuth } from '../auth/useAuth.js';
 import '../styles/AdminUsers.css';
 
@@ -82,11 +83,7 @@ export default function RolesListPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="panel-chip" style={{ background: '#fde2e2', color: '#9c1c1c', marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
+      <ErrorNotice error={error} context="manage roles" onRetry={load} onDismiss={() => setError('')} />
 
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="table-scroll">

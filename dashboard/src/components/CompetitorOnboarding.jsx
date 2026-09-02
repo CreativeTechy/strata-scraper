@@ -42,7 +42,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
+  ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
   Globe, Link2, Loader2, Plus, Radar, Search, Sparkles, Trash2, Users, X,
 } from 'lucide-react';
 import {
@@ -55,6 +55,7 @@ import { COUNTRIES, countryLabel } from '../constants/countries.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
 import { AddCompetitorForm, AddSourceRow } from './CompetitorSourceEditor.jsx';
 import { WeekdayPicker } from './ProjectsPage.jsx';
+import ErrorNotice from './ErrorNotice';
 import '../styles/Competitors.css';
 
 const STEPS = [
@@ -894,12 +895,7 @@ export default function CompetitorOnboarding() {
         })}
       </div>
 
-      {error ? (
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorNotice error={error} context="complete competitor setup" onDismiss={() => setError('')} />
 
       {step === 2 ? (
         <div className="cs-panel">
@@ -1099,15 +1095,13 @@ export default function CompetitorOnboarding() {
       {/* ---------------- Step 3: market context ---------------- */}
       {step === 3 && profile ? (
         <>
-          {scrape ? (
-            <div className={`cs-alert ${scrape.status === 'success' ? 'cs-alert-info' : 'cs-alert-warn'}`}>
-              {scrape.status === 'success' ? <Globe size={16} style={{ flexShrink: 0 }} /> : <AlertTriangle size={16} style={{ flexShrink: 0 }} />}
-              <span>
-                {scrape.status === 'success'
-                  ? `Read ${scrape.pages.length} page${scrape.pages.length === 1 ? '' : 's'} from your site (${scrape.chars.toLocaleString()} characters). Check the context below — competitors are found from it.`
-                  : `Could not read your website${scrape.error ? `: ${scrape.error}` : '.'} Fill the fields in below so discovery still has something to work from.`}
-              </span>
+          {scrape?.status === 'success' ? (
+            <div className="cs-alert cs-alert-info">
+              <Globe size={16} style={{ flexShrink: 0 }} />
+              <span>{`Read ${scrape.pages.length} page${scrape.pages.length === 1 ? '' : 's'} from your site (${scrape.chars.toLocaleString()} characters). Check the context below — competitors are found from it.`}</span>
             </div>
+          ) : scrape ? (
+            <ErrorNotice error={scrape.error || 'The website could not be read.'} context="read your website" compact />
           ) : null}
 
           <div className="cs-panel">
@@ -1211,10 +1205,7 @@ export default function CompetitorOnboarding() {
                 ))}
               </div>
             ) : (
-              <div className="cs-alert cs-alert-warn" style={{ marginTop: 14 }}>
-                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
-                <span>{culturalAnalysis.error || 'The analysis could not be generated. Try running it again, or skip and continue.'}</span>
-              </div>
+              <ErrorNotice error={culturalAnalysis.error || 'The analysis could not be generated.'} context="generate this analysis" compact />
             )
           ) : null}
 

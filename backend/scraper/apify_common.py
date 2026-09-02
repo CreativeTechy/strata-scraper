@@ -93,11 +93,12 @@ def run_actor_sync(actor, payload, actor_label=None, timeout=None):
 
     token = config.APIFY_API_TOKEN
     timeout = timeout if timeout is not None else config.APIFY_TIMEOUT_SECONDS
+    auth_headers = {"Authorization": f"Bearer {token}"}
 
     try:
         start_response = requests.post(
             _RUNS_URL.format(actor=_actor_path(actor)),
-            params={"token": token},
+            headers=auth_headers,
             json=payload,
             timeout=timeout,
         )
@@ -117,7 +118,7 @@ def run_actor_sync(actor, payload, actor_label=None, timeout=None):
         try:
             poll_response = requests.get(
                 _RUN_STATUS_URL.format(run_id=run_id),
-                params={"token": token},
+                headers=auth_headers,
                 timeout=timeout,
             )
             poll_response.raise_for_status()
@@ -143,7 +144,7 @@ def run_actor_sync(actor, payload, actor_label=None, timeout=None):
     try:
         items_response = requests.get(
             _DATASET_ITEMS_URL.format(dataset_id=dataset_id),
-            params={"token": token},
+            headers=auth_headers,
             timeout=timeout,
         )
         items_response.raise_for_status()

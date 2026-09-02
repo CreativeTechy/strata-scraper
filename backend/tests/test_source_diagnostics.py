@@ -65,6 +65,40 @@ class BuildFetchNoteTests(unittest.TestCase):
         self.assertEqual(source_diagnostics.build_fetch_note(None, scraped_count=5), "")
 
 
+class ClassifyFetchIssueTests(unittest.TestCase):
+    def test_known_issue_types_have_professional_messages(self):
+        cases = [
+            ({"fetch_note": "HTTP 404 for https://x.com/missing", "http_status": 404, "source_type": "username"}, "not_found", "X account not found"),
+            ({"fetch_note": "APIFY_API_TOKEN not set - linkedin sources require Apify", "source_type": "linkedin"}, "setup_required", "LinkedIn setup required"),
+            ({"fetch_note": "Configure GOOGLE_CSE_API_KEY/GOOGLE_CSE_ENGINE_ID", "source_type": "hashtag"}, "setup_required", "X search setup required"),
+            ({"fetch_note": "Blocked", "http_status": 403, "network_blocked": True}, "access_blocked", "Access blocked"),
+            ({"fetch_note": "Too many requests", "http_status": 429}, "rate_limited", "Temporarily rate limited"),
+            ({"fetch_note": "HTTP 503", "http_status": 503}, "service_unavailable", "Platform temporarily unavailable"),
+            ({"fetch_note": "Request failed: timeout"}, "timed_out", "Request timed out"),
+            ({"fetch_note": "Request failed: DNS lookup failed"}, "connection_failed", "Connection failed"),
+            ({"fetch_note": "Returned 0 articles."}, "no_results", "No articles found"),
+            ({"fetch_note": "Unexpected parser problem"}, "fetch_failed", "Source could not be collected"),
+        ]
+        for values, expected_code, expected_title in cases:
+            with self.subTest(expected_code):
+                result = source_diagnostics.classify_fetch_issue(**values)
+                self.assertEqual(result["code"], expected_code)
+                self.assertEqual(result["title"], expected_title)
+                self.assertTrue(result["message"])
+                self.assertTrue(result["action"])
+
+    def test_technical_detail_removes_headers_and_html_preview(self):
+        result = source_diagnostics.classify_fetch_issue(
+            "HTTP 404 for https://x.com/missing. Headers: {'Server': 'cloudflare'} Body preview: <html>huge</html>",
+            http_status=404,
+            source_type="username",
+        )
+        self.assertEqual(result["technical_detail"], "HTTP 404 for https://x.com/missing.")
+
+    def test_no_issue_returns_none(self):
+        self.assertIsNone(source_diagnostics.classify_fetch_issue(""))
+
+
 class SummarizeNotableDiagnosticsTests(unittest.TestCase):
     def test_empty_list_returns_empty_string(self):
         self.assertEqual(source_diagnostics.summarize_notable_diagnostics([]), "")
@@ -79,19 +113,19 @@ class SummarizeNotableDiagnosticsTests(unittest.TestCase):
         self.assertIn("1 source(s)", summary)
         self.assertIn("r/messi", summary)
         self.assertIn("blocked", summary)
-        self.assertIn("403", summary)
+        self.assertNotIn("403", summary)
 
     def test_generic_http_error_is_notable(self):
         summary = source_diagnostics.summarize_notable_diagnostics([{"source_name": "example.com", "http_status": 404}])
         self.assertIn("example.com", summary)
-        self.assertIn("HTTP 404", summary)
+        self.assertIn("Source not found", summary)
 
     def test_note_only_entry_is_notable(self):
         summary = source_diagnostics.summarize_notable_diagnostics([
             {"source_name": "somechannel", "note": "Request failed: timeout"},
         ])
         self.assertIn("somechannel", summary)
-        self.assertIn("Request failed: timeout", summary)
+        self.assertIn("Request timed out", summary)
 
     def test_mixed_healthy_and_notable_only_counts_notable(self):
         summary = source_diagnostics.summarize_notable_diagnostics([

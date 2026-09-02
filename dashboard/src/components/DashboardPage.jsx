@@ -8,13 +8,21 @@ import {
   Rss,
   Users,
   TrendingUp,
-  AlertTriangle,
   CheckCircle2,
   ShieldAlert,
   History,
   ChevronLeft,
   ChevronRight,
+  Globe2,
+  Search,
+  AtSign,
+  MessageCircle,
+  Send,
+  Link2,
+  PackageOpen,
+  Layers3,
 } from 'lucide-react';
+import ErrorNotice from './ErrorNotice';
 import {
   ResponsiveContainer,
   LineChart,
@@ -72,6 +80,65 @@ function RunsChart({ runs }) {
 }
 
 const SOURCE_PAGE_SIZE = 5;
+const ATTENTION_PAGE_SIZE = 1;
+
+const PLATFORM_ICONS = {
+  rss: Rss,
+  web: Globe2,
+  keyword: Search,
+  twitter: AtSign,
+  reddit: MessageCircle,
+  telegram: Send,
+  linkedin: Link2,
+  other: PackageOpen,
+};
+
+function PlatformBreakdown({ items, totalArticles }) {
+  if (!items.length) {
+    return (
+      <div className="admin-empty-state">
+        <div className="admin-empty-state-icon">
+          <Layers3 size={20} />
+        </div>
+        <strong>No platform data yet</strong>
+        <p>Platform totals will appear once sources are configured.</p>
+      </div>
+    );
+  }
+
+  const total = Math.max(0, Number(totalArticles) || 0);
+
+  return (
+    <div className="dashboard-platform-grid">
+      {items.map((item) => {
+        const Icon = PLATFORM_ICONS[item.platform] || Layers3;
+        const count = Math.max(0, Number(item.count) || 0);
+        const sourceCount = Math.max(0, Number(item.source_count) || 0);
+        const share = total > 0 ? (count / total) * 100 : 0;
+        const shareLabel = share > 0 && share < 0.1 ? '<0.1%' : `${share.toFixed(1)}%`;
+
+        return (
+          <div className="dashboard-platform-card" key={item.platform}>
+            <div className="dashboard-platform-card-top">
+              <span className="dashboard-platform-icon" aria-hidden="true">
+                <Icon size={17} />
+              </span>
+              <span className="dashboard-platform-share">{shareLabel}</span>
+            </div>
+            <span className="dashboard-platform-name">{item.label || item.platform}</span>
+            <strong className="dashboard-platform-count">{count.toLocaleString()}</strong>
+            <span className="dashboard-platform-meta">
+              {sourceCount.toLocaleString()} configured source{sourceCount === 1 ? '' : 's'}
+            </span>
+            <div className="dashboard-platform-track" aria-label={`${shareLabel} of project articles`}>
+              <span style={{ width: `${Math.min(100, share)}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function SourceBreakdown({ items }) {
   const [page, setPage] = useState(0);
@@ -140,7 +207,9 @@ function SourceBreakdown({ items }) {
   );
 }
 
-function AttentionList({ items, healthyLabel, renderItem }) {
+function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginationLabel = 'Attention list pagination' }) {
+  const [page, setPage] = useState(0);
+
   if (!items.length) {
     return (
       <div className="admin-empty-state">
@@ -152,7 +221,40 @@ function AttentionList({ items, healthyLabel, renderItem }) {
     );
   }
 
-  return <div className="report-insight-list">{items.map(renderItem)}</div>;
+  const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(items.length / pageSize)) : 1;
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageItems = pageSize > 0
+    ? items.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+    : items;
+
+  return (
+    <div className="dashboard-attention-list">
+      <div className="report-insight-list">{pageItems.map(renderItem)}</div>
+      {totalPages > 1 ? (
+        <div className="dashboard-source-pagination" role="navigation" aria-label={paginationLabel}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={14} /> Prev
+          </button>
+          <span className="dashboard-source-pagination-label">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
+            disabled={currentPage >= totalPages - 1}
+          >
+            Next <ChevronRight size={14} />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function DashboardPage({ projects = [], projectId = null }) {
@@ -265,13 +367,7 @@ export default function DashboardPage({ projects = [], projectId = null }) {
           <Link to="/projects" className="btn-secondary">Go to Projects</Link>
         </div>
       ) : error ? (
-        <div className="glass-card admin-empty-state report-error-state">
-          <div className="admin-empty-state-icon">
-            <AlertTriangle size={20} />
-          </div>
-          <strong>Couldn't load this project's dashboard</strong>
-          <p>{error}</p>
-        </div>
+        <ErrorNotice error={error} context="load this project's dashboard" onRetry={() => loadSummary(selectedId)} />
       ) : (
         <div className="report-body">
           <div className="admin-stats-grid dashboard-stats-grid">
@@ -328,6 +424,24 @@ export default function DashboardPage({ projects = [], projectId = null }) {
             <RunsChart runs={summary?.runs || []} />
           </div>
 
+          <div className="glass-card report-section">
+            <div className="report-section-header">
+              <div className="report-section-heading">
+                <span className="report-section-icon">
+                  <Layers3 size={16} />
+                </span>
+                <h3 className="report-section-title">Articles by platform</h3>
+              </div>
+              <p className="report-section-caption">
+                How each configured collection platform contributes to this project's articles.
+              </p>
+            </div>
+            <PlatformBreakdown
+              items={summary?.articles_by_platform || []}
+              totalArticles={summary?.totals?.articles || 0}
+            />
+          </div>
+
           <div className="report-section-row dashboard-paired-row">
             <div className="glass-card report-section">
               <div className="report-section-header">
@@ -353,18 +467,41 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <p className="report-section-caption">Sources that were blocked, errored, or returned nothing on the last run.</p>
               </div>
               <AttentionList
+                key={selectedId}
                 items={summary?.sources_needing_attention || []}
                 healthyLabel="All sources came back healthy on the last run"
-                renderItem={(item) => (
-                  <div className="report-insight-card tone-negative" key={item.source_url || item.source}>
+                pageSize={ATTENTION_PAGE_SIZE}
+                paginationLabel="Sources needing attention pagination"
+                renderItem={(item) => {
+                  const issue = item.issue || {
+                    title: 'Source needs attention',
+                    message: item.reason,
+                    action: 'Review the source configuration and try again.',
+                    severity: 'warning',
+                    technical_detail: item.reason,
+                  };
+                  return (
+                  <div className={`report-insight-card ${issue.severity === 'error' ? 'tone-negative' : 'tone-warning'}`} key={item.source_url || item.source}>
                     <div className="report-insight-card-top">
                       <div className="report-insight-card-copy">
                         <p className="report-insight-card-text">{item.source}</p>
-                        <span className="dashboard-attention-reason">{item.reason}</span>
+                        <strong className="dashboard-attention-title">{issue.title}</strong>
+                        <span className="dashboard-attention-reason">{issue.message}</span>
+                        <span className="dashboard-attention-action">{issue.action}</span>
+                        <div className="dashboard-attention-controls">
+                          <Link className="dashboard-attention-link" to="/sources">Review sources</Link>
+                          {issue.technical_detail ? (
+                            <details className="dashboard-attention-details">
+                              <summary>Technical details</summary>
+                              <p>{issue.technical_detail}</p>
+                            </details>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                }}
               />
             </div>
           </div>
@@ -391,7 +528,7 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                         <div className="report-insight-card-tags">
                           {competitor.sources.map((source, index) => (
                             <span className="report-insight-card-tag muted" key={`${competitor.id}-${index}`}>
-                              {source.platform}: {source.reason}
+                              {source.platform}: {source.issue?.title || source.reason}
                             </span>
                           ))}
                         </div>

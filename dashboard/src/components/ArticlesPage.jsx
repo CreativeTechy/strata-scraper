@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, Layers, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import ImportOptionsModal from './articles/ImportOptionsModal.jsx';
 import ExportOptionsModal from './articles/ExportOptionsModal.jsx';
 import { useAuth } from '../auth/useAuth.js';
+import { userFacingError } from '../errors/userFacingError.js';
 import '../styles/Articles.css';
 
 const SORT_OPTIONS = [
@@ -90,7 +92,7 @@ function ImportProgressBanner({ run, onDismiss }) {
           <ul className="articles-import-errors">
             {run.errors.slice(0, 5).map((item) => (
               <li key={item.line}>
-                Line {item.line}: {item.error}
+                Line {item.line}: {userFacingError(item.error, { context: 'import this article' }).message}
               </li>
             ))}
             {run.errors.length > 5 ? <li>and {run.errors.length - 5} more...</li> : null}
@@ -839,12 +841,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
           </div>
         </div>
 
-        {error ? (
-          <div className="glass-card articles-error-banner">
-            <AlertTriangle size={18} />
-            <span>{error}</span>
-          </div>
-        ) : null}
+        <ErrorNotice error={error} context="load or manage articles" onDismiss={() => setError('')} />
 
         {importRun ? <ImportProgressBanner run={importRun} onDismiss={() => setImportRun(null)} /> : null}
 

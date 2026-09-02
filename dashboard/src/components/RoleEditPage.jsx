@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Pencil, ShieldAlert, ArrowLeft } from 'lucide-react';
 import RoleForm from './RoleForm';
+import ErrorNotice from './ErrorNotice';
 
 // Edit-only: loads one existing role and its permission set and saves changes
 // back to it. Creating a new role lives in RoleCreatePage.
@@ -75,7 +76,7 @@ export default function RoleEditPage() {
               <ShieldAlert size={18} />
             </div>
             <strong>Role not found</strong>
-            <span>{loadError || 'It may have been removed, or you may not have access to it.'}</span>
+            <ErrorNotice error={loadError || 'Role not found.'} context="load this role" compact />
             <Link to="/admin/roles" className="btn-primary" style={{ marginTop: 8, textDecoration: 'none' }}>
               <ArrowLeft size={16} /> Back to Roles
             </Link>
@@ -97,11 +98,7 @@ export default function RoleEditPage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="panel-chip" style={{ background: '#fde2e2', color: '#9c1c1c', marginBottom: 16 }}>
-          {loadError}
-        </div>
-      )}
+      <ErrorNotice error={loadError} context="load this role" />
 
       {loading && (
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-light)' }}>

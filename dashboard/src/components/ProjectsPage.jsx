@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import { useAuth } from '../auth/useAuth.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
 import '../styles/Projects.css';
@@ -279,22 +280,7 @@ function normalizeDraftForCompare(value) {
 }
 
 function ErrorBanner({ message }) {
-  if (!message) return null;
-  return (
-    <div
-      style={{
-        padding: '12px 14px',
-        borderRadius: 14,
-        background: 'rgba(255, 71, 87, 0.08)',
-        border: '1px solid rgba(255, 71, 87, 0.16)',
-        color: '#b42318',
-        fontSize: '0.84rem',
-        lineHeight: 1.5,
-      }}
-    >
-      {message}
-    </div>
-  );
+  return <ErrorNotice error={message} context="update this project" compact />;
 }
 
 function TermChipsField({ label, placeholder, values, onChange, options = [], disabled, hint }) {
@@ -1875,21 +1861,7 @@ export default function ProjectsPage({
                       onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, name: e.target.value }))}
                       disabled={isCreatingSource}
                     />
-                    {newSourceError && (
-                      <div
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 12,
-                          background: 'rgba(255, 71, 87, 0.08)',
-                          border: '1px solid rgba(255, 71, 87, 0.16)',
-                          color: '#b42318',
-                          fontSize: '0.82rem',
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        {newSourceError}
-                      </div>
-                    )}
+                    <ErrorNotice error={newSourceError} context="add this source" compact />
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button
                         type="button"

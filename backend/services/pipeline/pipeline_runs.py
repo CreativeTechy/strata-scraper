@@ -4,6 +4,7 @@ import uuid
 
 from app.core import settings as config
 from app.core import db
+from services.pipeline.source_diagnostics import classify_fetch_issue
 
 
 RUN_COLUMNS = "id,pipeline,project_id,status,stage,message,articles_scraped,articles_cleaned,articles_saved,crawl_pages,error,started_at,finished_at,cancel_requested_at,cancelled_at,has_detail,scrape_started_at,scrape_finished_at,clean_started_at,clean_finished_at,created_at,updated_at"
@@ -52,6 +53,13 @@ def _normalize(row):
 
 
 def _normalize_source_stat(row):
+    fetch_note = row.get("fetch_note") or ""
+    issue = classify_fetch_issue(
+        fetch_note,
+        http_status=row.get("http_status"),
+        network_blocked=bool(row.get("network_blocked")),
+        source_type=row.get("source_type"),
+    )
     return {
         "source": row.get("source"),
         "source_url": row.get("source_url"),
@@ -68,7 +76,8 @@ def _normalize_source_stat(row):
         # network_blocked rather than a name that could be confused with it.
         "http_status": row.get("http_status"),
         "network_blocked": bool(row.get("network_blocked")),
-        "fetch_note": row.get("fetch_note") or "",
+        "fetch_note": fetch_note,
+        "issue": issue,
     }
 
 
@@ -260,11 +269,13 @@ def get_pipeline_run_sources(run_id):
     try:
         rows = db.fetch_all(
             """
-            select source, source_url, scraped, duplicate, content_filtered, date_filtered, skipped_existing, kept, saved,
-                   http_status, network_blocked, fetch_note
-            from pipeline_run_sources
-            where run_id = %s
-            order by scraped desc, source asc
+            select prs.source, prs.source_url, prs.scraped, prs.duplicate, prs.content_filtered,
+                   prs.date_filtered, prs.skipped_existing, prs.kept, prs.saved,
+                   prs.http_status, prs.network_blocked, prs.fetch_note, s.source_type
+            from pipeline_run_sources prs
+            left join sources s on s.url = prs.source_url
+            where prs.run_id = %s
+            order by prs.scraped desc, prs.source asc
             """,
             (run_id,),
         )

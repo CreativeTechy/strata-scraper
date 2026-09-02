@@ -51,6 +51,10 @@ class RunActorSyncTests(unittest.TestCase):
             called_url = mock_post.call_args.args[0]
             self.assertIn("apidojo~tweet-scraper", called_url)
             self.assertIn("ds1", mock_get.call_args.args[0])
+            self.assertEqual(mock_post.call_args.kwargs["headers"], {"Authorization": "Bearer token"})
+            self.assertNotIn("params", mock_post.call_args.kwargs)
+            self.assertEqual(mock_get.call_args.kwargs["headers"], {"Authorization": "Bearer token"})
+            self.assertNotIn("params", mock_get.call_args.kwargs)
 
     def test_polls_until_terminal_before_fetching_dataset(self):
         start_response = _response({"data": {"id": "run1", "status": "READY"}})

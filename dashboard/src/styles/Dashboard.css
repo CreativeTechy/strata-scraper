@@ -13,6 +13,98 @@
   height: 260px;
 }
 
+.dashboard-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-platform-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.dashboard-platform-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dashboard-platform-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--secondary-color);
+  background: rgba(46, 134, 222, 0.12);
+}
+
+.dashboard-platform-share {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.dashboard-platform-name,
+.dashboard-platform-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-platform-name {
+  color: var(--text-dark);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.dashboard-platform-count {
+  display: block;
+  margin: 3px 0;
+  color: var(--text-dark);
+  font-size: 1.55rem;
+  line-height: 1.15;
+}
+
+.dashboard-platform-meta {
+  color: var(--text-light);
+  font-size: 0.75rem;
+}
+
+.dashboard-platform-track {
+  height: 5px;
+  margin-top: 13px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.07);
+}
+
+.dashboard-platform-track > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+}
+
+@media (max-width: 640px) {
+  .dashboard-platform-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-platform-card {
+    padding: 13px;
+  }
+}
+
 .dashboard-source-list {
   display: flex;
   flex-direction: column;
@@ -71,9 +163,62 @@
 }
 
 .dashboard-attention-reason {
+  display: block;
   color: var(--text-light);
   font-size: 0.85rem;
   line-height: 1.5;
+}
+
+.dashboard-attention-title {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-dark);
+  font-size: 0.88rem;
+}
+
+.dashboard-attention-action {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-dark);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.dashboard-attention-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.dashboard-attention-link,
+.dashboard-attention-details summary {
+  color: var(--secondary-color);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dashboard-attention-link {
+  text-decoration: none;
+}
+
+.dashboard-attention-details {
+  min-width: 0;
+  flex: 1 1 100%;
+}
+
+.dashboard-attention-details p {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.045);
+  color: var(--text-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* "Articles by source" and "Sources needing attention" sit side by side and

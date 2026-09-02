@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeft, Check, ChevronRight, Download, Link2, Plus, Radar,
+  ArrowLeft, Check, ChevronRight, Download, Link2, Plus, Radar,
   Search, Sparkles, Trash2,
 } from 'lucide-react';
 import {
@@ -21,6 +21,7 @@ import {
 import { countryLabel } from '../constants/countries.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import { AddCompetitorForm, AddSourceRow, AliasEditor } from './CompetitorSourceEditor.jsx';
 import { DiscoveryLog } from './CompetitorOnboarding.jsx';
 import '../styles/Competitors.css';
@@ -339,10 +340,7 @@ export default function CompetitorsListPage() {
   if (loadError || !study) {
     return (
       <div className="cs-page">
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{loadError || 'Study not found.'}</span>
-        </div>
+        <ErrorNotice error={loadError || 'Study not found.'} context="load this competitor study" />
         <Link to="/competitors" className="cs-btn" style={{ marginTop: 14 }}>
           <ArrowLeft size={15} /> Back to studies
         </Link>
@@ -391,11 +389,7 @@ export default function CompetitorsListPage() {
         <DiscoveryLog logs={discoveryLogs} active={discoveringCompetitors || discoveringChannels} />
       ) : null}
 
-      {actionError ? (
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{actionError}</span>
-        </div>
-      ) : null}
+      <ErrorNotice error={actionError} context="update competitors" onDismiss={() => setActionError('')} />
 
       {discoveryNotice ? (
         <div className="cs-alert cs-alert-info">
