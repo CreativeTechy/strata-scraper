@@ -51,6 +51,7 @@ from scraper.apify_linkedin import (
     linkedin_kind,
     linkedin_search_query,
 )
+from scraper.apify_twitter import apify_twitter_search_posts
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
 from services.pipeline.pipeline_runs import update_pipeline_run
@@ -321,6 +322,27 @@ class SourceRssSpider(scrapy.Spider):
                 self._push_progress()
                 continue
 
+            if source_type == "tweet":
+                # A single tracked tweet/post - the exact post is already
+                # known (sources_store._derive_tweet_url only ever stores a
+                # real status URL), so this hydrates it directly via
+                # fxtwitter.com the same way _yield_article does for any
+                # tweet URL reached while crawling, rather than issuing a
+                # Scrapy request for the tweet's own (JS-rendered) HTML page.
+                tweet = self._hydrate_tweet(url)
+                if not tweet:
+                    self._note_source_status(
+                        source_name, url,
+                        note="Could not fetch this tweet (deleted, private/protected, or fxtwitter.com is unavailable).",
+                    )
+                    continue
+                tweet["source_name"] = source_name
+                self.logger.info("Tweet source %r -> 1 post via fxtwitter", source_name)
+                self._progress_articles += 1
+                yield tweet
+                self._push_progress()
+                continue
+
             fetch_url = url
             if source_type == "reddit":
                 fetch_url = (
@@ -346,12 +368,15 @@ class SourceRssSpider(scrapy.Spider):
                     # "keyword", a Google News RSS search feed - see
                     # sources_store._derive_term_url) the publisher already
                     # intends for aggregation, so robots.txt is skipped for
-                    # them too. "web" sources crawl arbitrary same-domain
-                    # pages beyond any feed (see parse_page's follow_links),
-                    # which is exactly what robots.txt is meant to scope, so
-                    # it stays honored there.
+                    # them too. "web" is included as well: since "social" was
+                    # removed as its own type, a platform this app has no
+                    # dedicated scraping tier for (Facebook, Instagram,
+                    # TikTok, YouTube, Threads, ...) is now just a "web"
+                    # source (see config._infer_source_type) - most of these
+                    # disallow bots in their own robots.txt, so honoring it
+                    # would mean never even attempting the fetch.
                     "dont_obey_robotstxt": source_type in {
-                        "social", "username", "hashtag", "reddit", "telegram", "rss", "keyword",
+                        "username", "hashtag", "reddit", "telegram", "rss", "keyword", "web",
                     },
                     # The telegram parser needs to see a raw redirect (private/
                     # missing channel) as its own status, not silently follow
@@ -427,44 +452,78 @@ class SourceRssSpider(scrapy.Spider):
                         },
                     )
 
-            if source_type == "hashtag" and config.google_cse_configured():
+            if source_type == "keyword" and config.apify_configured():
+                # Apify tweet-search tier: none of the tiers above (Google
+                # News RSS, GDELT, general-web CSE) ever surface X/Twitter
+                # content - X blocks generic web crawlers and most of its own
+                # indexing. Apify's hosted tweet-search actor returns full
+                # tweet text directly in its dataset, so unlike the hashtag
+                # CSE tier below, this yields articles straight away rather
+                # than a URL to hydrate via fxtwitter.com.
+                apify_tweets = apify_twitter_search_posts(source_name, url, source_name)
+                if apify_tweets:
+                    self.logger.info(
+                        "Keyword %r -> %d tweet(s) via Apify", source_name, len(apify_tweets)
+                    )
+                for tweet in apify_tweets:
+                    self._progress_articles += 1
+                    yield tweet
+
+            if source_type == "hashtag":
                 # A hashtag page (x.com/hashtag/<tag>) is itself a
                 # client-rendered shell with no tweets or links in its raw
                 # HTML (confirmed by hand against the live site - unlike a
                 # profile page, X does not server-render anything there for
                 # crawlers), so there's nothing to follow from the seed
-                # request in parse_social_page below. Instead, ask Google CSE
-                # for individual tweet URLs mentioning the hashtag and only
-                # follow the ones that are actual /status/ links - each then
-                # goes through the same fxtwitter hydration path
-                # (_yield_article/_hydrate_tweet) already used for tweets
-                # discovered via a profile page. Best-effort and often sparse
-                # (X blocks most of its own site from being indexed - see
-                # x.com/robots.txt), but it is the only way left to discover
-                # tweets for a hashtag without X API access.
+                # request in parse_social_page below. Two independent
+                # best-effort tiers make up for that instead, each gated on
+                # its own config and neither depending on the other:
                 tag = url.rsplit("/hashtag/", 1)[-1].strip("/") or source_name
-                cse_results = google_cse_search(f'"#{tag}" (site:x.com OR site:twitter.com)')
-                tweet_urls = [
-                    (result.get("url") or "").strip()
-                    for result in cse_results
-                    if TWEET_STATUS_RE.search(result.get("url") or "")
-                ]
-                if tweet_urls:
-                    self.logger.info(
-                        "Hashtag %r -> %d tweet link(s) via Google CSE", source_name, len(tweet_urls)
-                    )
-                for tweet_url in tweet_urls:
-                    yield scrapy.Request(
-                        tweet_url,
-                        callback=self.parse_article,
-                        meta={
-                            "source_url": url,
-                            "source_type": "social",
-                            "source_name": source_name,
-                            "dont_obey_robotstxt": True,
-                            **proxy_meta("social"),
-                        },
-                    )
+
+                if config.google_cse_configured():
+                    # Ask Google CSE for individual tweet URLs mentioning the
+                    # hashtag and only follow the ones that are actual
+                    # /status/ links - each then goes through the same
+                    # fxtwitter hydration path (_yield_article/_hydrate_tweet)
+                    # already used for tweets discovered via a profile page.
+                    # Often sparse (X blocks most of its own site from being
+                    # indexed - see x.com/robots.txt).
+                    cse_results = google_cse_search(f'"#{tag}" (site:x.com OR site:twitter.com)')
+                    tweet_urls = [
+                        (result.get("url") or "").strip()
+                        for result in cse_results
+                        if TWEET_STATUS_RE.search(result.get("url") or "")
+                    ]
+                    if tweet_urls:
+                        self.logger.info(
+                            "Hashtag %r -> %d tweet link(s) via Google CSE", source_name, len(tweet_urls)
+                        )
+                    for tweet_url in tweet_urls:
+                        yield scrapy.Request(
+                            tweet_url,
+                            callback=self.parse_article,
+                            meta={
+                                "source_url": url,
+                                "source_type": "tweet",
+                                "source_name": source_name,
+                                "dont_obey_robotstxt": True,
+                                **proxy_meta("tweet"),
+                            },
+                        )
+
+                if config.apify_configured():
+                    # Apify's hosted tweet-search actor, queried directly for
+                    # the hashtag - full tweet text comes back in the
+                    # actor's own dataset, so these are yielded as articles
+                    # straight away rather than URLs to hydrate.
+                    apify_tweets = apify_twitter_search_posts(f"#{tag}", url, source_name)
+                    if apify_tweets:
+                        self.logger.info(
+                            "Hashtag %r -> %d tweet(s) via Apify", source_name, len(apify_tweets)
+                        )
+                    for tweet in apify_tweets:
+                        self._progress_articles += 1
+                        yield tweet
         self._push_progress(force=True)
 
     def start_requests(self):
@@ -559,7 +618,7 @@ class SourceRssSpider(scrapy.Spider):
                 yield request
             return
 
-        if source_type in {"social", "username", "hashtag"}:
+        if source_type in {"username", "hashtag"}:
             for request in self.parse_social_page(response):
                 yield request
             return
@@ -735,7 +794,7 @@ class SourceRssSpider(scrapy.Spider):
         self._push_progress()
         self.logger.info("Social page %s -> extracting", response.url)
 
-        source_type = (response.meta.get("source_type") or "social").strip().lower()
+        source_type = (response.meta.get("source_type") or "").strip().lower()
         source_name = response.meta.get("source_name")
         source_url = response.meta.get("source_url")
 
@@ -758,23 +817,28 @@ class SourceRssSpider(scrapy.Spider):
                     # See parse_feed's comment above - keep the configured
                     # source's own URL, not this page's URL.
                     "source_url": response.meta.get("source_url"),
-                    "source_type": "social",
+                    "source_type": "tweet",
                     "source_name": response.meta.get("source_name"),
                     "dont_obey_robotstxt": True,
                 },
             )
 
-        if source_type == "hashtag" and not seen and not config.google_cse_configured():
+        if (
+            source_type == "hashtag"
+            and not seen
+            and not config.google_cse_configured()
+            and not config.apify_configured()
+        ):
             # Unlike a profile page (x.com/<handle>), which X still
             # server-renders a few /status/ links into for crawlers/SEO, a
             # hashtag/search page (x.com/hashtag/<tag>) is a pure
             # client-rendered shell with zero tweet content in the raw HTML -
-            # confirmed by hand against the live site. Without Google CSE
-            # configured (see start()'s hashtag tier, which discovers tweet
-            # links a different way), there's nothing left that can find
-            # tweets for this source, so this is worth calling out as a
+            # confirmed by hand against the live site. Without Google CSE or
+            # Apify configured (see start()'s hashtag tiers, which discover/
+            # fetch tweets two other ways), there's nothing left that can
+            # find tweets for this source, so this is worth calling out as a
             # known limitation rather than a transient fetch failure. Once
-            # CSE is configured this note no longer fires - the CSE tier's
+            # either is configured this note no longer fires - that tier's
             # own results (or lack thereof) speak for themselves via the
             # normal scraped-count diagnostics.
             self._note_source_status(
@@ -783,8 +847,8 @@ class SourceRssSpider(scrapy.Spider):
                 note=(
                     "X hashtag pages are rendered client-side after login and expose no "
                     "tweets to an unauthenticated crawler. Configure GOOGLE_CSE_API_KEY/"
-                    "GOOGLE_CSE_ENGINE_ID to discover tweet links via search instead, or "
-                    "try an X profile/username source."
+                    "GOOGLE_CSE_ENGINE_ID or APIFY_API_TOKEN to discover/fetch tweets via "
+                    "search instead, or try an X profile/username source."
                 ),
             )
 

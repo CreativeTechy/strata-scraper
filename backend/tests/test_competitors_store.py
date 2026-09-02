@@ -37,6 +37,53 @@ class NormalizeSourceUrlTests(unittest.TestCase):
         self.assertIsNone(competitors_store.normalize_source_url("https://localhost"))
 
 
+class PlatformSourceTypeTests(unittest.TestCase):
+    """No generic "social" source_type any more (see config._infer_source_type) -
+    an "x" account resolves to "username", and platforms with no dedicated
+    scraping tier (Facebook/Instagram/YouTube) resolve to "web"."""
+
+    def test_x_resolves_to_username(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["x"], "username")
+
+    def test_facebook_instagram_youtube_resolve_to_web(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["facebook"], "web")
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["instagram"], "web")
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["youtube"], "web")
+
+    def test_tweet_resolves_to_tweet(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["tweet"], "tweet")
+
+    def test_social_is_not_a_known_value_but_still_falls_back_to_web(self):
+        self.assertNotIn("social", competitors_store.PLATFORM_SOURCE_TYPE.values())
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE.get("social", "web"), "web")
+
+    def test_unrecognized_platform_defaults_to_web(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE.get("not-a-real-platform", "web"), "web")
+
+
+class ResolveAccountUrlTests(unittest.TestCase):
+    def test_term_platforms_derive_from_handle(self):
+        self.assertEqual(competitors_store.resolve_account_url("username", "", "elonmusk"), "https://x.com/elonmusk")
+        self.assertEqual(competitors_store.resolve_account_url("hashtag", "", "EVSummit"), "https://x.com/hashtag/EVSummit")
+
+    def test_tweet_platform_derives_and_validates_a_status_url(self):
+        self.assertEqual(
+            competitors_store.resolve_account_url("tweet", "https://x.com/elonmusk/status/123", ""),
+            "https://x.com/elonmusk/status/123",
+        )
+
+    def test_tweet_platform_rejects_a_non_status_url(self):
+        self.assertIsNone(competitors_store.resolve_account_url("tweet", "https://x.com/elonmusk", ""))
+
+    def test_reddit_and_telegram_still_derive_as_before(self):
+        self.assertEqual(competitors_store.resolve_account_url("reddit", "r/test", ""), "https://www.reddit.com/r/test")
+        self.assertEqual(competitors_store.resolve_account_url("telegram", "@somechannel", ""), "https://t.me/s/somechannel")
+
+    def test_other_platforms_fall_back_to_plain_url_normalization(self):
+        self.assertEqual(competitors_store.resolve_account_url("web", "example.com", ""), "https://example.com")
+        self.assertEqual(competitors_store.resolve_account_url("facebook", "facebook.com/acme", ""), "https://facebook.com/acme")
+
+
 class ExportCompetitorsTests(unittest.TestCase):
     """export_competitors() feeds GET /api/competitors/export - the handoff
     that lets an analysis app skip re-guessing a competitor list this app

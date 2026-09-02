@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, quote_plus, urlparse
 
 from app.core import settings as config
 from app.core import db
+from content_guard import TWEET_STATUS_RE
 from services.projects.projects_store import set_source_projects, list_source_project_ids
 from ssrf_guard import check_url_is_safe
 
@@ -53,6 +54,23 @@ def _derive_term_url(source_type, term):
         # way as any other RSS source.
         return f"https://news.google.com/rss/search?q={quote_plus(text)}"
     return ""
+
+
+def _derive_tweet_url(term):
+    """Canonicalize a single tracked tweet/post - unlike hashtag/keyword/
+    username above, there is no bare term to derive a URL from: the user
+    supplies the actual tweet URL directly (like reddit/telegram/linkedin's
+    URL field), and this just validates it's really a status link and
+    normalizes it to the x.com/<handle>/status/<id> shape the spider's
+    TWEET_STATUS_RE/_hydrate_tweet expect (see source_rss.py's start()).
+    Returns "" for anything that isn't a recognizable tweet URL, same
+    reject-don't-silently-save contract as the reddit/telegram/linkedin
+    derivers."""
+    match = TWEET_STATUS_RE.search((term or "").strip())
+    if not match:
+        return ""
+    handle, tweet_id = match.groups()
+    return f"https://x.com/{handle}/status/{tweet_id}"
 
 
 def _derive_reddit_url(term, kind=None):
@@ -223,6 +241,11 @@ def _upsert_payload(source, default_limited=True):
         # articles later (Apify's actors only accept linkedin.com URLs/queries).
         linkedin_kind = str(source.get("linkedin_kind") or "").strip().lower()
         url = _derive_linkedin_url(url or name, linkedin_kind)
+    elif source_type_input == "tweet" and (url or name):
+        # Same reasoning as reddit/telegram/linkedin above - anything that
+        # isn't really a tweet/status URL must be rejected here, not saved
+        # as-is only to silently fail to hydrate later.
+        url = _derive_tweet_url(url or name)
 
     source_type = config._resolve_source_type(source_type_input, url)
     return {

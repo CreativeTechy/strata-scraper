@@ -24,15 +24,17 @@ import '../styles/ProjectDetail.css';
 
 const SOURCES_PAGE_SIZE = 3;
 
+// No "Social" option - see SourcesPage.jsx's SOURCE_TYPE_OPTIONS comment.
 const SOURCE_TYPE_OPTIONS = [
   { value: 'rss', label: 'RSS' },
   { value: 'web', label: 'Web' },
-  { value: 'social', label: 'Social' },
   { value: 'hashtag', label: 'Hashtag' },
   { value: 'keyword', label: 'Keyword' },
   { value: 'username', label: 'X Account' },
+  { value: 'tweet', label: 'Single Post' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'linkedin', label: 'LinkedIn' },
 ];
 
 const SOURCE_ASSIGN_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];

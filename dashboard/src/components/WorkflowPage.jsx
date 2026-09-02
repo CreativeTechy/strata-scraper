@@ -28,7 +28,7 @@ import {
 import '../styles/Workflow.css';
 
 const SourceTypeIcon = ({ sourceType }) => {
-  if (sourceType === 'x' || sourceType === 'username' || sourceType === 'hashtag') return <AtSign size={16} />;
+  if (sourceType === 'x' || sourceType === 'username' || sourceType === 'hashtag' || sourceType === 'tweet') return <AtSign size={16} />;
   if (sourceType === 'facebook') return <Share2 size={16} />;
   return <Globe size={16} />;
 };

@@ -67,9 +67,12 @@ class RedditTelegramSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._infer_source_type("https://t.me/s/somechannel"), "telegram")
         self.assertEqual(config._infer_source_type("https://telegram.me/somechannel"), "telegram")
 
-    def test_other_social_urls_still_infer_as_social_not_reddit(self):
-        self.assertEqual(config._infer_source_type("https://x.com/someone"), "social")
-        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "social")
+    def test_other_social_urls_do_not_infer_as_reddit(self):
+        # No generic "social" bucket any more (see TwitterSourceTypeTests) -
+        # x.com resolves to its own concrete type, and a platform with no
+        # dedicated scraping tier (Facebook) falls through to "web".
+        self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
+        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
 
     def test_explicit_reddit_and_telegram_types_are_trusted(self):
         self.assertEqual(config._resolve_source_type("reddit", "https://www.reddit.com/r/test"), "reddit")
@@ -87,6 +90,43 @@ class RedditTelegramSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._resolve_source_type("keyword", "https://news.google.com/rss/search?q=ev"), "keyword")
 
 
+class TwitterSourceTypeTests(unittest.TestCase):
+    """hashtag/username/tweet source-type inference and resolution - no
+    generic "social" bucket exists any more (see _resolve_source_type's
+    docstring): an x.com/twitter.com URL resolves straight to whichever of
+    these three it actually is."""
+
+    def test_hashtag_urls_are_inferred_as_hashtag(self):
+        self.assertEqual(config._infer_source_type("https://x.com/hashtag/EVSummit"), "hashtag")
+        self.assertEqual(config._infer_source_type("https://twitter.com/hashtag/EVSummit"), "hashtag")
+
+    def test_status_urls_are_inferred_as_tweet(self):
+        self.assertEqual(config._infer_source_type("https://x.com/elonmusk/status/12345"), "tweet")
+        self.assertEqual(config._infer_source_type("https://twitter.com/elonmusk/status/12345"), "tweet")
+
+    def test_bare_profile_urls_are_inferred_as_username(self):
+        self.assertEqual(config._infer_source_type("https://x.com/elonmusk"), "username")
+
+    def test_any_entry_gets_reassigned_to_the_url_s_real_platform(self):
+        # The example that motivated this: picking "Reddit" but pasting a
+        # twitter.com URL should not create an uncrawlable "reddit" source.
+        self.assertEqual(config._resolve_source_type("reddit", "https://x.com/someone"), "username")
+        self.assertEqual(config._resolve_source_type("reddit", "https://x.com/someone/status/123"), "tweet")
+        self.assertEqual(config._resolve_source_type("web", "https://x.com/hashtag/ev"), "hashtag")
+        self.assertEqual(config._resolve_source_type("linkedin", "https://t.me/s/somechannel"), "telegram")
+        # Even within Twitter/X itself: picking "Single post" but pasting a
+        # plain profile URL corrects to "username".
+        self.assertEqual(config._resolve_source_type("tweet", "https://x.com/someone"), "username")
+
+    def test_uncrawlable_social_platforms_are_not_reassigned_away_from_web_or_rss(self):
+        # Facebook/Instagram/TikTok/YouTube/Threads have no dedicated type to
+        # promote to - "web" is correct and final, and an explicit "rss" pick
+        # (e.g. a homepage URL saved for parse_homepage to discover its feed)
+        # is left alone rather than getting flipped to "web".
+        self.assertEqual(config._resolve_source_type("web", "https://www.facebook.com/someone"), "web")
+        self.assertEqual(config._resolve_source_type("rss", "https://www.facebook.com/someone"), "rss")
+
+
 class LinkedinSourceTypeTests(unittest.TestCase):
     """linkedin source-type inference and resolution (config.py's half of the
     feature - see services/sources/sources_store.py for URL derivation and
@@ -96,9 +136,9 @@ class LinkedinSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._infer_source_type("https://www.linkedin.com/company/google"), "linkedin")
         self.assertEqual(config._infer_source_type("https://linkedin.com/in/satyanadella"), "linkedin")
 
-    def test_other_social_urls_still_infer_as_social_not_linkedin(self):
-        self.assertEqual(config._infer_source_type("https://x.com/someone"), "social")
-        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "social")
+    def test_other_social_urls_do_not_infer_as_linkedin(self):
+        self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
+        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
 
     def test_explicit_linkedin_type_is_trusted(self):
         self.assertEqual(config._resolve_source_type("linkedin", "https://www.linkedin.com/company/google"), "linkedin")

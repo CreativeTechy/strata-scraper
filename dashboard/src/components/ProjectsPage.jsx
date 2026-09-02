@@ -30,13 +30,19 @@ const emptyNewSourceDraft = {
   linkedin_kind: 'company',
 };
 
+// No "Social" option - the backend has no dedicated scraping tier for
+// Facebook/Instagram/TikTok/YouTube/Threads/etc, so a URL on any of those
+// platforms is just stored (and crawled) as a "web" source instead (see
+// backend/app/core/settings.py's _infer_source_type/_resolve_source_type,
+// which reassigns any entered URL to its real platform type regardless of
+// what was picked here).
 const SOURCE_TYPE_OPTIONS = [
   { value: 'rss', label: 'RSS' },
   { value: 'web', label: 'Web' },
-  { value: 'social', label: 'Social' },
   { value: 'hashtag', label: 'Hashtag' },
   { value: 'keyword', label: 'Keyword' },
   { value: 'username', label: 'X Account' },
+  { value: 'tweet', label: 'Single Post' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
   { value: 'linkedin', label: 'LinkedIn' },
@@ -44,20 +50,58 @@ const SOURCE_TYPE_OPTIONS = [
 
 const TERM_SOURCE_TYPES = new Set(['hashtag', 'keyword', 'username']);
 
+// hashtag/username/tweet grouped under the "Twitter/X" tab - a superset of
+// TERM_SOURCE_TYPES, which only governs the term-vs-URL field choice below
+// (tweet keeps the URL field, like reddit/telegram/linkedin, since a tweet
+// has no bare-term short form). "keyword" is deliberately NOT included here:
+// its stored URL/primary crawl is a Google News RSS search
+// (sources_store._derive_term_url), not an X/Twitter search - the Apify
+// tweet-search tier it also gets (scraper/apify_twitter.py) is one of
+// several tiers, not what the source actually is, so grouping it under
+// Twitter/X read as "this searches X" and was misleading.
+const TWITTER_SOURCE_TYPES = new Set(['hashtag', 'username', 'tweet']);
+
+// The "New source" mini-form below groups hashtag/username/tweet under one
+// "Twitter/X" tab (all three are X-only concepts - see
+// backend/services/sources/sources_store.py's _derive_term_url/
+// _derive_tweet_url) - picking a specific one happens via
+// TWITTER_SUB_TYPE_OPTIONS, same pattern as the reddit/linkedin kind
+// selectors. "keyword" stays its own top-level tab (see TWITTER_SOURCE_TYPES
+// above). SOURCE_ASSIGN_TABS (the filter tabs over the existing source pool)
+// keeps every type separate, since filtering by exact type still matters
+// there.
+const SOURCE_TYPE_FORM_TABS = [
+  { value: 'rss', label: 'RSS' },
+  { value: 'web', label: 'Web' },
+  { value: 'keyword', label: 'Keyword' },
+  { value: 'twitter', label: 'Twitter/X' },
+  { value: 'reddit', label: 'Reddit' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'linkedin', label: 'LinkedIn' },
+];
+
+const TWITTER_SUB_TYPE_OPTIONS = [
+  { value: 'hashtag', label: 'Hashtag' },
+  { value: 'username', label: 'X Account' },
+  { value: 'tweet', label: 'Single Post' },
+];
+
 const TERM_SOURCE_PLACEHOLDERS = {
   hashtag: 'Hashtag, without # (e.g. EVSummit)',
   username: 'X account, without @ (e.g. elonmusk)',
   keyword: 'Keyword or phrase (e.g. electric vehicles)',
 };
 
-// Reddit/LinkedIn keep the URL field (unlike the term types above) since it
-// doubles as a free-form input that accepts short forms (a bare subreddit/
-// company/profile slug or search phrase, disambiguated by the kind selector
-// below) as well as full URLs.
+// Reddit/Telegram/LinkedIn/tweet keep the URL field (unlike the term types
+// above) since it doubles as a free-form input that accepts short forms (a
+// bare subreddit/company/profile slug or search phrase, disambiguated by the
+// kind selector below) as well as full URLs. A tweet has no short form - the
+// full status URL is the only valid input.
 const URL_FIELD_PLACEHOLDERS = {
   reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
   telegram: '@channelname, channelname, or https://t.me/channelname',
   linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
+  tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
 };
 
 function sourceTypeLabel(sourceType) {
@@ -1727,8 +1771,11 @@ export default function ProjectsPage({
                     <div style={{ display: 'grid', gap: 6 }}>
                       <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Source type</span>
                       <div className="source-type-tabs" role="tablist" aria-label="Choose source type">
-                        {SOURCE_TYPE_OPTIONS.map((option) => {
-                          const isActive = newSourceDraft.source_type === option.value;
+                        {SOURCE_TYPE_FORM_TABS.map((option) => {
+                          const isActive =
+                            option.value === 'twitter'
+                              ? TWITTER_SOURCE_TYPES.has(newSourceDraft.source_type)
+                              : newSourceDraft.source_type === option.value;
                           return (
                             <button
                               key={option.value}
@@ -1736,7 +1783,17 @@ export default function ProjectsPage({
                               role="tab"
                               aria-selected={isActive}
                               className={`source-type-tab ${isActive ? 'active' : ''}`}
-                              onClick={() => setNewSourceDraft((prev) => ({ ...prev, source_type: option.value }))}
+                              onClick={() =>
+                                setNewSourceDraft((prev) => ({
+                                  ...prev,
+                                  source_type:
+                                    option.value === 'twitter'
+                                      ? TWITTER_SOURCE_TYPES.has(prev.source_type)
+                                        ? prev.source_type
+                                        : 'hashtag'
+                                      : option.value,
+                                }))
+                              }
                               disabled={isCreatingSource}
                             >
                               {option.label}
@@ -1745,6 +1802,23 @@ export default function ProjectsPage({
                         })}
                       </div>
                     </div>
+                    {TWITTER_SOURCE_TYPES.has(newSourceDraft.source_type) && (
+                      <label style={{ display: 'grid', gap: 6 }}>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Twitter/X source kind</span>
+                        <select
+                          className="filter-select"
+                          value={newSourceDraft.source_type}
+                          onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, source_type: e.target.value }))}
+                          disabled={isCreatingSource}
+                        >
+                          {TWITTER_SUB_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     {newSourceDraft.source_type === 'reddit' && (
                       <label style={{ display: 'grid', gap: 6 }}>
                         <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Reddit source kind</span>

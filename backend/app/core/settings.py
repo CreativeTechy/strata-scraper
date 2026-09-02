@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from content_guard import is_tweet_url
+
 from . import db
 
 # This file lives at backend/app/core/settings.py, three levels under
@@ -297,6 +299,19 @@ def apify_configured() -> bool:
     return bool(APIFY_API_TOKEN)
 
 
+# --- Apify (optional) - Twitter/X scraping tier ------------------------------
+# Reuses APIFY_API_TOKEN/APIFY_TIMEOUT_SECONDS above - this only adds the
+# actor id and result cap for "keyword"/"hashtag" X sources (see
+# scraper/apify_twitter.py). Runs alongside the existing Google-CSE
+# tweet-link-discovery tier for "hashtag" sources, not instead of it: CSE
+# finds tweet URLs to hydrate via fxtwitter.com, this gets full tweet content
+# directly from the search actor's own dataset, so a miss in one doesn't cost
+# the other. Unconfigured (the default), this tier is silently skipped - a
+# keyword/hashtag source's other tiers already report their own diagnostics.
+APIFY_TWITTER_SEARCH_ACTOR = os.environ.get("APIFY_TWITTER_SEARCH_ACTOR", "apidojo/tweet-scraper").strip()
+APIFY_TWITTER_MAX_TWEETS = _env_int("APIFY_TWITTER_MAX_TWEETS", 20)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
@@ -372,22 +387,6 @@ def _looks_like_feed_url(url: str) -> bool:
     )
 
 
-def _looks_like_social_url(url: str) -> bool:
-    host = urlparse((url or "").strip()).netloc.lower()
-    return any(
-        domain in host
-        for domain in (
-            "x.com",
-            "twitter.com",
-            "facebook.com",
-            "instagram.com",
-            "tiktok.com",
-            "youtube.com",
-            "threads.net",
-        )
-    )
-
-
 def _looks_like_reddit_url(url: str) -> bool:
     host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
     return host == "reddit.com" or host.endswith(".reddit.com")
@@ -403,7 +402,27 @@ def _looks_like_linkedin_url(url: str) -> bool:
     return host == "linkedin.com" or host.endswith(".linkedin.com")
 
 
+def _looks_like_x_url(url: str) -> bool:
+    host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
+    return host in {"x.com", "twitter.com"}
+
+
+def _looks_like_hashtag_url(url: str) -> bool:
+    if not _looks_like_x_url(url):
+        return False
+    path = (urlparse((url or "").strip()).path or "").rstrip("/").lower()
+    return path.startswith("/hashtag/")
+
+
 def _infer_source_type(url: str) -> str:
+    """Best-guess source_type from a URL's own shape - no generic "social"
+    bucket: an x.com/twitter.com URL resolves straight to whichever of
+    tweet/hashtag/username it actually is, and every other social platform
+    (Facebook, Instagram, TikTok, YouTube, Threads, ...) - none of which this
+    app has any dedicated scraping tier for - falls through to "web" like any
+    other non-feed URL, per the "we can't scrape it as its own platform, so
+    treat it as a plain web page" rule.
+    """
     if _looks_like_feed_url(url):
         return "rss"
     if _looks_like_reddit_url(url):
@@ -412,32 +431,54 @@ def _infer_source_type(url: str) -> str:
         return "telegram"
     if _looks_like_linkedin_url(url):
         return "linkedin"
-    if _looks_like_social_url(url):
-        return "social"
+    if is_tweet_url(url):
+        return "tweet"
+    if _looks_like_hashtag_url(url):
+        return "hashtag"
+    if _looks_like_x_url(url):
+        return "username"
     return "web"
 
 
-KNOWN_SOURCE_TYPES = {"rss", "web", "social", "hashtag", "keyword", "username", "reddit", "telegram", "linkedin"}
+KNOWN_SOURCE_TYPES = {"rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram", "linkedin"}
+
+# hashtag/keyword/username store a URL derived FROM the chosen type itself
+# (see sources_store._derive_term_url) - it is always self-consistent with
+# that type, so re-inferring from it would be circular (a keyword's Google
+# News RSS URL would otherwise "infer" as rss). These three are the only
+# types _resolve_source_type never overrides.
+_TERM_DERIVED_TYPES = {"hashtag", "keyword", "username"}
+
+# Every other known type is a dedicated platform whose URL shape alone
+# determines it - if a user-entered URL for any of these actually belongs to
+# a different one, _resolve_source_type corrects it below.
+_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "tweet", "hashtag", "username"}
 
 
 def _resolve_source_type(source_type_input: str, url: str) -> str:
-    """Pick the source_type to store, trusting an explicit known value.
-
-    Legacy rows stored as rss/web whose URL is actually a social profile get
-    upgraded to social, same as before this was centralized. reddit.com/t.me/
-    linkedin.com used to be lumped into the generic social bucket, so a legacy
-    row stored as social (or rss/web) whose URL is actually one of those gets
-    upgraded to its own dedicated type the same way. hashtag/keyword/username
-    are never overridden even though their derived URLs live on
-    x.com/google.com (which would otherwise infer as social/web).
+    """Pick the source_type to store - for any entry, not just legacy rows:
+    hashtag/keyword/username are trusted as explicitly chosen (see
+    _TERM_DERIVED_TYPES), but every other type is corrected to whatever the
+    URL itself actually is whenever that disagrees with a dedicated
+    platform's own shape (reddit.com, t.me, linkedin.com, an x.com/twitter.com
+    status/hashtag/profile link) - so e.g. pasting a tweet URL while "Reddit"
+    is still selected still ends up stored as "tweet", not an uncrawlable
+    "reddit" source. This also carries forward legacy rows from before
+    reddit/telegram/linkedin/tweet/hashtag/username existed as their own
+    types (previously lumped into a generic "social"/rss/web bucket).
+    A plain rss/web pick is left alone even if its URL doesn't look feed-like
+    (a homepage URL saved as "rss" is normal - see parse_homepage) or looks
+    like a non-X social platform (Facebook/Instagram/... - see
+    _infer_source_type - correctly stays "web", since there's no dedicated
+    type to promote it to).
     """
     source_type_input = (source_type_input or "").strip().lower()
     inferred_type = _infer_source_type(url)
+    if source_type_input in _TERM_DERIVED_TYPES:
+        return source_type_input
     if source_type_input in KNOWN_SOURCE_TYPES:
-        if source_type_input in {"rss", "web", "social"} and inferred_type in {"reddit", "telegram", "linkedin"}:
+        if inferred_type in _PLATFORM_TYPES and inferred_type != source_type_input:
             return inferred_type
-        if source_type_input in {"rss", "web"} and inferred_type == "social":
-            return "social"
         return source_type_input
     return inferred_type or "rss"
 
