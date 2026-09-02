@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Database, RefreshCw, CalendarClock } from 'lucide-react';
+import ErrorNotice from './ErrorNotice';
+import { friendlyRunMessage } from '../errors/userFacingError.js';
 
 const POLL_INTERVAL_MS = 5000;
 // Only surface an upcoming repeating run as a placeholder when it's within this
@@ -187,11 +189,7 @@ export default function PipelineRunsPage({ projects = [] }) {
         </select>
       </div>
 
-      {error ? (
-        <div className="glass-card" style={{ color: '#b42318', borderLeft: '4px solid #ff4757', marginBottom: 18 }}>
-          {error}
-        </div>
-      ) : null}
+      <ErrorNotice error={error} context="load pipeline runs" onRetry={loadRuns} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {upcomingRun ? (
@@ -267,7 +265,7 @@ export default function PipelineRunsPage({ projects = [] }) {
                 </div>
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                {prettyStage(run.stage)} - {run.message || 'No message'}
+                {prettyStage(run.stage)} - {friendlyRunMessage(run)}
               </div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-light)' }}>
                 <span>Scraped: {run.articles_scraped || 0}</span>
