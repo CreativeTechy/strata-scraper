@@ -99,13 +99,17 @@ export const SIZE_TIER_LABELS = {
   unknown: 'Unknown size',
 };
 
+// No "Social" option - see backend/services/competitors/competitors_store.py's
+// PLATFORM_SOURCE_TYPE comment. "tweet" (a single tracked post) is a real URL
+// like reddit/telegram below, not a term - it falls to SourceRowFields' URL
+// branch in CompetitorSourceEditor.jsx automatically.
 export const SOURCE_KIND_OPTIONS = [
   { value: 'rss', label: 'RSS' },
   { value: 'web', label: 'Web' },
-  { value: 'social', label: 'Social' },
   { value: 'hashtag', label: 'Hashtag' },
   { value: 'keyword', label: 'Keyword' },
   { value: 'username', label: 'X Account' },
+  { value: 'tweet', label: 'Single Post' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
 ];

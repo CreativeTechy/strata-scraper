@@ -136,6 +136,35 @@ class DeriveLinkedinUrlTests(unittest.TestCase):
         self.assertEqual(sources_store._derive_linkedin_url(""), "")
 
 
+class DeriveTweetUrlTests(unittest.TestCase):
+    def test_normalizes_a_status_url(self):
+        self.assertEqual(
+            sources_store._derive_tweet_url("https://x.com/elonmusk/status/123456789"),
+            "https://x.com/elonmusk/status/123456789",
+        )
+
+    def test_twitter_com_host_is_also_accepted(self):
+        self.assertEqual(
+            sources_store._derive_tweet_url("https://twitter.com/elonmusk/status/123456789"),
+            "https://x.com/elonmusk/status/123456789",
+        )
+
+    def test_query_string_and_trailing_path_are_dropped(self):
+        self.assertEqual(
+            sources_store._derive_tweet_url("https://x.com/elonmusk/status/123456789?s=20"),
+            "https://x.com/elonmusk/status/123456789",
+        )
+
+    def test_a_bare_profile_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_tweet_url("https://x.com/elonmusk"), "")
+
+    def test_a_non_x_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_tweet_url("https://example.com/status/123"), "")
+
+    def test_empty_input_is_rejected(self):
+        self.assertEqual(sources_store._derive_tweet_url(""), "")
+
+
 class UpsertPayloadRedditTelegramTests(unittest.TestCase):
     """The end-to-end path a create/update API call actually goes through."""
 
@@ -181,6 +210,15 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
 
     def test_linkedin_non_linkedin_host_is_rejected_not_saved_raw(self):
         payload = sources_store._upsert_payload({"source_type": "linkedin", "url": "https://example.com/company/google"})
+        self.assertEqual(payload["url"], "")
+
+    def test_tweet_source_normalizes_status_url(self):
+        payload = sources_store._upsert_payload({"source_type": "tweet", "url": "https://twitter.com/elonmusk/status/123"})
+        self.assertEqual(payload["url"], "https://x.com/elonmusk/status/123")
+        self.assertEqual(payload["source_type"], "tweet")
+
+    def test_tweet_non_status_url_is_rejected_not_saved_raw(self):
+        payload = sources_store._upsert_payload({"source_type": "tweet", "url": "https://x.com/elonmusk"})
         self.assertEqual(payload["url"], "")
 
 

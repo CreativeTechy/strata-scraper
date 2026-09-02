@@ -527,7 +527,10 @@ def _resolve_source(item):
                 "url": final_url,
                 "title": title or _default_name(final_url),
                 "reason": reason or "Resolved from AI social suggestion.",
-                "source_type": "social",
+                # Whichever of tweet/hashtag/username this URL actually is -
+                # there's no generic "social" bucket to fall back on (see
+                # config._infer_source_type).
+                "source_type": config._infer_source_type(final_url),
             }
         )
         return resolved

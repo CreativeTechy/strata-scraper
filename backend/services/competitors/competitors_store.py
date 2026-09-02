@@ -19,7 +19,7 @@ from psycopg.types.json import Jsonb
 
 from app.core import db
 from services.competitors.countries import COUNTRIES, validate_countries
-from services.sources.sources_store import _derive_reddit_url, _derive_telegram_url, _derive_term_url
+from services.sources.sources_store import _derive_reddit_url, _derive_telegram_url, _derive_term_url, _derive_tweet_url
 
 COMPETITOR_COLUMNS = """
     id, project_id, name, website, domain, description, country,
@@ -69,23 +69,34 @@ ACCOUNT_COLUMNS = """
 # (dashboard SOURCE_KIND_OPTIONS / backend config.KNOWN_SOURCE_TYPES); the second
 # block is legacy platform values from before source types were unified, kept so
 # competitor_accounts rows created under the old vocabulary still resolve.
+# There is no generic "social" source_type any more (see
+# config._infer_source_type) - "x" resolves to "username" (a tracked X account
+# is virtually always a profile link, not a hashtag or single tweet), and
+# every other social platform this app has no dedicated scraping tier for
+# (Facebook, Instagram, YouTube) maps straight to "web". The "social" key
+# itself is kept mapped to "web" only so a competitor_accounts row saved under
+# that pre-unification generic label still resolves to something crawlable -
+# .get()'s own default below would already do this even without the explicit
+# entry, but it's spelled out here for the same "kept so it still resolves"
+# reason as the rest of this legacy block.
 PLATFORM_SOURCE_TYPE = {
     "web": "web",
     "rss": "rss",
-    "social": "social",
     "hashtag": "hashtag",
     "keyword": "keyword",
     "username": "username",
+    "tweet": "tweet",
     "reddit": "reddit",
     "telegram": "telegram",
     "website": "web",
     "blog": "rss",
     "news": "web",
-    "x": "social",
+    "x": "username",
     "linkedin": "linkedin",
-    "facebook": "social",
-    "instagram": "social",
-    "youtube": "social",
+    "facebook": "web",
+    "instagram": "web",
+    "youtube": "web",
+    "social": "web",
 }
 
 # Platforms whose "url" is derived from a bare name/handle rather than typed in
@@ -98,9 +109,10 @@ TERM_PLATFORMS = {"hashtag", "keyword", "username"}
 def resolve_account_url(platform: str, url: str, handle: str) -> str | None:
     """The real URL to store for a manually-entered competitor source.
 
-    Term-type platforms and reddit/telegram accept a bare name/handle instead of
-    a URL; everything else still requires a plausible URL via
-    normalize_source_url.
+    Term-type platforms and reddit/telegram/tweet accept a bare name/handle
+    (or, for tweet, the pasted URL in either field) instead of requiring the
+    url field specifically; everything else still requires a plausible URL
+    via normalize_source_url.
     """
     term = (handle or "").strip()
     if platform in TERM_PLATFORMS:
@@ -109,6 +121,8 @@ def resolve_account_url(platform: str, url: str, handle: str) -> str | None:
         return _derive_reddit_url(url or term) or None
     if platform == "telegram":
         return _derive_telegram_url(url or term) or None
+    if platform == "tweet":
+        return _derive_tweet_url(url or term) or None
     return normalize_source_url(url)
 
 
