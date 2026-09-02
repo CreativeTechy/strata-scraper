@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key")
@@ -75,42 +75,10 @@ class ArticleFromPostTests(unittest.TestCase):
         self.assertIsNone(article["author"])
 
 
-class RunActorTests(unittest.TestCase):
-    def test_returns_empty_list_when_not_configured(self):
-        with patch.object(config, "APIFY_API_TOKEN", ""):
-            self.assertEqual(apify_linkedin._run_actor("harvestapi/linkedin-company-posts", {}), [])
-
-    def test_returns_empty_list_on_request_exception(self):
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_linkedin.requests.post", side_effect=Exception("boom")
-        ):
-            self.assertEqual(apify_linkedin._run_actor("harvestapi/linkedin-company-posts", {}), [])
-
-    def test_returns_empty_list_when_dataset_response_is_not_a_list(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"error": "not found"}
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_linkedin.requests.post", return_value=mock_response
-        ):
-            self.assertEqual(apify_linkedin._run_actor("harvestapi/linkedin-company-posts", {}), [])
-
-    def test_returns_dataset_items_on_success(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = [{"linkedinUrl": "u", "content": "c"}]
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_linkedin.requests.post", return_value=mock_response
-        ) as mock_post:
-            result = apify_linkedin._run_actor("harvestapi/linkedin-company-posts", {"targetUrls": ["u"]})
-            self.assertEqual(result, [{"linkedinUrl": "u", "content": "c"}])
-            called_url = mock_post.call_args.args[0]
-            self.assertIn("harvestapi~linkedin-company-posts", called_url)
-            self.assertEqual(mock_post.call_args.kwargs["params"], {"token": "token"})
-
-
 class PagePostsAndSearchPostsTests(unittest.TestCase):
     def test_page_posts_normalizes_dataset_items(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_linkedin, "_run_actor", return_value=[{"linkedinUrl": "u", "content": "c", "author": {"name": "Google"}}]
+            apify_linkedin, "run_actor_sync", return_value=[{"linkedinUrl": "u", "content": "c", "author": {"name": "Google"}}]
         ):
             articles = apify_linkedin.apify_linkedin_page_posts(
                 "https://www.linkedin.com/company/google", "https://www.linkedin.com/company/google", "Google"
@@ -120,11 +88,38 @@ class PagePostsAndSearchPostsTests(unittest.TestCase):
 
     def test_search_posts_drops_items_that_fail_normalization(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_linkedin, "_run_actor", return_value=[{"content": "no url"}, {"linkedinUrl": "u2", "content": "c2"}]
+            apify_linkedin, "run_actor_sync", return_value=[{"content": "no url"}, {"linkedinUrl": "u2", "content": "c2"}]
         ):
             articles = apify_linkedin.apify_linkedin_search_posts("ev fires", "search-url", "ev fires")
             self.assertEqual(len(articles), 1)
             self.assertEqual(articles[0]["url"], "u2")
+
+    def test_page_posts_propagates_billing_error(self):
+        from scraper.apify_common import ApifyBillingError
+
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            apify_linkedin, "run_actor_sync", side_effect=ApifyBillingError("no subscription")
+        ):
+            with self.assertRaises(ApifyBillingError):
+                apify_linkedin.apify_linkedin_page_posts(
+                    "https://www.linkedin.com/company/google", "https://www.linkedin.com/company/google", "Google"
+                )
+
+    def test_page_posts_uses_its_own_timeout(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            config, "APIFY_LINKEDIN_POSTS_TIMEOUT_SECONDS", 90
+        ), patch.object(apify_linkedin, "run_actor_sync", return_value=[]) as mock_run:
+            apify_linkedin.apify_linkedin_page_posts(
+                "https://www.linkedin.com/company/google", "https://www.linkedin.com/company/google", "Google"
+            )
+            self.assertEqual(mock_run.call_args.kwargs["timeout"], 90)
+
+    def test_search_posts_uses_its_own_timeout(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            config, "APIFY_LINKEDIN_SEARCH_TIMEOUT_SECONDS", 150
+        ), patch.object(apify_linkedin, "run_actor_sync", return_value=[]) as mock_run:
+            apify_linkedin.apify_linkedin_search_posts("ev fires", "search-url", "ev fires")
+            self.assertEqual(mock_run.call_args.kwargs["timeout"], 150)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key")
@@ -59,42 +59,22 @@ class ArticleFromPostTests(unittest.TestCase):
         self.assertEqual(article["source"], "reddit.com")
 
 
-class RunActorTests(unittest.TestCase):
-    def test_returns_empty_list_when_not_configured(self):
-        with patch.object(config, "APIFY_API_TOKEN", ""):
-            self.assertEqual(apify_reddit._run_actor("trudax/reddit-scraper-lite", {}), [])
+class SearchQueryTests(unittest.TestCase):
+    def test_extracts_query_from_search_url(self):
+        self.assertEqual(apify_reddit._search_query("https://www.reddit.com/search?q=stories+coffee+shop"), "stories coffee shop")
 
-    def test_returns_empty_list_on_request_exception(self):
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_reddit.requests.post", side_effect=Exception("boom")
-        ):
-            self.assertEqual(apify_reddit._run_actor("trudax/reddit-scraper-lite", {}), [])
+    def test_non_search_url_returns_none(self):
+        self.assertIsNone(apify_reddit._search_query("https://www.reddit.com/r/nasa"))
+        self.assertIsNone(apify_reddit._search_query("https://www.reddit.com/user/someone"))
 
-    def test_returns_empty_list_when_dataset_response_is_not_a_list(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"error": "not found"}
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_reddit.requests.post", return_value=mock_response
-        ):
-            self.assertEqual(apify_reddit._run_actor("trudax/reddit-scraper-lite", {}), [])
-
-    def test_returns_dataset_items_on_success(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = [{"url": "u", "body": "t"}]
-        with patch.object(config, "APIFY_API_TOKEN", "token"), patch(
-            "scraper.apify_reddit.requests.post", return_value=mock_response
-        ) as mock_post:
-            result = apify_reddit._run_actor("trudax/reddit-scraper-lite", {"startUrls": [{"url": "u"}]})
-            self.assertEqual(result, [{"url": "u", "body": "t"}])
-            called_url = mock_post.call_args.args[0]
-            self.assertIn("trudax~reddit-scraper-lite", called_url)
-            self.assertEqual(mock_post.call_args.kwargs["params"], {"token": "token"})
+    def test_search_url_with_empty_query_returns_none(self):
+        self.assertIsNone(apify_reddit._search_query("https://www.reddit.com/search?q="))
 
 
 class ApifyRedditPostsTests(unittest.TestCase):
     def test_normalizes_dataset_items(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_reddit, "_run_actor", return_value=[{"url": "u", "body": "t", "username": "someone"}]
+            apify_reddit, "run_actor_sync", return_value=[{"url": "u", "body": "t", "username": "someone"}]
         ):
             articles = apify_reddit.apify_reddit_posts("https://www.reddit.com/r/nasa", "https://www.reddit.com/r/nasa", "nasa")
             self.assertEqual(len(articles), 1)
@@ -102,11 +82,45 @@ class ApifyRedditPostsTests(unittest.TestCase):
 
     def test_drops_items_that_fail_normalization(self):
         with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
-            apify_reddit, "_run_actor", return_value=[{"body": "no url"}, {"url": "u2", "body": "t2"}]
+            apify_reddit, "run_actor_sync", return_value=[{"body": "no url"}, {"url": "u2", "body": "t2"}]
         ):
             articles = apify_reddit.apify_reddit_posts("https://www.reddit.com/search?q=ev", "search-url", "ev")
             self.assertEqual(len(articles), 1)
             self.assertEqual(articles[0]["url"], "u2")
+
+    def test_propagates_billing_error(self):
+        from scraper.apify_common import ApifyBillingError
+
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            apify_reddit, "run_actor_sync", side_effect=ApifyBillingError("no subscription")
+        ):
+            with self.assertRaises(ApifyBillingError):
+                apify_reddit.apify_reddit_posts("https://www.reddit.com/r/nasa", "https://www.reddit.com/r/nasa", "nasa")
+
+    def test_subreddit_url_uses_start_urls_payload(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            apify_reddit, "run_actor_sync", return_value=[]
+        ) as mock_run:
+            apify_reddit.apify_reddit_posts("https://www.reddit.com/r/nasa", "https://www.reddit.com/r/nasa", "nasa")
+            payload = mock_run.call_args.args[1]
+            self.assertEqual(payload["startUrls"], [{"url": "https://www.reddit.com/r/nasa"}])
+            self.assertNotIn("searches", payload)
+
+    def test_search_url_uses_searches_payload_not_start_urls(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            apify_reddit, "run_actor_sync", return_value=[]
+        ) as mock_run:
+            apify_reddit.apify_reddit_posts("https://www.reddit.com/search?q=stories+coffee+shop", "search-url", "stories coffee shop")
+            payload = mock_run.call_args.args[1]
+            self.assertEqual(payload["searches"], ["stories coffee shop"])
+            self.assertNotIn("startUrls", payload)
+
+    def test_uses_the_dedicated_reddit_timeout(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"), patch.object(
+            config, "APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS", 300
+        ), patch.object(apify_reddit, "run_actor_sync", return_value=[]) as mock_run:
+            apify_reddit.apify_reddit_posts("https://www.reddit.com/r/nasa", "https://www.reddit.com/r/nasa", "nasa")
+            self.assertEqual(mock_run.call_args.kwargs["timeout"], 300)
 
 
 if __name__ == "__main__":

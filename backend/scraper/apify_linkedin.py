@@ -18,18 +18,18 @@ Both default actors (harvestapi's) return dataset items in the same post
 shape - confirmed live against both actors, see _article_from_post - so one
 normalizer covers company, profile, and search results alike. Best-effort
 throughout, same contract as gdelt.py/web_search.py: unconfigured or any
-failure (bad token, actor error, timeout) returns [] rather than raising, so
-one broken LinkedIn source can't take down the rest of the crawl.
+ordinary failure (bad token, actor error, timeout) returns [] rather than
+raising, so one broken LinkedIn source can't take down the rest of the
+crawl. The one exception is a subscription/credit problem on the configured
+Apify account - see apify_common.run_actor_sync - which raises
+ApifyBillingError instead, since that's worth surfacing to the user.
 """
 
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
-import requests
-
 from app.core import settings as config
-
-_RUN_SYNC_URL = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
+from scraper.apify_common import run_actor_sync
 
 
 def linkedin_kind(url):
@@ -48,28 +48,6 @@ def linkedin_kind(url):
 def linkedin_search_query(url):
     """The `keywords` search term out of a search-kind source's stored URL."""
     return (parse_qs(urlparse(url or "").query).get("keywords") or [""])[0].strip()
-
-
-def _run_actor(actor, payload):
-    if not config.apify_configured() or not actor:
-        return []
-    try:
-        # Apify's REST API takes an actor id as a single path segment - a
-        # store slug's "username/actor-name" form (as configured via
-        # APIFY_LINKEDIN_*_ACTOR) must have its slash swapped for "~", or the
-        # extra "/" is parsed as a second path segment and 404s.
-        actor_path = actor.strip("/").replace("/", "~")
-        response = requests.post(
-            _RUN_SYNC_URL.format(actor=actor_path),
-            params={"token": config.APIFY_API_TOKEN},
-            json=payload,
-            timeout=config.APIFY_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        items = response.json()
-        return items if isinstance(items, list) else []
-    except Exception:
-        return []
 
 
 def _article_from_post(post, source_url, source_name):
@@ -104,18 +82,28 @@ def _articles_from_posts(posts, source_url, source_name):
 
 
 def apify_linkedin_page_posts(page_url, source_url, source_name):
-    """Recent posts from one specific LinkedIn company or profile page."""
-    posts = _run_actor(
+    """Recent posts from one specific LinkedIn company or profile page.
+    Raises ApifyBillingError (see apify_common) if the actor can't run for a
+    subscription/credit reason - callers should surface that to the user
+    rather than treating it as a silent empty result."""
+    posts = run_actor_sync(
         config.APIFY_LINKEDIN_POSTS_ACTOR,
         {"targetUrls": [page_url], "maxPosts": config.APIFY_LINKEDIN_MAX_POSTS},
+        actor_label="LinkedIn page posts",
+        timeout=config.APIFY_LINKEDIN_POSTS_TIMEOUT_SECONDS,
     )
     return _articles_from_posts(posts, source_url, source_name)
 
 
 def apify_linkedin_search_posts(query, source_url, source_name):
-    """Posts matching a keyword/hashtag query across all of LinkedIn."""
-    posts = _run_actor(
+    """Posts matching a keyword/hashtag query across all of LinkedIn. Raises
+    ApifyBillingError (see apify_common) if the actor can't run for a
+    subscription/credit reason - callers should surface that to the user
+    rather than treating it as a silent empty result."""
+    posts = run_actor_sync(
         config.APIFY_LINKEDIN_SEARCH_ACTOR,
         {"searchQueries": [query], "maxPosts": config.APIFY_LINKEDIN_MAX_POSTS},
+        actor_label="LinkedIn post search",
+        timeout=config.APIFY_LINKEDIN_SEARCH_TIMEOUT_SECONDS,
     )
     return _articles_from_posts(posts, source_url, source_name)

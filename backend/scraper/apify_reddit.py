@@ -11,46 +11,37 @@ sources.
 
 A `reddit` source's stored URL is already a canonical reddit.com subreddit
 (/r/<name>), user (/user/<name>), or search (/search?q=<term>) URL (see
-services/sources/sources_store.py's _derive_reddit_url) - the actor accepts
-any of those shapes directly as a start URL, so one function covers all three
-kinds, unlike apify_linkedin.py's split between a page-posts actor and a
-separate search actor.
+services/sources/sources_store.py's _derive_reddit_url). Only the first two
+are valid `startUrls` entries for the actor - confirmed live, a search URL
+there fails the run outright with statusMessage "Invalid input." (silently
+swallowed as an ordinary empty result by apify_common.run_actor_sync, same
+as any other non-billing failure). A search-kind URL's `q` term is pulled
+out and sent through the actor's own `searches` field instead, so one
+function still covers all three kinds - unlike apify_linkedin.py's split
+between a page-posts actor and a separate search actor.
 
 Same contract as gdelt.py/web_search.py/apify_linkedin.py/apify_twitter.py
-throughout: unconfigured or any failure (bad token, actor error, timeout)
-returns [] rather than raising, so one broken tier can't take down the rest
-of the crawl.
+throughout: unconfigured or any ordinary failure (bad token, actor error,
+timeout) returns [] rather than raising, so one broken tier can't take down
+the rest of the crawl. The one exception is a subscription/credit problem on
+the configured Apify account - see apify_common.run_actor_sync - which
+raises ApifyBillingError instead, since that's worth surfacing to the user.
 """
 
 from datetime import datetime, timezone
-
-import requests
+from urllib.parse import parse_qs, urlparse
 
 from app.core import settings as config
+from scraper.apify_common import run_actor_sync
 
-_RUN_SYNC_URL = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 
-
-def _run_actor(actor, payload):
-    if not config.apify_configured() or not actor:
-        return []
-    try:
-        # Apify's REST API takes an actor id as a single path segment - a
-        # store slug's "username/actor-name" form (as configured via
-        # APIFY_REDDIT_SEARCH_ACTOR) must have its slash swapped for "~", or
-        # the extra "/" is parsed as a second path segment and 404s.
-        actor_path = actor.strip("/").replace("/", "~")
-        response = requests.post(
-            _RUN_SYNC_URL.format(actor=actor_path),
-            params={"token": config.APIFY_API_TOKEN},
-            json=payload,
-            timeout=config.APIFY_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        items = response.json()
-        return items if isinstance(items, list) else []
-    except Exception:
-        return []
+def _search_query(reddit_url):
+    """The `q` term out of a search-kind source's stored reddit.com/search
+    URL, or None if this isn't a search URL - see _derive_reddit_url."""
+    path = (urlparse(reddit_url or "").path or "").rstrip("/")
+    if path != "/search":
+        return None
+    return (parse_qs(urlparse(reddit_url).query).get("q") or [""])[0].strip() or None
 
 
 def _article_from_post(post, source_url, source_name):
@@ -88,9 +79,21 @@ def _articles_from_posts(posts, source_url, source_name):
 
 def apify_reddit_posts(reddit_url, source_url, source_name):
     """Posts (and comments, depending on the actor's own default settings)
-    from one subreddit, user, or search reddit.com URL."""
-    posts = _run_actor(
+    from one subreddit, user, or search reddit.com URL. Raises
+    ApifyBillingError (see apify_common) if the actor can't run for a
+    subscription/credit reason - callers should surface that to the user
+    rather than treating it as a silent empty result."""
+    query = _search_query(reddit_url)
+    payload = (
+        {"searches": [query]}
+        if query
+        else {"startUrls": [{"url": reddit_url}]}
+    )
+    payload["maxItems"] = config.APIFY_REDDIT_MAX_ITEMS
+    posts = run_actor_sync(
         config.APIFY_REDDIT_SEARCH_ACTOR,
-        {"startUrls": [{"url": reddit_url}], "maxItems": config.APIFY_REDDIT_MAX_ITEMS},
+        payload,
+        actor_label="Reddit search",
+        timeout=config.APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS,
     )
     return _articles_from_posts(posts, source_url, source_name)
