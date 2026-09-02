@@ -181,7 +181,7 @@ def _merge_fetch_diagnostics(run_id, workdir):
             "source_url": (diagnostic or {}).get("source_url") or row.get("source_url"),
             "scraped": scraped_count,
             "duplicate": row.get("duplicate", 0),
-            "blocked": row.get("blocked", 0),
+            "content_filtered": row.get("content_filtered", 0),
             "date_filtered": row.get("date_filtered", 0),
             "skipped_existing": row.get("skipped_existing", 0),
             "kept": row.get("kept", 0),

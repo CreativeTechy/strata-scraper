@@ -196,7 +196,7 @@ def _persist_source_stats(scraped, removed, date_filtered, skipped_existing, kep
             "source_url": (diagnostic or {}).get("source_url"),
             "scraped": scraped_count,
             "duplicate": removed_counts.get("duplicate", 0),
-            "blocked": removed_counts.get("blocked", 0),
+            "content_filtered": removed_counts.get("content_filtered", 0),
             "date_filtered": date_filtered.get(source, 0),
             "skipped_existing": skipped_existing.get(source, 0),
             "kept": kept.get(source, 0),
@@ -211,7 +211,7 @@ def _persist_source_stats(scraped, removed, date_filtered, skipped_existing, kep
 def clean_articles(articles, seen_urls=None):
     """Returns (cleaned_articles, removed_counts_by_source), the latter tallying
     why an article didn't make it past dedup/quality filtering (see
-    pipeline_run_sources - "duplicate" and "blocked" buckets).
+    pipeline_run_sources - "duplicate" and "content_filtered" buckets).
 
     `seen_urls` defaults to a fresh set (this call's own batch only, the
     original behavior). Pass a set you own across repeated single-article
@@ -220,7 +220,7 @@ def clean_articles(articles, seen_urls=None):
     if seen_urls is None:
         seen_urls = set()
     cleaned = []
-    removed_by_source = defaultdict(lambda: {"duplicate": 0, "blocked": 0})
+    removed_by_source = defaultdict(lambda: {"duplicate": 0, "content_filtered": 0})
     for a in articles:
         source = _source_key(a)
         url = a.get("url", "")
@@ -236,7 +236,7 @@ def clean_articles(articles, seen_urls=None):
         # source_rss.py already guarantees non-empty text for these).
         min_length = 0 if is_tweet_url(url) else MIN_TEXT_LENGTH
         if len(text) < min_length or not a.get("title") or is_blocked_article(url, a.get("title")):
-            removed_by_source[source]["blocked"] += 1
+            removed_by_source[source]["content_filtered"] += 1
             continue
         seen_urls.add(url)
         cleaned.append(a)

@@ -100,15 +100,15 @@ function sourceHref(row) {
 const SOURCE_COLUMNS = [
   { key: 'scraped', label: 'Scraped' },
   { key: 'duplicate', label: 'Duplicate' },
-  { key: 'blocked', label: 'Blocked' },
+  { key: 'content_filtered', label: 'Content filtered' },
   { key: 'date_filtered', label: 'Date filtered' },
   { key: 'skipped_existing', label: 'Already scraped' },
   { key: 'kept', label: 'Kept' },
   { key: 'saved', label: 'Saved' },
 ];
 
-// A source's fetch-status badge, distinct from the "Blocked" column above
-// (that one counts articles content_guard rejected AFTER a successful
+// A source's fetch-status badge, distinct from the "Content filtered" column
+// above (that one counts articles content_guard rejected AFTER a successful
 // fetch - this is about whether the source's own page could be reached at
 // all this run). See backend/services/pipeline/source_diagnostics.py.
 function sourceStatusBadge(source) {

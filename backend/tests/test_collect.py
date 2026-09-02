@@ -31,19 +31,19 @@ class CleanArticlesTests(unittest.TestCase):
         articles = [self._article(url="https://example.com/b", text="too short")]
         cleaned, removed = collect.clean_articles(articles)
         self.assertEqual(cleaned, [])
-        self.assertEqual(removed["example.com"]["blocked"], 1)
+        self.assertEqual(removed["example.com"]["content_filtered"], 1)
 
     def test_missing_title_is_blocked(self):
         articles = [self._article(url="https://example.com/c", title="")]
         cleaned, removed = collect.clean_articles(articles)
         self.assertEqual(cleaned, [])
-        self.assertEqual(removed["example.com"]["blocked"], 1)
+        self.assertEqual(removed["example.com"]["content_filtered"], 1)
 
     def test_google_consent_page_is_blocked(self):
         articles = [self._article(url="https://consent.google.com/x", title="Before you continue to Google")]
         cleaned, removed = collect.clean_articles(articles)
         self.assertEqual(cleaned, [])
-        self.assertEqual(removed["example.com"]["blocked"], 1)
+        self.assertEqual(removed["example.com"]["content_filtered"], 1)
 
     def test_short_tweet_is_kept(self):
         articles = [
@@ -56,13 +56,13 @@ class CleanArticlesTests(unittest.TestCase):
         ]
         cleaned, removed = collect.clean_articles(articles)
         self.assertEqual(len(cleaned), 1)
-        self.assertEqual(removed["x.com/someuser"]["blocked"], 0)
+        self.assertEqual(removed["x.com/someuser"]["content_filtered"], 0)
 
     def test_clean_article_is_kept(self):
         articles = [self._article()]
         cleaned, removed = collect.clean_articles(articles)
         self.assertEqual(len(cleaned), 1)
-        self.assertEqual(removed["example.com"], {"duplicate": 0, "blocked": 0})
+        self.assertEqual(removed["example.com"], {"duplicate": 0, "content_filtered": 0})
 
     def test_seen_urls_dedups_across_separate_calls(self):
         """The streaming pipeline calls this once per article with a shared
