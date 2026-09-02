@@ -61,7 +61,7 @@ def _run_actor(actor, payload):
         actor_path = actor.strip("/").replace("/", "~")
         response = requests.post(
             _RUN_SYNC_URL.format(actor=actor_path),
-            params={"token": config.APIFY_API_TOKEN},
+            headers={"Authorization": f"Bearer {config.APIFY_API_TOKEN}"},
             json=payload,
             timeout=config.APIFY_TIMEOUT_SECONDS,
         )

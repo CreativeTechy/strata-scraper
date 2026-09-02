@@ -80,7 +80,8 @@ class RunActorTests(unittest.TestCase):
             self.assertEqual(result, [{"url": "u", "fullText": "t"}])
             called_url = mock_post.call_args.args[0]
             self.assertIn("apidojo~tweet-scraper", called_url)
-            self.assertEqual(mock_post.call_args.kwargs["params"], {"token": "token"})
+            self.assertEqual(mock_post.call_args.kwargs["headers"], {"Authorization": "Bearer token"})
+            self.assertNotIn("params", mock_post.call_args.kwargs)
 
 
 class ApifyTwitterSearchPostsTests(unittest.TestCase):

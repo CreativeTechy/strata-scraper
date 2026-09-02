@@ -112,6 +112,13 @@ const SOURCE_COLUMNS = [
 // fetch - this is about whether the source's own page could be reached at
 // all this run). See backend/services/pipeline/source_diagnostics.py.
 function sourceStatusBadge(source) {
+  if (source.issue) {
+    return {
+      label: source.issue.title,
+      color: source.issue.severity === 'error' ? '#ff4757' : '#ffb13b',
+      Icon: source.issue.severity === 'error' ? ShieldAlert : CircleAlert,
+    };
+  }
   if (source.network_blocked) {
     return { label: `Blocked (HTTP ${source.http_status ?? '?'})`, color: '#ff4757', Icon: ShieldAlert };
   }
@@ -237,6 +244,11 @@ export default function PipelineRunDetailPage({ projects = [] }) {
 
   const total = run ? stageDuration(run.started_at, run.finished_at) : null;
   const projectName = projectNameForRun(run, projectsById);
+  const sourceIssueCount = sources.filter((source) => source.issue).length;
+  const hasVerboseSourceSummary = sourceIssueCount > 0 && /source\(s\) had fetch issues:/i.test(run?.message || '');
+  const displayMessage = hasVerboseSourceSummary
+    ? `Pipeline complete. ${sourceIssueCount} source${sourceIssueCount === 1 ? '' : 's'} need attention; review the per-source breakdown below.`
+    : run?.message;
 
   return (
     <div className="admin-page-shell">
@@ -298,10 +310,18 @@ export default function PipelineRunDetailPage({ projects = [] }) {
                 provider error's raw detail) - kept in their own full-width
                 containers below the small-field grid instead of as cells in
                 it, so one long value can't stretch or misalign the rest. */}
-            {run.message ? (
+            {displayMessage ? (
               <div className="run-detail-message-box">
                 <div className="run-detail-box-label">Message</div>
-                <div className="run-detail-message-text">{run.message}</div>
+                <div className="run-detail-message-text">{displayMessage}</div>
+                {hasVerboseSourceSummary ? (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontSize: '0.78rem', fontWeight: 700 }}>
+                      Original run details
+                    </summary>
+                    <div className="run-detail-message-text" style={{ marginTop: 7, color: 'var(--text-light)' }}>{run.message}</div>
+                  </details>
+                ) : null}
               </div>
             ) : null}
 
@@ -460,7 +480,19 @@ export default function PipelineRunDetailPage({ projects = [] }) {
                             <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
                               <td />
                               <td colSpan={SOURCE_COLUMNS.length + 2} style={{ padding: '8px 10px 12px', fontSize: '0.8rem', color: 'var(--text-dark)' }}>
-                                {row.fetch_note}
+                                {row.issue ? (
+                                  <div style={{ display: 'grid', gap: 5 }}>
+                                    <strong>{row.issue.title}</strong>
+                                    <span>{row.issue.message}</span>
+                                    <span style={{ color: 'var(--text-light)' }}>{row.issue.action}</span>
+                                    {row.issue.technical_detail ? (
+                                      <details style={{ marginTop: 3 }}>
+                                        <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontWeight: 700 }}>Technical details</summary>
+                                        <div style={{ marginTop: 6, overflowWrap: 'anywhere', color: 'var(--text-light)' }}>{row.issue.technical_detail}</div>
+                                      </details>
+                                    ) : null}
+                                  </div>
+                                ) : row.fetch_note}
                               </td>
                             </tr>
                           ) : null}

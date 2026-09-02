@@ -1007,6 +1007,12 @@ class SourceRssSpider(scrapy.Spider):
         if status_match:
             tweet = self._hydrate_tweet(response.url)
             if tweet:
+                # _hydrate_tweet identifies the post itself, but the
+                # collection channel is the configured source that led us to
+                # it (an X account, hashtag, keyword, or single-post source).
+                # Keep that origin so dashboard platform totals can attribute
+                # the saved article correctly.
+                tweet["source_url"] = response.meta.get("source_url") or tweet.get("source_url")
                 tweet["source_name"] = source_name
                 yield tweet
                 self._progress_articles += 1

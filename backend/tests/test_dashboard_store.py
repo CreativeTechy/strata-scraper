@@ -9,9 +9,9 @@ from services.dashboard import dashboard_store
 
 class DashboardSummaryTests(unittest.TestCase):
     """get_dashboard_summary() shapes one project's collection health: totals,
-    an articles-per-run series, an articles-by-source breakdown, and (from the
-    latest run with per-source detail) which sources - or, for a competitor
-    study, which competitors - need attention."""
+    articles-by-platform and articles-by-source breakdowns, an articles-per-run
+    series, and (from the latest detailed run) which sources or competitors
+    need attention."""
 
     def _fetch_one(self, project_row, sources_total=3, competitors_tracked=0, latest_run_id="run-2", runs_total=2):
         def fetch_one(sql, params=()):
@@ -33,11 +33,63 @@ class DashboardSummaryTests(unittest.TestCase):
         with patch("services.dashboard.dashboard_store.db.fetch_one", return_value=None):
             self.assertIsNone(dashboard_store.get_dashboard_summary(999))
 
+    def test_articles_by_platform_seeds_all_platforms_and_groups_twitter_sources(self):
+        def fetch_all(sql, params=()):
+            if "count(*)::int as source_count" in sql:
+                self.assertEqual(params, (7,))
+                return [
+                    {"source_type": "keyword", "source_count": 2},
+                    {"source_type": "hashtag", "source_count": 1},
+                    {"source_type": "username", "source_count": 2},
+                    {"source_type": "linkedin", "source_count": 1},
+                ]
+            if "count(distinct a.id)::int as article_count" in sql:
+                self.assertEqual(params, (7, 7))
+                self.assertIn("x\\.com|twitter\\.com", sql)
+                return [
+                    {"source_type": "keyword", "article_count": 12},
+                    {"source_type": "hashtag", "article_count": 3},
+                    {"source_type": "tweet", "article_count": 2},
+                    {"source_type": "linkedin", "article_count": 4},
+                    {"source_type": "other", "article_count": 1},
+                ]
+            raise AssertionError(f"Unexpected fetch_all query: {sql}")
+
+        with patch("services.dashboard.dashboard_store.db.fetch_all", side_effect=fetch_all):
+            items = dashboard_store._articles_by_platform(7)
+
+        by_key = {item["platform"]: item for item in items}
+        self.assertEqual(
+            list(by_key),
+            ["rss", "web", "keyword", "twitter", "reddit", "telegram", "linkedin", "other"],
+        )
+        self.assertEqual(by_key["keyword"], {"platform": "keyword", "label": "Keyword", "count": 12, "source_count": 2})
+        self.assertEqual(by_key["twitter"], {"platform": "twitter", "label": "Twitter/X", "count": 5, "source_count": 3})
+        self.assertEqual(by_key["rss"]["count"], 0)
+        self.assertEqual(by_key["other"]["label"], "Imported / Other")
+
+    def test_articles_by_platform_keeps_future_source_types(self):
+        with patch(
+            "services.dashboard.dashboard_store.db.fetch_all",
+            side_effect=[
+                [{"source_type": "youtube", "source_count": 2}],
+                [{"source_type": "youtube", "article_count": 9}],
+            ],
+        ):
+            items = dashboard_store._articles_by_platform(3)
+
+        self.assertEqual(
+            items[-1],
+            {"platform": "youtube", "label": "Youtube", "count": 9, "source_count": 2},
+        )
+
     def test_sentiment_project_has_no_competitor_fields(self):
         project_row = {"id": 1, "name": "Coffee Chatter", "mode": "sentiment", "status": "active"}
         fetch_one = self._fetch_one(project_row, sources_total=4, latest_run_id="run-9", runs_total=6)
 
         def fetch_all(sql, params=()):
+            if "count(*)::int as source_count" in sql or "count(distinct a.id)::int as article_count" in sql:
+                return []
             if "pipeline_run_sources prs" in sql and "project_sources ps" in sql:
                 return [
                     {
@@ -67,6 +119,7 @@ class DashboardSummaryTests(unittest.TestCase):
             summary = dashboard_store.get_dashboard_summary(1)
 
         self.assertEqual(summary["totals"], {"articles": 42, "sources": 4, "runs": 6})
+        self.assertEqual(len(summary["articles_by_platform"]), 7)
         self.assertNotIn("competitors", summary["totals"])
         self.assertEqual(summary["competitors_needing_attention"], [])
         # Runs come back oldest-first for a left-to-right chart.
@@ -79,6 +132,8 @@ class DashboardSummaryTests(unittest.TestCase):
         fetch_one = self._fetch_one(project_row, sources_total=2, competitors_tracked=3, latest_run_id="run-1", runs_total=1)
 
         def fetch_all(sql, params=()):
+            if "count(*)::int as source_count" in sql or "count(distinct a.id)::int as article_count" in sql:
+                return []
             if "pipeline_run_sources prs" in sql and "project_sources ps" in sql:
                 return []
             if "competitor_accounts ca" in sql:
@@ -122,8 +177,13 @@ class DashboardSummaryTests(unittest.TestCase):
         project_row = {"id": 3, "name": "New Project", "mode": "sentiment", "status": "draft"}
         fetch_one = self._fetch_one(project_row, sources_total=0, latest_run_id=None)
 
+        def fetch_all(sql, params=()):
+            if "count(*)::int as source_count" in sql or "count(distinct a.id)::int as article_count" in sql:
+                return []
+            raise AssertionError(f"Unexpected fetch_all query: {sql}")
+
         with patch("services.dashboard.dashboard_store.db.fetch_one", side_effect=fetch_one), \
-             patch("services.dashboard.dashboard_store.db.fetch_all") as fetch_all, \
+             patch("services.dashboard.dashboard_store.db.fetch_all", side_effect=fetch_all), \
              patch(
                  "services.dashboard.dashboard_store.get_article_stats",
                  return_value={"total": 0, "sources": []},
@@ -131,8 +191,8 @@ class DashboardSummaryTests(unittest.TestCase):
              patch("services.dashboard.dashboard_store.list_pipeline_runs", return_value=[]):
             summary = dashboard_store.get_dashboard_summary(3)
 
-        fetch_all.assert_not_called()
         self.assertEqual(summary["sources_needing_attention"], [])
+        self.assertEqual(len(summary["articles_by_platform"]), 7)
 
 
 if __name__ == "__main__":
