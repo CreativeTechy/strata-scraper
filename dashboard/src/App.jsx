@@ -114,15 +114,15 @@ export default function App() {
     return projects.filter((project) => selectedIds.has(Number(project.id)));
   }, [projects, workflowSelectedProjectIds]);
 
-  const workflowSelectedSourceUrls = useMemo(() => {
-    const urls = new Set();
+  const workflowSelectedSources = useMemo(() => {
+    const byId = new Map();
     workflowSelectedProjects.forEach((project) => {
       (project.source_ids || []).forEach((sourceId) => {
         const source = sources.find((item) => Number(item.id) === Number(sourceId));
-        if (source?.url) urls.add(source.url);
+        if (source) byId.set(Number(source.id), source);
       });
     });
-    return [...urls];
+    return [...byId.values()];
   }, [sources, workflowSelectedProjects]);
 
   const isTerminalPipelineStatus = (status) => ['success', 'failed', 'cancelled'].includes(String(status || '').toLowerCase());
@@ -338,9 +338,13 @@ export default function App() {
     loadWorkflowArticles(workflowSelectedProjectIds);
   }, [isAuthenticated, pathname, workflowSelectedProjectIds]);
 
-  const runScraper = async (projectIds = workflowSelectedProjectIds) => {
+  const runScraper = async (projectIds = workflowSelectedProjectIds, sourceIds = null) => {
     const normalizedProjectIds = normalizeWorkflowSelection(Array.isArray(projectIds) ? projectIds : [projectIds]);
     if (normalizedProjectIds.length === 0) return;
+    const normalizedSourceIds = Array.isArray(sourceIds)
+      ? [...new Set(sourceIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)))]
+      : null;
+    if (normalizedSourceIds && normalizedSourceIds.length === 0) return;
     stopPolling();
     setIsScraping(true);
     try {
@@ -349,7 +353,9 @@ export default function App() {
         const res = await fetch('/scrape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: projectId }),
+          body: JSON.stringify(
+            normalizedSourceIds ? { project_id: projectId, source_ids: normalizedSourceIds } : { project_id: projectId }
+          ),
         });
         if (!res.ok) throw new Error(`Scrape request failed: ${res.status}`);
         const data = await res.json().catch(() => ({}));
@@ -557,7 +563,7 @@ export default function App() {
       articles={workflowArticles}
       isScraping={isScraping}
       onRunScraper={runScraper}
-      sources={workflowSelectedSourceUrls}
+      sources={workflowSelectedSources}
       projects={projects}
       selectedProjects={workflowSelectedProjects}
       selectedProjectIds={workflowSelectedProjectIds}

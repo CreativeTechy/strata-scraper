@@ -388,30 +388,37 @@ def load_source_records():
 
     Scoped to the project's assigned sources when PIPELINE_PROJECT_ID is set
     (the scraper subprocess always has this when a project was selected -
-    see run_scraper_pipeline), otherwise every source in the table.
+    see run_scraper_pipeline), otherwise every source in the table. Further
+    narrowed to PIPELINE_SOURCE_IDS when set - the checked-sources subset the
+    user picked on the workflow page for this run (see run_scraper_pipeline).
     """
     if not config.DATABASE_URL:
         return []
 
     project_id = os.environ.get("PIPELINE_PROJECT_ID", "").strip()
+    source_ids_raw = os.environ.get("PIPELINE_SOURCE_IDS", "").strip()
+    source_ids = [int(part) for part in source_ids_raw.split(",") if part.strip().isdigit()] if source_ids_raw else None
+
     if project_id:
-        records = db.fetch_all(
-            """
+        query = """
             select s.id, s.url, s.name, s.enabled, s.source_type, s.created_at, s.updated_at
             from sources s
             inner join project_sources ps on ps.source_id = s.id
             where ps.project_id = %s
-            order by s.created_at asc
-            """,
-            (int(project_id),),
-        )
+        """
+        params: list = [int(project_id)]
+        if source_ids:
+            query += " and s.id = any(%s)"
+            params.append(source_ids)
+        query += " order by s.created_at asc"
+        records = db.fetch_all(query, params)
     else:
-        records = db.fetch_all(
-            """
-            select id, url, name, enabled, source_type, created_at, updated_at
-            from sources
-            order by created_at asc
-            """
-        )
+        query = "select id, url, name, enabled, source_type, created_at, updated_at from sources"
+        params = []
+        if source_ids:
+            query += " where id = any(%s)"
+            params.append(source_ids)
+        query += " order by created_at asc"
+        records = db.fetch_all(query, params)
 
     return [_normalize_source_record({**row, "source": "database"}) for row in records]
