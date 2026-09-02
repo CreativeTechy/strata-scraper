@@ -18,6 +18,8 @@ TERM_SOURCE_TYPES = {"username", "hashtag", "keyword"}
 
 REDDIT_KINDS = {"subreddit", "user", "search"}
 
+LINKEDIN_KINDS = {"company", "profile", "search"}
+
 
 def _default_name(url):
     if not url:
@@ -132,6 +134,44 @@ def _derive_telegram_url(term):
     return f"https://t.me/s/{channel}" if channel else ""
 
 
+def _derive_linkedin_url(term, kind=None):
+    """Turn a full linkedin.com URL, or a bare company/profile slug or search
+    phrase, into a canonical linkedin.com URL - the same "kind disambiguates a
+    bare term" contract as _derive_reddit_url above, since `apify_linkedin.py`
+    reads the kind (company/profile/search) straight back off the stored
+    URL's path shape (see its linkedin_kind()) rather than a separate column.
+    """
+    text = (term or "").strip()
+    if not text:
+        return ""
+
+    if re.match(r"^https?://", text, re.I):
+        parsed = urlparse(text)
+        host = parsed.netloc.lower().removeprefix("www.")
+        if host != "linkedin.com":
+            return ""
+        path = (parsed.path or "").rstrip("/")
+        if path.startswith("/search/results/content"):
+            query_term = (parse_qs(parsed.query).get("keywords") or [""])[0].strip()
+            return f"https://www.linkedin.com/search/results/content/?keywords={quote_plus(query_term)}" if query_term else ""
+        if path.startswith("/company/") or path.startswith("/in/"):
+            return f"https://www.linkedin.com{path}"
+        return ""
+
+    kind = (kind or "").strip().lower()
+    if kind not in LINKEDIN_KINDS:
+        kind = "company"
+
+    if kind == "search":
+        return f"https://www.linkedin.com/search/results/content/?keywords={quote_plus(text)}"
+    slug = re.sub(r"[^A-Za-z0-9_\-]", "", text.lstrip("/"))
+    if not slug:
+        return ""
+    if kind == "profile":
+        return f"https://www.linkedin.com/in/{slug}"
+    return f"https://www.linkedin.com/company/{slug}"
+
+
 def _normalize_record(row, include_project_ids=False):
     url = (row.get("url") or "").strip()
     name = (row.get("name") or "").strip() or _default_name(url)
@@ -177,6 +217,12 @@ def _upsert_payload(source, default_limited=True):
         # public @username/t.me link) must be rejected here, not saved as-is
         # only to silently scrape zero articles later.
         url = _derive_telegram_url(url or name)
+    elif source_type_input == "linkedin" and (url or name):
+        # Same reasoning as reddit/telegram above - a non-linkedin.com URL
+        # must be rejected here, not saved as-is only to silently scrape zero
+        # articles later (Apify's actors only accept linkedin.com URLs/queries).
+        linkedin_kind = str(source.get("linkedin_kind") or "").strip().lower()
+        url = _derive_linkedin_url(url or name, linkedin_kind)
 
     source_type = config._resolve_source_type(source_type_input, url)
     return {

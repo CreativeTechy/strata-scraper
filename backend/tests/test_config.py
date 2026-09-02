@@ -87,6 +87,40 @@ class RedditTelegramSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._resolve_source_type("keyword", "https://news.google.com/rss/search?q=ev"), "keyword")
 
 
+class LinkedinSourceTypeTests(unittest.TestCase):
+    """linkedin source-type inference and resolution (config.py's half of the
+    feature - see services/sources/sources_store.py for URL derivation and
+    scraper/apify_linkedin.py for the Apify tier itself)."""
+
+    def test_linkedin_urls_are_inferred_as_linkedin(self):
+        self.assertEqual(config._infer_source_type("https://www.linkedin.com/company/google"), "linkedin")
+        self.assertEqual(config._infer_source_type("https://linkedin.com/in/satyanadella"), "linkedin")
+
+    def test_other_social_urls_still_infer_as_social_not_linkedin(self):
+        self.assertEqual(config._infer_source_type("https://x.com/someone"), "social")
+        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "social")
+
+    def test_explicit_linkedin_type_is_trusted(self):
+        self.assertEqual(config._resolve_source_type("linkedin", "https://www.linkedin.com/company/google"), "linkedin")
+
+    def test_legacy_rows_stored_as_social_upgrade_to_linkedin(self):
+        # linkedin.com used to be lumped into the generic "social" bucket
+        # before this type existed - existing rows should be reclassified on
+        # load, the same way legacy reddit/telegram rows already upgrade.
+        self.assertEqual(config._resolve_source_type("social", "https://www.linkedin.com/company/google"), "linkedin")
+        self.assertEqual(config._resolve_source_type("rss", "https://www.linkedin.com/in/satyanadella"), "linkedin")
+
+
+class ApifyConfiguredTests(unittest.TestCase):
+    def test_false_when_unset(self):
+        with patch.object(config, "APIFY_API_TOKEN", ""):
+            self.assertFalse(config.apify_configured())
+
+    def test_true_when_set(self):
+        with patch.object(config, "APIFY_API_TOKEN", "token"):
+            self.assertTrue(config.apify_configured())
+
+
 class RedditOAuthConfiguredTests(unittest.TestCase):
     def test_false_when_unset(self):
         with patch.object(config, "REDDIT_OAUTH_CLIENT_ID", ""), patch.object(config, "REDDIT_OAUTH_CLIENT_SECRET", ""):

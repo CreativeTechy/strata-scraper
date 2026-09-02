@@ -27,6 +27,7 @@ const emptyDraft = {
   limited: true,
   project_ids: [],
   reddit_kind: 'subreddit',
+  linkedin_kind: 'company',
 };
 
 const SOURCE_TYPE_OPTIONS = [
@@ -38,6 +39,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: 'username', label: 'X Account' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'linkedin', label: 'LinkedIn' },
 ];
 
 const SOURCE_TYPE_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];
@@ -50,11 +52,14 @@ const TERM_SOURCE_PLACEHOLDERS = {
   keyword: 'Keyword or phrase (e.g. electric vehicles)',
 };
 
-// Reddit/Telegram keep the URL field (unlike the term types above) since it
-// doubles as a free-form input that accepts short forms as well as full URLs.
+// Reddit/Telegram/LinkedIn keep the URL field (unlike the term types above)
+// since it doubles as a free-form input that accepts short forms (a bare
+// company/profile slug or search phrase, disambiguated by the kind selector
+// below) as well as full URLs.
 const URL_FIELD_PLACEHOLDERS = {
   reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
   telegram: '@channelname, channelname, or https://t.me/channelname',
+  linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
 };
 
 function inferRedditKind(url) {
@@ -67,6 +72,18 @@ function inferRedditKind(url) {
   if (/\/user\//i.test(path)) return 'user';
   if (/\/search/i.test(path)) return 'search';
   return 'subreddit';
+}
+
+function inferLinkedinKind(url) {
+  let path = url || '';
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    // Not a full URL (e.g. a bare term saved before this field existed) - fall through.
+  }
+  if (/\/search\/results\/content/i.test(path)) return 'search';
+  if (/\/in\//i.test(path)) return 'profile';
+  return 'company';
 }
 
 function sourceTypeLabel(sourceType) {
@@ -87,6 +104,7 @@ function normalizeDraftForCompare(value) {
       ? [...new Set(value.project_ids.map((item) => Number(item)).filter((item) => Number.isFinite(item)))].sort((a, b) => a - b)
       : [],
     reddit_kind: String(value?.reddit_kind || 'subreddit').trim().toLowerCase(),
+    linkedin_kind: String(value?.linkedin_kind || 'company').trim().toLowerCase(),
   };
 }
 
@@ -156,6 +174,7 @@ export default function SourcesPage({
         limited: currentSource.limited ?? false,
         project_ids: assignedProjectIds,
         reddit_kind: inferRedditKind(currentSource.url),
+        linkedin_kind: inferLinkedinKind(currentSource.url),
       };
       setDraft(nextDraft);
       setInitialDraft(nextDraft);
@@ -273,6 +292,9 @@ export default function SourcesPage({
     if (draft.source_type === 'reddit') {
       payload.reddit_kind = draft.reddit_kind || 'subreddit';
     }
+    if (draft.source_type === 'linkedin') {
+      payload.linkedin_kind = draft.linkedin_kind || 'company';
+    }
 
     if (isTermType ? !payload.name : !payload.url) return;
 
@@ -384,6 +406,23 @@ export default function SourcesPage({
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
                 Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input
                 (r/..., u/...) and full reddit.com URLs are unambiguous either way.
+              </span>
+            </label>
+          )}
+          {draft.source_type === 'linkedin' && (
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>LinkedIn source kind</span>
+              <select
+                className="filter-select"
+                value={draft.linkedin_kind}
+                onChange={(e) => setDraft((prev) => ({ ...prev, linkedin_kind: e.target.value }))}
+              >
+                <option value="company">Company page</option>
+                <option value="profile">Personal profile</option>
+                <option value="search">Keyword / hashtag search</option>
+              </select>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                Requires APIFY API TOKEN
               </span>
             </label>
           )}

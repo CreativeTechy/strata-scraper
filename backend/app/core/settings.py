@@ -270,6 +270,33 @@ def google_cse_configured() -> bool:
 GDELT_ENABLED = os.environ.get("GDELT_ENABLED", "true").strip().lower() not in {"false", "0", "no"}
 
 
+# --- Apify (optional) - LinkedIn scraping tier -------------------------------
+# LinkedIn requires an authenticated, JS-rendered session for every page (even
+# a public company page) - there is no unauthenticated HTML worth fetching the
+# way there is for X/Reddit/Telegram, so "linkedin" sources go through Apify's
+# hosted actors instead of Scrapy's own downloader (see scraper/apify_linkedin.py).
+# Get a token at https://console.apify.com/settings/integrations. Unconfigured
+# (the default), "linkedin" sources report 0 articles with an explanatory
+# fetch note rather than a silent miss - same contract as the CSE/GDELT tiers.
+APIFY_API_TOKEN = os.environ.get("APIFY_API_TOKEN", "").strip()
+# Both default actors are from the same vendor (harvestapi) and return dataset
+# items in the same post shape (linkedinUrl/content/author/postedAt), so one
+# normalizer covers both - see apify_linkedin.py's _article_from_post. Override
+# either to point at a different actor with the same input/output contract
+# (targetUrls/searchQueries in, a list of post objects out).
+APIFY_LINKEDIN_POSTS_ACTOR = os.environ.get("APIFY_LINKEDIN_POSTS_ACTOR", "harvestapi/linkedin-company-posts").strip()
+APIFY_LINKEDIN_SEARCH_ACTOR = os.environ.get("APIFY_LINKEDIN_SEARCH_ACTOR", "harvestapi/linkedin-post-search").strip()
+APIFY_LINKEDIN_MAX_POSTS = _env_int("APIFY_LINKEDIN_MAX_POSTS", 20)
+# A synchronous actor run (fetch + scrape LinkedIn's own JS-rendered pages)
+# routinely takes tens of seconds, well past a normal HTTP request's budget -
+# see apify_linkedin.py's run-sync-get-dataset-items call.
+APIFY_TIMEOUT_SECONDS = _env_int("APIFY_TIMEOUT_SECONDS", 120)
+
+
+def apify_configured() -> bool:
+    return bool(APIFY_API_TOKEN)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
@@ -355,7 +382,6 @@ def _looks_like_social_url(url: str) -> bool:
             "facebook.com",
             "instagram.com",
             "tiktok.com",
-            "linkedin.com",
             "youtube.com",
             "threads.net",
         )
@@ -372,6 +398,11 @@ def _looks_like_telegram_url(url: str) -> bool:
     return host in {"t.me", "telegram.me"}
 
 
+def _looks_like_linkedin_url(url: str) -> bool:
+    host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
+
+
 def _infer_source_type(url: str) -> str:
     if _looks_like_feed_url(url):
         return "rss"
@@ -379,29 +410,31 @@ def _infer_source_type(url: str) -> str:
         return "reddit"
     if _looks_like_telegram_url(url):
         return "telegram"
+    if _looks_like_linkedin_url(url):
+        return "linkedin"
     if _looks_like_social_url(url):
         return "social"
     return "web"
 
 
-KNOWN_SOURCE_TYPES = {"rss", "web", "social", "hashtag", "keyword", "username", "reddit", "telegram"}
+KNOWN_SOURCE_TYPES = {"rss", "web", "social", "hashtag", "keyword", "username", "reddit", "telegram", "linkedin"}
 
 
 def _resolve_source_type(source_type_input: str, url: str) -> str:
     """Pick the source_type to store, trusting an explicit known value.
 
     Legacy rows stored as rss/web whose URL is actually a social profile get
-    upgraded to social, same as before this was centralized. reddit.com used
-    to be lumped into the generic social bucket, so a legacy row stored as
-    social (or rss/web) whose URL is actually reddit.com/t.me gets upgraded
-    to the dedicated reddit/telegram type the same way. hashtag/keyword/
-    username are never overridden even though their derived URLs live on
+    upgraded to social, same as before this was centralized. reddit.com/t.me/
+    linkedin.com used to be lumped into the generic social bucket, so a legacy
+    row stored as social (or rss/web) whose URL is actually one of those gets
+    upgraded to its own dedicated type the same way. hashtag/keyword/username
+    are never overridden even though their derived URLs live on
     x.com/google.com (which would otherwise infer as social/web).
     """
     source_type_input = (source_type_input or "").strip().lower()
     inferred_type = _infer_source_type(url)
     if source_type_input in KNOWN_SOURCE_TYPES:
-        if source_type_input in {"rss", "web", "social"} and inferred_type in {"reddit", "telegram"}:
+        if source_type_input in {"rss", "web", "social"} and inferred_type in {"reddit", "telegram", "linkedin"}:
             return inferred_type
         if source_type_input in {"rss", "web"} and inferred_type == "social":
             return "social"

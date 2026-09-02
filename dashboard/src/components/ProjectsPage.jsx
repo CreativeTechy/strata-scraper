@@ -26,6 +26,8 @@ const emptyNewSourceDraft = {
   url: '',
   name: '',
   source_type: 'rss',
+  reddit_kind: 'subreddit',
+  linkedin_kind: 'company',
 };
 
 const SOURCE_TYPE_OPTIONS = [
@@ -37,6 +39,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: 'username', label: 'X Account' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'linkedin', label: 'LinkedIn' },
 ];
 
 const TERM_SOURCE_TYPES = new Set(['hashtag', 'keyword', 'username']);
@@ -45,6 +48,16 @@ const TERM_SOURCE_PLACEHOLDERS = {
   hashtag: 'Hashtag, without # (e.g. EVSummit)',
   username: 'X account, without @ (e.g. elonmusk)',
   keyword: 'Keyword or phrase (e.g. electric vehicles)',
+};
+
+// Reddit/LinkedIn keep the URL field (unlike the term types above) since it
+// doubles as a free-form input that accepts short forms (a bare subreddit/
+// company/profile slug or search phrase, disambiguated by the kind selector
+// below) as well as full URLs.
+const URL_FIELD_PLACEHOLDERS = {
+  reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
+  telegram: '@channelname, channelname, or https://t.me/channelname',
+  linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
 };
 
 function sourceTypeLabel(sourceType) {
@@ -790,6 +803,12 @@ export default function ProjectsPage({
       enabled: true,
       project_ids: [],
     };
+    if (newSourceDraft.source_type === 'reddit') {
+      payload.reddit_kind = newSourceDraft.reddit_kind || 'subreddit';
+    }
+    if (newSourceDraft.source_type === 'linkedin') {
+      payload.linkedin_kind = newSourceDraft.linkedin_kind || 'company';
+    }
 
     if (isCreatingSource) return;
     if (isTermType ? !payload.name : !payload.url) return;
@@ -1705,11 +1724,70 @@ export default function ProjectsPage({
                     }}
                   >
                     <strong style={{ fontSize: '0.86rem' }}>Create a new source</strong>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Source type</span>
+                      <div className="source-type-tabs" role="tablist" aria-label="Choose source type">
+                        {SOURCE_TYPE_OPTIONS.map((option) => {
+                          const isActive = newSourceDraft.source_type === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="tab"
+                              aria-selected={isActive}
+                              className={`source-type-tab ${isActive ? 'active' : ''}`}
+                              onClick={() => setNewSourceDraft((prev) => ({ ...prev, source_type: option.value }))}
+                              disabled={isCreatingSource}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {newSourceDraft.source_type === 'reddit' && (
+                      <label style={{ display: 'grid', gap: 6 }}>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Reddit source kind</span>
+                        <select
+                          className="filter-select"
+                          value={newSourceDraft.reddit_kind}
+                          onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, reddit_kind: e.target.value }))}
+                          disabled={isCreatingSource}
+                        >
+                          <option value="subreddit">Subreddit</option>
+                          <option value="user">User / profile</option>
+                          <option value="search">Keyword / search</option>
+                        </select>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                          Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed
+                          input (r/..., u/...) and full reddit.com URLs are unambiguous either way.
+                        </span>
+                      </label>
+                    )}
+                    {newSourceDraft.source_type === 'linkedin' && (
+                      <label style={{ display: 'grid', gap: 6 }}>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>LinkedIn source kind</span>
+                        <select
+                          className="filter-select"
+                          value={newSourceDraft.linkedin_kind}
+                          onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, linkedin_kind: e.target.value }))}
+                          disabled={isCreatingSource}
+                        >
+                          <option value="company">Company page</option>
+                          <option value="profile">Personal profile</option>
+                          <option value="search">Keyword / hashtag search</option>
+                        </select>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                          Only used to interpret a bare slug or phrase below (e.g. "google" as a company page vs. a
+                          search term). A full linkedin.com URL is unambiguous either way. Requires APIFY_API_TOKEN.
+                        </span>
+                      </label>
+                    )}
                     {!TERM_SOURCE_TYPES.has(newSourceDraft.source_type) && (
                       <input
                         type="text"
                         className="source-input"
-                        placeholder="Source URL"
+                        placeholder={URL_FIELD_PLACEHOLDERS[newSourceDraft.source_type] || 'Source URL'}
                         value={newSourceDraft.url}
                         onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, url: e.target.value }))}
                         disabled={isCreatingSource}
@@ -1723,18 +1801,6 @@ export default function ProjectsPage({
                       onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, name: e.target.value }))}
                       disabled={isCreatingSource}
                     />
-                    <select
-                      className="filter-select"
-                      value={newSourceDraft.source_type}
-                      onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, source_type: e.target.value }))}
-                      disabled={isCreatingSource}
-                    >
-                      {SOURCE_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
                     {newSourceError && (
                       <div
                         style={{

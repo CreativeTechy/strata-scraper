@@ -82,7 +82,7 @@ PLATFORM_SOURCE_TYPE = {
     "blog": "rss",
     "news": "web",
     "x": "social",
-    "linkedin": "social",
+    "linkedin": "linkedin",
     "facebook": "social",
     "instagram": "social",
     "youtube": "social",

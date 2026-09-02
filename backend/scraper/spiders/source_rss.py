@@ -45,6 +45,12 @@ from scraper.social_sources import (
     reddit_oauth_headers,
     reddit_oauth_request_url,
 )
+from scraper.apify_linkedin import (
+    apify_linkedin_page_posts,
+    apify_linkedin_search_posts,
+    linkedin_kind,
+    linkedin_search_query,
+)
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
 from services.pipeline.pipeline_runs import update_pipeline_run
@@ -287,6 +293,34 @@ class SourceRssSpider(scrapy.Spider):
             # produces any response at all (see _on_request_error) still ends
             # up in source_diagnostics.json - not just ones that errored back.
             self._note_source_status(source_name, url)
+
+            if source_type == "linkedin":
+                # LinkedIn has no unauthenticated HTML worth fetching (even a
+                # public company page requires a logged-in, JS-rendered
+                # session) - unlike every other source type, this replaces
+                # the seed request entirely rather than adding an extra tier
+                # on top of it. See scraper/apify_linkedin.py.
+                if not config.apify_configured():
+                    self._note_source_status(
+                        source_name, url,
+                        note="APIFY_API_TOKEN not set - linkedin sources require Apify (see backend/.env).",
+                    )
+                    continue
+                kind = linkedin_kind(url)
+                if kind == "search":
+                    articles = apify_linkedin_search_posts(linkedin_search_query(url) or source_name, url, source_name)
+                elif kind in {"company", "profile"}:
+                    articles = apify_linkedin_page_posts(url, url, source_name)
+                else:
+                    self._note_source_status(source_name, url, note=f"Unrecognized LinkedIn source URL: {url!r}")
+                    continue
+                self.logger.info("LinkedIn %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
+                for article in articles:
+                    self._progress_articles += 1
+                    yield article
+                self._push_progress()
+                continue
+
             fetch_url = url
             if source_type == "reddit":
                 fetch_url = (

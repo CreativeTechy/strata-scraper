@@ -86,6 +86,56 @@ class DeriveTelegramUrlTests(unittest.TestCase):
         self.assertEqual(sources_store._derive_telegram_url(""), "")
 
 
+class DeriveLinkedinUrlTests(unittest.TestCase):
+    def test_full_company_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url("https://www.linkedin.com/company/google/"),
+            "https://www.linkedin.com/company/google",
+        )
+
+    def test_full_profile_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url("https://www.linkedin.com/in/satyanadella/"),
+            "https://www.linkedin.com/in/satyanadella",
+        )
+
+    def test_full_search_url_keeps_keywords_param(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url(
+                "https://www.linkedin.com/search/results/content/?keywords=ev+fires&origin=GLOBAL_SEARCH_HEADER"
+            ),
+            "https://www.linkedin.com/search/results/content/?keywords=ev+fires",
+        )
+
+    def test_full_search_url_without_keywords_is_rejected(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url("https://www.linkedin.com/search/results/content/?origin=x"), ""
+        )
+
+    def test_non_linkedin_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_linkedin_url("https://example.com/company/google"), "")
+
+    def test_unrecognized_linkedin_path_is_rejected(self):
+        self.assertEqual(sources_store._derive_linkedin_url("https://www.linkedin.com/feed/"), "")
+
+    def test_bare_word_defaults_to_company(self):
+        self.assertEqual(sources_store._derive_linkedin_url("google"), "https://www.linkedin.com/company/google")
+
+    def test_bare_word_with_profile_kind(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url("satyanadella", kind="profile"), "https://www.linkedin.com/in/satyanadella"
+        )
+
+    def test_bare_phrase_with_search_kind(self):
+        self.assertEqual(
+            sources_store._derive_linkedin_url("electric vehicles", kind="search"),
+            "https://www.linkedin.com/search/results/content/?keywords=electric+vehicles",
+        )
+
+    def test_empty_input_returns_empty_string(self):
+        self.assertEqual(sources_store._derive_linkedin_url(""), "")
+
+
 class UpsertPayloadRedditTelegramTests(unittest.TestCase):
     """The end-to-end path a create/update API call actually goes through."""
 
@@ -116,6 +166,21 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
 
     def test_reddit_non_reddit_host_is_rejected_not_saved_raw(self):
         payload = sources_store._upsert_payload({"source_type": "reddit", "url": "https://example.com/r/test"})
+        self.assertEqual(payload["url"], "")
+
+    def test_linkedin_source_normalizes_bare_company_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "linkedin", "url": "google", "linkedin_kind": "company"})
+        self.assertEqual(payload["url"], "https://www.linkedin.com/company/google")
+        self.assertEqual(payload["source_type"], "linkedin")
+
+    def test_linkedin_source_normalizes_bare_search_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "linkedin", "url": "ev fires", "linkedin_kind": "search"}
+        )
+        self.assertEqual(payload["url"], "https://www.linkedin.com/search/results/content/?keywords=ev+fires")
+
+    def test_linkedin_non_linkedin_host_is_rejected_not_saved_raw(self):
+        payload = sources_store._upsert_payload({"source_type": "linkedin", "url": "https://example.com/company/google"})
         self.assertEqual(payload["url"], "")
 
 
