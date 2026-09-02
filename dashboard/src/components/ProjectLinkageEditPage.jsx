@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Link2, RefreshCw, Save, Search, Users, X } from 'lucide-react';
 import '../styles/ProjectLinkage.css';
+import ErrorNotice from './ErrorNotice';
 
 // Edit-only: changes which dashboard users are linked to one project. Viewing
 // the current linkage lives on ProjectLinkageDetailPage; this page only
@@ -96,21 +97,7 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
       </div>
 
       <div className="glass-card admin-form-panel" style={{ maxWidth: 780, margin: '0 auto' }}>
-        {error && (
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 14,
-              background: 'rgba(255, 71, 87, 0.08)',
-              border: '1px solid rgba(255, 71, 87, 0.16)',
-              color: '#b42318',
-              fontSize: '0.84rem',
-              lineHeight: 1.5,
-            }}
-          >
-            {error}
-          </div>
-        )}
+        <ErrorNotice error={error} context="update linked users" onDismiss={() => setError('')} compact />
 
         <div className="assign-sources-panel">
           <div className="assign-sources-header">

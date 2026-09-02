@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart3, CalendarClock, Check, ChevronRight,
+  BarChart3, CalendarClock, Check, ChevronRight,
   ExternalLink, Layers, Link2, Pencil, Play, Radar, RefreshCw, Search,
   ShieldCheck, Sparkles, Trash2, Users,
 } from 'lucide-react';
@@ -24,6 +24,7 @@ import {
 import { countryLabel } from '../constants/countries.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import '../styles/Competitors.css';
 
 // How far back analysis looks for evidence. The backend accepts 1-365 and
@@ -302,10 +303,7 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
       ) : null}
 
       {!running && analysis && analysis.status !== 'success' ? (
-        <div className="cs-alert cs-alert-warn" style={{ marginTop: 14 }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0 }} />
-          <span>{analysis.error || 'The analysis could not be generated.'}</span>
-        </div>
+        <ErrorNotice error={analysis.error || 'The analysis could not be generated.'} context="generate this analysis" compact />
       ) : null}
 
       {!running && !analysis ? (
@@ -547,11 +545,7 @@ export default function CompetitorWorkspace() {
         </div>
       </div>
 
-      {error ? (
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{error}</span>
-        </div>
-      ) : null}
+      <ErrorNotice error={error} context="load or update this competitor study" onDismiss={() => setError('')} />
 
       {scrapeNotice ? (
         <div className="cs-alert cs-alert-info">

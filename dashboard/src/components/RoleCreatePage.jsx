@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldPlus } from 'lucide-react';
 import RoleForm from './RoleForm';
+import ErrorNotice from './ErrorNotice';
 
 const emptyValue = { name: '', description: '', permissions: [] };
 
@@ -65,11 +66,7 @@ export default function RoleCreatePage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="panel-chip" style={{ background: '#fde2e2', color: '#9c1c1c', marginBottom: 16 }}>
-          {loadError}
-        </div>
-      )}
+      <ErrorNotice error={loadError} context="load permissions" />
 
       {loading && (
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-light)' }}>

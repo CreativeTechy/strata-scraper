@@ -20,12 +20,13 @@ import {
   BadgeCheck,
   FileText,
   TrendingUp,
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Square,
 } from 'lucide-react';
 import '../styles/Workflow.css';
+import ErrorNotice from './ErrorNotice';
+import { friendlyRunMessage } from '../errors/userFacingError.js';
 
 const SourceTypeIcon = ({ sourceType }) => {
   if (sourceType === 'x' || sourceType === 'username' || sourceType === 'hashtag' || sourceType === 'tweet') return <AtSign size={16} />;
@@ -636,12 +637,7 @@ export default function WorkflowPage({
                 </span>
               </div>
 
-              {runsError ? (
-                <div className="panel-empty danger">
-                  <AlertTriangle size={16} />
-                  <span>{runsError}</span>
-                </div>
-              ) : null}
+              <ErrorNotice error={runsError} context="load pipeline activity" compact />
 
               <div className="log-list">
                 {runsLoading ? (
@@ -660,7 +656,7 @@ export default function WorkflowPage({
                       <div className="log-dot"></div>
                       <div className="log-copy">
                         <div className="log-title">Current run</div>
-                        <div className="log-body">{currentRun.message || 'Pipeline in progress.'}</div>
+                        <div className="log-body">{friendlyRunMessage(currentRun)}</div>
                         <div className="log-meta">
                           <span>{prettyStage(currentRun.stage)}</span>
                           <span>{currentRun.status}</span>
@@ -674,7 +670,7 @@ export default function WorkflowPage({
                         <div className={`log-dot ${run.status || ''}`}></div>
                         <div className="log-copy">
                           <div className="log-title">{prettyStage(run.stage)}</div>
-                          <div className="log-body">{run.message || 'No message'}</div>
+                          <div className="log-body">{friendlyRunMessage(run)}</div>
                           <div className="log-meta">
                             <span>{run.status || 'queued'}</span>
                             <span>{formatWhen(run.finished_at || run.created_at)}</span>

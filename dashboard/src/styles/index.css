@@ -3166,3 +3166,35 @@ h1, h2, h3 {
     font-size: 1.45rem;
   }
 }
+/* Shared, user-facing error treatment used across dashboard pages. */
+.error-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-left: 4px solid #ef4444;
+  border-radius: 14px;
+  background: rgba(254, 242, 242, 0.92);
+  color: #7f1d1d;
+  line-height: 1.45;
+}
+.error-notice-icon { flex: 0 0 auto; margin-top: 2px; color: #e11d48; }
+.error-notice-content { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.error-notice-content > strong { color: #991b1b; font-size: .92rem; }
+.error-notice-content > span { font-size: .84rem; }
+.error-notice-action { color: var(--text-dark); }
+.error-notice-buttons { display: flex; align-items: center; gap: 6px; }
+.error-notice-button, .error-notice-dismiss {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid rgba(220, 38, 38, .18); border-radius: 9px;
+  background: rgba(255,255,255,.72); color: #991b1b; cursor: pointer;
+}
+.error-notice-button { padding: 6px 10px; font-weight: 700; }
+.error-notice-dismiss { width: 30px; height: 30px; padding: 0; }
+.error-notice-details { margin-top: 5px; font-size: .76rem; color: var(--text-light); }
+.error-notice-details summary { cursor: pointer; font-weight: 700; }
+.error-notice-details pre { max-height: 130px; overflow: auto; margin: 7px 0 0; padding: 9px; border-radius: 8px; background: rgba(255,255,255,.7); white-space: pre-wrap; overflow-wrap: anywhere; }
+.error-notice-compact { padding: 10px 12px; margin-bottom: 10px; }
+@media (max-width: 640px) { .error-notice { flex-wrap: wrap; } .error-notice-buttons { margin-left: 30px; } }

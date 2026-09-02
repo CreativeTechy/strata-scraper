@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import { useAuth } from '../auth/useAuth.js';
 import {
   Rss,
@@ -185,6 +186,7 @@ export default function SourcesPage({
   const [initialDraft, setInitialDraft] = useState(emptyDraft);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     if (!isFormRoute) {
@@ -323,6 +325,7 @@ export default function SourcesPage({
   };
 
   const submit = async () => {
+    setActionError('');
     const isTermType = TERM_SOURCE_TYPES.has(draft.source_type);
     const payload = {
       url: isTermType ? '' : draft.url.trim(),
@@ -341,13 +344,16 @@ export default function SourcesPage({
 
     if (isTermType ? !payload.name : !payload.url) return;
 
-    if (editingId) {
-      await onUpdateSource?.(editingId, payload);
-    } else {
-      await onCreateSource?.(payload);
+    try {
+      if (editingId) {
+        await onUpdateSource?.(editingId, payload);
+      } else {
+        await onCreateSource?.(payload);
+      }
+      navigate('/sources');
+    } catch (error) {
+      setActionError(error?.message || 'Failed to save source.');
     }
-
-    navigate('/sources');
   };
 
   const toggleProject = (projectId) => {
@@ -361,9 +367,14 @@ export default function SourcesPage({
   };
 
   const remove = async (source) => {
-    await onDeleteSource?.(source.id);
-    if (editingId === source.id) {
-      navigate('/sources');
+    setActionError('');
+    try {
+      await onDeleteSource?.(source.id);
+      if (editingId === source.id) {
+        navigate('/sources');
+      }
+    } catch (error) {
+      setActionError(error?.message || 'Failed to delete source.');
     }
   };
 
@@ -407,6 +418,8 @@ export default function SourcesPage({
             </div>
           </div>
         </div>
+
+        <ErrorNotice error={actionError} context="save this source" onDismiss={() => setActionError('')} />
 
         <div className="glass-card admin-form-panel" style={{ maxWidth: 1080, margin: '0 auto' }}>
           <div className="panel-header-tight">
@@ -687,6 +700,8 @@ export default function SourcesPage({
           )}
         </div>
       </div>
+
+      <ErrorNotice error={actionError} context="manage sources" onDismiss={() => setActionError('')} />
 
       <div className="admin-stats-grid">
         <div className="admin-stat-card">

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogIn, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { LogIn, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
+import ErrorNotice from './ErrorNotice';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -87,12 +88,7 @@ export default function LoginPage() {
             </div>
           </label>
 
-          {error && (
-            <div className="login-error" role="alert">
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
+          <ErrorNotice error={error} context="sign you in" compact />
 
           <button type="submit" className="btn-primary login-submit" disabled={submitting}>
             {submitting ? <RefreshCw size={16} className="icon-spin" /> : <LogIn size={16} />}

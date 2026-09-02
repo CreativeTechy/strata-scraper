@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowLeft, Building2, Calendar, CheckCircle2, ChevronRight,
+  ArrowLeft, Building2, Calendar, CheckCircle2, ChevronRight,
   Layers, Loader2, Save,
 } from 'lucide-react';
 import {
@@ -20,6 +20,7 @@ import {
 } from '../competitorApi.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
 import { CountryPicker, ListEditor } from './CompetitorOnboarding.jsx';
+import ErrorNotice from './ErrorNotice';
 import { WeekdayPicker } from './ProjectsPage.jsx';
 import '../styles/Competitors.css';
 
@@ -138,10 +139,7 @@ export default function CompetitorEditPage() {
   if (loadError || !study) {
     return (
       <div className="cs-page">
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{loadError || 'Study not found.'}</span>
-        </div>
+        <ErrorNotice error={loadError || 'Study not found.'} context="load this competitor study" />
         <Link to="/competitors" className="cs-btn" style={{ marginTop: 14 }}>
           <ArrowLeft size={15} /> Back to studies
         </Link>
@@ -170,11 +168,7 @@ export default function CompetitorEditPage() {
         </div>
       </div>
 
-      {saveError ? (
-        <div className="cs-alert cs-alert-error">
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{saveError}</span>
-        </div>
-      ) : null}
+      <ErrorNotice error={saveError} context="save this competitor study" onDismiss={() => setSaveError('')} />
       {saved && !saveError ? (
         <div className="cs-alert cs-alert-info">
           <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />

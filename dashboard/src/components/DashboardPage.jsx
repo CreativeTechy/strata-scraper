@@ -8,7 +8,6 @@ import {
   Rss,
   Users,
   TrendingUp,
-  AlertTriangle,
   CheckCircle2,
   ShieldAlert,
   History,
@@ -23,6 +22,7 @@ import {
   PackageOpen,
   Layers3,
 } from 'lucide-react';
+import ErrorNotice from './ErrorNotice';
 import {
   ResponsiveContainer,
   LineChart,
@@ -367,13 +367,7 @@ export default function DashboardPage({ projects = [], projectId = null }) {
           <Link to="/projects" className="btn-secondary">Go to Projects</Link>
         </div>
       ) : error ? (
-        <div className="glass-card admin-empty-state report-error-state">
-          <div className="admin-empty-state-icon">
-            <AlertTriangle size={20} />
-          </div>
-          <strong>Couldn't load this project's dashboard</strong>
-          <p>{error}</p>
-        </div>
+        <ErrorNotice error={error} context="load this project's dashboard" onRetry={() => loadSummary(selectedId)} />
       ) : (
         <div className="report-body">
           <div className="admin-stats-grid dashboard-stats-grid">

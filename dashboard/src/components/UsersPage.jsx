@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { UserPlus, Users as UsersIcon, Ban, CheckCircle2, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
+import ErrorNotice from './ErrorNotice';
 import '../styles/AdminUsers.css';
 
 const emptyDraft = { username: '', email: '', password: '', role: '' };
@@ -140,11 +141,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="panel-chip" style={{ background: '#fde2e2', color: '#9c1c1c', marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
+      <ErrorNotice error={error} context="manage users" onDismiss={() => setError('')} />
 
       <form onSubmit={createUser} className="glass-card user-create-form" style={{ marginBottom: 24 }}>
         <label className="user-create-field">

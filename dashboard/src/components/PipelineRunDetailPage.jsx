@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Database,
   Loader2,
-  AlertTriangle,
   ChevronDown,
   ChevronRight,
   ShieldAlert,
@@ -16,6 +15,7 @@ import {
   Layers,
   ExternalLink,
 } from 'lucide-react';
+import ErrorNotice from './ErrorNotice';
 
 function prettyStage(stage) {
   if (!stage) return 'queued';
@@ -272,9 +272,7 @@ export default function PipelineRunDetailPage({ projects = [] }) {
           <Loader2 size={18} className="spin" /> Loading run details...
         </div>
       ) : error ? (
-        <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b42318', borderLeft: '4px solid #ff4757' }}>
-          <AlertTriangle size={18} /> {error}
-        </div>
+        <ErrorNotice error={error} context="load this pipeline run" />
       ) : !run ? null : (
         <>
           <div className="admin-stats-grid">
@@ -325,14 +323,7 @@ export default function PipelineRunDetailPage({ projects = [] }) {
               </div>
             ) : null}
 
-            {run.error ? (
-              <div className="run-detail-error-box">
-                <div className="run-detail-box-label">
-                  <AlertTriangle size={13} /> Error
-                </div>
-                <pre className="run-detail-error-text">{run.error}</pre>
-              </div>
-            ) : null}
+            <ErrorNotice error={run.error} context="complete this pipeline run" compact />
           </div>
 
           <div className="glass-card" style={{ marginBottom: 18 }}>

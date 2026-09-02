@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import '../styles/AdminUsers.css';
+import ErrorNotice from './ErrorNotice';
 
 const CATEGORY_LABELS = {
   articles: 'Articles',
@@ -121,11 +122,7 @@ export default function RoleForm({
 
   return (
     <form onSubmit={onSubmit} className="glass-card role-form">
-      {error && (
-        <div className="panel-chip" style={{ background: '#fde2e2', color: '#9c1c1c' }}>
-          {error}
-        </div>
-      )}
+      <ErrorNotice error={error} context="save this role" compact />
 
       <div className="role-fields">
         <label className="role-field">
