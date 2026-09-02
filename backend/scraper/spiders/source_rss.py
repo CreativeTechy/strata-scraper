@@ -51,6 +51,7 @@ from scraper.apify_linkedin import (
     linkedin_kind,
     linkedin_search_query,
 )
+from scraper.apify_reddit import apify_reddit_posts
 from scraper.apify_twitter import apify_twitter_search_posts
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
@@ -394,6 +395,24 @@ class SourceRssSpider(scrapy.Spider):
                     **proxy_meta(source_type),
                 },
             )
+
+            if source_type == "reddit" and config.apify_configured():
+                # Apify Reddit-scraper tier: independent best-effort coverage
+                # alongside the direct reddit.com/oauth.reddit.com .json
+                # request just yielded above, not instead of it - the public
+                # endpoints get rate-limited or blocked outright without
+                # REDDIT_OAUTH_CLIENT_ID/SECRET configured. The actor accepts
+                # the source's own canonical subreddit/user/search URL
+                # directly, so its results land as articles straight away
+                # rather than needing a follow-up hydration hop.
+                apify_posts = apify_reddit_posts(url, url, source_name)
+                if apify_posts:
+                    self.logger.info(
+                        "Reddit %r -> %d post(s) via Apify", source_name, len(apify_posts)
+                    )
+                for post in apify_posts:
+                    self._progress_articles += 1
+                    yield post
 
             if source_type == "keyword" and config.google_cse_configured():
                 # General-web-search tier: the Google News RSS feed above only

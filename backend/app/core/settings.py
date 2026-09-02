@@ -312,6 +312,20 @@ APIFY_TWITTER_SEARCH_ACTOR = os.environ.get("APIFY_TWITTER_SEARCH_ACTOR", "apido
 APIFY_TWITTER_MAX_TWEETS = _env_int("APIFY_TWITTER_MAX_TWEETS", 20)
 
 
+# --- Apify (optional) - Reddit scraping tier ---------------------------------
+# Reuses APIFY_API_TOKEN/APIFY_TIMEOUT_SECONDS above - this only adds the
+# actor id and result cap for "reddit" sources (see scraper/apify_reddit.py).
+# Runs alongside the existing direct reddit.com/oauth.reddit.com .json tier,
+# not instead of it: Reddit's public endpoints get rate-limited or blocked
+# outright without REDDIT_OAUTH_CLIENT_ID/SECRET configured, so this is
+# independent best-effort coverage, the same relationship the Apify Twitter
+# tier above has to the Google CSE tweet-link tier. Unconfigured (the
+# default), this tier is silently skipped - a reddit source's direct-fetch
+# tier already reports its own diagnostics.
+APIFY_REDDIT_SEARCH_ACTOR = os.environ.get("APIFY_REDDIT_SEARCH_ACTOR", "trudax/reddit-scraper-lite").strip()
+APIFY_REDDIT_MAX_ITEMS = _env_int("APIFY_REDDIT_MAX_ITEMS", 20)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
