@@ -53,6 +53,12 @@ from scraper.apify_linkedin import (
     linkedin_search_query,
 )
 from scraper.apify_reddit import apify_reddit_posts
+from scraper.apify_threads import (
+    apify_threads_profile_posts,
+    apify_threads_search_posts,
+    threads_kind,
+    threads_search_query,
+)
 from scraper.apify_twitter import apify_twitter_search_posts
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
@@ -328,6 +334,39 @@ class SourceRssSpider(scrapy.Spider):
                 self._push_progress()
                 continue
 
+            if source_type == "threads":
+                # Threads.com is a JS-rendered SPA that gates most of a
+                # profile's posts behind a logged-in session - same "no
+                # unauthenticated HTML worth fetching" situation as
+                # "linkedin" above, so this replaces the seed request
+                # entirely rather than adding an extra tier on top of it.
+                # See scraper/apify_threads.py.
+                if not config.apify_configured():
+                    self._note_source_status(
+                        source_name, url,
+                        note="APIFY_API_TOKEN not set - threads sources require Apify (see backend/.env).",
+                    )
+                    continue
+                kind = threads_kind(url)
+                try:
+                    if kind == "search":
+                        articles = apify_threads_search_posts(threads_search_query(url) or source_name, url, source_name)
+                    elif kind == "profile":
+                        handle = url.rsplit("/@", 1)[-1].strip("/")
+                        articles = apify_threads_profile_posts(handle, url, source_name)
+                    else:
+                        self._note_source_status(source_name, url, note=f"Unrecognized Threads source URL: {url!r}")
+                        continue
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
+                    continue
+                self.logger.info("Threads %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
+                for article in articles:
+                    self._progress_articles += 1
+                    yield article
+                self._push_progress()
+                continue
+
             if source_type == "tweet":
                 # A single tracked tweet/post - the exact post is already
                 # known (sources_store._derive_tweet_url only ever stores a
@@ -409,10 +448,10 @@ class SourceRssSpider(scrapy.Spider):
                     # them too. "web" is included as well: since "social" was
                     # removed as its own type, a platform this app has no
                     # dedicated scraping tier for (Facebook, Instagram,
-                    # TikTok, YouTube, Threads, ...) is now just a "web"
-                    # source (see config._infer_source_type) - most of these
-                    # disallow bots in their own robots.txt, so honoring it
-                    # would mean never even attempting the fetch.
+                    # TikTok, YouTube, ...) is now just a "web" source (see
+                    # config._infer_source_type) - most of these disallow
+                    # bots in their own robots.txt, so honoring it would mean
+                    # never even attempting the fetch.
                     "dont_obey_robotstxt": source_type in {
                         "username", "hashtag", "reddit", "telegram", "rss", "keyword", "web",
                     },

@@ -341,6 +341,20 @@ APIFY_REDDIT_MAX_ITEMS = _env_int("APIFY_REDDIT_MAX_ITEMS", 20)
 APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS", 240)
 
 
+# --- Apify (optional) - Threads scraping tier --------------------------------
+# Reuses APIFY_API_TOKEN above. Threads.com is a JS-rendered SPA that gates
+# most of a profile's posts behind a logged-in session, the same "no
+# unauthenticated HTML worth fetching" situation as LinkedIn - so "threads"
+# sources go through this actor in place of the normal per-source request
+# entirely (see scraper/apify_threads.py), not alongside it like the Twitter/
+# Reddit tiers above. Unset (the default), "threads" sources report 0
+# articles with an explanatory fetch note, same contract as an unconfigured
+# "linkedin" source.
+APIFY_THREADS_ACTOR = os.environ.get("APIFY_THREADS_ACTOR", "automation-lab/threads-scraper").strip()
+APIFY_THREADS_MAX_POSTS = _env_int("APIFY_THREADS_MAX_POSTS", 20)
+APIFY_THREADS_TIMEOUT_SECONDS = _env_int("APIFY_THREADS_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
@@ -431,6 +445,14 @@ def _looks_like_linkedin_url(url: str) -> bool:
     return host == "linkedin.com" or host.endswith(".linkedin.com")
 
 
+def _looks_like_threads_url(url: str) -> bool:
+    # threads.com is the current canonical domain (Meta moved off threads.net
+    # in April 2025, which now redirects to it) - both are recognized here so
+    # a source saved before the move still resolves correctly.
+    host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
+    return host in {"threads.com", "threads.net"}
+
+
 def _looks_like_x_url(url: str) -> bool:
     host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
     return host in {"x.com", "twitter.com"}
@@ -447,10 +469,12 @@ def _infer_source_type(url: str) -> str:
     """Best-guess source_type from a URL's own shape - no generic "social"
     bucket: an x.com/twitter.com URL resolves straight to whichever of
     tweet/hashtag/username it actually is, and every other social platform
-    (Facebook, Instagram, TikTok, YouTube, Threads, ...) - none of which this
-    app has any dedicated scraping tier for - falls through to "web" like any
-    other non-feed URL, per the "we can't scrape it as its own platform, so
-    treat it as a plain web page" rule.
+    (Facebook, Instagram, TikTok, YouTube, ...) - none of which this app has
+    any dedicated scraping tier for - falls through to "web" like any other
+    non-feed URL, per the "we can't scrape it as its own platform, so treat
+    it as a plain web page" rule. Threads (threads.com/threads.net) is the
+    one exception among Meta/X-adjacent platforms: see "linkedin" for why it
+    gets its own type instead of falling through too.
     """
     if _looks_like_feed_url(url):
         return "rss"
@@ -460,6 +484,8 @@ def _infer_source_type(url: str) -> str:
         return "telegram"
     if _looks_like_linkedin_url(url):
         return "linkedin"
+    if _looks_like_threads_url(url):
+        return "threads"
     if is_tweet_url(url):
         return "tweet"
     if _looks_like_hashtag_url(url):
@@ -469,7 +495,7 @@ def _infer_source_type(url: str) -> str:
     return "web"
 
 
-KNOWN_SOURCE_TYPES = {"rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram", "linkedin"}
+KNOWN_SOURCE_TYPES = {"rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram", "linkedin", "threads"}
 
 # hashtag/keyword/username store a URL derived FROM the chosen type itself
 # (see sources_store._derive_term_url) - it is always self-consistent with
@@ -481,7 +507,7 @@ _TERM_DERIVED_TYPES = {"hashtag", "keyword", "username"}
 # Every other known type is a dedicated platform whose URL shape alone
 # determines it - if a user-entered URL for any of these actually belongs to
 # a different one, _resolve_source_type corrects it below.
-_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "tweet", "hashtag", "username"}
+_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "threads", "tweet", "hashtag", "username"}
 
 
 def _resolve_source_type(source_type_input: str, url: str) -> str:

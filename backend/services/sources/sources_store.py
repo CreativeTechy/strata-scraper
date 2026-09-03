@@ -21,6 +21,8 @@ REDDIT_KINDS = {"subreddit", "user", "search"}
 
 LINKEDIN_KINDS = {"company", "profile", "search"}
 
+THREADS_KINDS = {"profile", "search"}
+
 
 def _default_name(url):
     if not url:
@@ -190,6 +192,42 @@ def _derive_linkedin_url(term, kind=None):
     return f"https://www.linkedin.com/company/{slug}"
 
 
+def _derive_threads_url(term, kind=None):
+    """Turn a full threads.com/threads.net URL, or a bare handle or search
+    phrase, into a canonical threads.com URL - same "kind disambiguates a
+    bare term" contract as _derive_linkedin_url above, since
+    `apify_threads.py` reads the kind (profile/search) straight back off the
+    stored URL's path shape (see its threads_kind()) rather than a separate
+    column. threads.net is accepted as input (Meta's former domain, still
+    live as a redirect) but always canonicalized to threads.com.
+    """
+    text = (term or "").strip()
+    if not text:
+        return ""
+
+    if re.match(r"^https?://", text, re.I):
+        parsed = urlparse(text)
+        host = parsed.netloc.lower().removeprefix("www.")
+        if host not in {"threads.com", "threads.net"}:
+            return ""
+        path = (parsed.path or "").rstrip("/")
+        if path.startswith("/search"):
+            query_term = (parse_qs(parsed.query).get("q") or [""])[0].strip()
+            return f"https://www.threads.com/search?q={quote_plus(query_term)}" if query_term else ""
+        if path.startswith("/@"):
+            return f"https://www.threads.com{path}"
+        return ""
+
+    kind = (kind or "").strip().lower()
+    if kind not in THREADS_KINDS:
+        kind = "profile"
+
+    if kind == "search":
+        return f"https://www.threads.com/search?q={quote_plus(text)}"
+    handle = re.sub(r"[^A-Za-z0-9_.]", "", text.lstrip("@").lstrip("/"))
+    return f"https://www.threads.com/@{handle}" if handle else ""
+
+
 def _normalize_record(row, include_project_ids=False):
     url = (row.get("url") or "").strip()
     name = (row.get("name") or "").strip() or _default_name(url)
@@ -241,6 +279,13 @@ def _upsert_payload(source, default_limited=True):
         # articles later (Apify's actors only accept linkedin.com URLs/queries).
         linkedin_kind = str(source.get("linkedin_kind") or "").strip().lower()
         url = _derive_linkedin_url(url or name, linkedin_kind)
+    elif source_type_input == "threads" and (url or name):
+        # Same reasoning as reddit/telegram/linkedin above - a non-threads.com
+        # URL must be rejected here, not saved as-is only to silently scrape
+        # zero articles later (Apify's actor only accepts a Threads handle or
+        # search query).
+        threads_kind = str(source.get("threads_kind") or "").strip().lower()
+        url = _derive_threads_url(url or name, threads_kind)
     elif source_type_input == "tweet" and (url or name):
         # Same reasoning as reddit/telegram/linkedin above - anything that
         # isn't really a tweet/status URL must be rejected here, not saved
