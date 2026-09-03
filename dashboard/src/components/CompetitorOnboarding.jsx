@@ -97,7 +97,7 @@ const CULTURAL_STAGES = [
 const CHANNEL_STAGES = [
   'Checking each competitor’s site for a feed',
   'Searching the web for their real accounts and hashtags',
-  'Asking the model for X accounts, hashtags, and keywords to monitor',
+  'Asking the model for X, LinkedIn, Threads, Facebook, and Instagram accounts, hashtags, and keywords to monitor',
   'Searching for review and discussion pages',
   'Linking valid channels as sources',
 ];

@@ -788,6 +788,15 @@
   margin-bottom: 10px;
 }
 
+/* Platform tabs sit on their own line above the URL/handle fields in a
+   source row - .source-type-tabs' own margin-top is meant for a standalone
+   label+tabs block (Sources/Projects), not inline in a flex row like this
+   one. */
+.cs-source-type-tabs {
+  margin-top: 0;
+  flex: 1 1 100%;
+}
+
 .cs-source-error {
   font-size: 0.76rem;
   color: #b91c1c;

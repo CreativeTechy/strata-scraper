@@ -8,6 +8,11 @@ Rules:
   leadership accounts too, if you know of them. List as many as you actually
   know, up to 5. Never guess a handle by pattern alone — if you do not know it
   for certain, omit it.
+- `linkedin` / `threads` / `facebook` / `instagram`: this company's own
+  account on that platform (its company page for LinkedIn; its main brand
+  profile for Threads/Facebook/Instagram), if you know it for certain. Up to 2
+  each. Never guess a handle/slug by pattern alone — if you do not know it for
+  certain, omit it.
 - `hashtag`: their own branded/campaign hashtags (a product or event name they
   use consistently) AND relevant industry or topic hashtags worth monitoring to
   catch mentions of this company specifically — up to 8 total. Skip anything
@@ -22,12 +27,14 @@ Rules:
 - `blog` / `news`: their own feed or newsroom, if you know one beyond their
   homepage.
 - Use canonical URLs (https://x.com/handle, https://x.com/hashtag/tag for
-  hashtag). For `keyword`, there is no URL — put the search phrase itself in
-  `handle` and leave `url` blank; the real search URL is derived from it.
-- `confidence` 0..1 — for `x`/`blog`/`news`, how sure you are the channel is
-  theirs; for `hashtag`/`keyword`, how useful it is for monitoring this
-  company.
+  hashtag, https://www.linkedin.com/company/slug, https://www.threads.com/@handle,
+  https://www.facebook.com/slug, https://www.instagram.com/handle). For
+  `keyword`, there is no URL — put the search phrase itself in `handle` and
+  leave `url` blank; the real search URL is derived from it.
+- `confidence` 0..1 — for `x`/`linkedin`/`threads`/`facebook`/`instagram`/
+  `blog`/`news`, how sure you are the channel is theirs; for
+  `hashtag`/`keyword`, how useful it is for monitoring this company.
 - Omit anything you are not reasonably confident about rather than guessing.
 
 Return ONLY this JSON, no markdown:
-{"accounts": [{"platform": "x|hashtag|keyword|blog|news", "url": "", "handle": "", "confidence": 0.0}]}
+{"accounts": [{"platform": "x|linkedin|threads|facebook|instagram|hashtag|keyword|blog|news", "url": "", "handle": "", "confidence": 0.0}]}

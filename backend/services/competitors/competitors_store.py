@@ -19,7 +19,24 @@ from psycopg.types.json import Jsonb
 
 from app.core import db
 from services.competitors.countries import COUNTRIES, validate_countries
-from services.sources.sources_store import _derive_reddit_url, _derive_telegram_url, _derive_term_url, _derive_tweet_url
+from services.sources.sources_store import (
+    _derive_facebook_url,
+    _derive_instagram_url,
+    _derive_linkedin_url,
+    _derive_reddit_url,
+    _derive_telegram_url,
+    _derive_term_url,
+    _derive_threads_url,
+    _derive_tweet_url,
+)
+
+# Platforms whose bare-term entry is ambiguous without a "kind" to disambiguate
+# it (subreddit vs. user vs. search, company vs. profile, ...) - mirrors the
+# dashboard's per-platform kind selector on the Sources page / project wizard
+# (SourcesPage.jsx/ProjectsPage.jsx's reddit_kind/linkedin_kind/threads_kind/
+# facebook_kind/instagram_kind). An explicit full URL for any of these is
+# unambiguous on its own and `kind` is ignored - see each _derive_*_url.
+KIND_PLATFORMS = {"reddit", "linkedin", "threads", "facebook", "instagram"}
 
 COMPETITOR_COLUMNS = """
     id, project_id, name, website, domain, description, country,
@@ -73,12 +90,14 @@ ACCOUNT_COLUMNS = """
 # config._infer_source_type) - "x" resolves to "username" (a tracked X account
 # is virtually always a profile link, not a hashtag or single tweet), and
 # every other social platform this app has no dedicated scraping tier for
-# (Instagram, YouTube) maps straight to "web". The "social" key itself is
-# kept mapped to "web" only so a competitor_accounts row saved under that
-# pre-unification generic label still resolves to something crawlable -
-# .get()'s own default below would already do this even without the explicit
-# entry, but it's spelled out here for the same "kept so it still resolves"
-# reason as the rest of this legacy block.
+# (YouTube, TikTok, ...) maps straight to "web". LinkedIn/Threads/Facebook/
+# Instagram each get their own dedicated Apify-backed tier (see CLAUDE.md), so
+# they resolve to their own source_type rather than falling through to "web"
+# like YouTube does. The "social" key itself is kept mapped to "web" only so a
+# competitor_accounts row saved under that pre-unification generic label still
+# resolves to something crawlable - .get()'s own default below would already
+# do this even without the explicit entry, but it's spelled out here for the
+# same "kept so it still resolves" reason as the rest of this legacy block.
 PLATFORM_SOURCE_TYPE = {
     "web": "web",
     "rss": "rss",
@@ -93,8 +112,9 @@ PLATFORM_SOURCE_TYPE = {
     "news": "web",
     "x": "username",
     "linkedin": "linkedin",
+    "threads": "threads",
     "facebook": "facebook",
-    "instagram": "web",
+    "instagram": "instagram",
     "youtube": "web",
     "social": "web",
 }
@@ -106,23 +126,35 @@ PLATFORM_SOURCE_TYPE = {
 TERM_PLATFORMS = {"hashtag", "keyword", "username"}
 
 
-def resolve_account_url(platform: str, url: str, handle: str) -> str | None:
+def resolve_account_url(platform: str, url: str, handle: str, kind: str | None = None) -> str | None:
     """The real URL to store for a manually-entered competitor source.
 
-    Term-type platforms and reddit/telegram/tweet accept a bare name/handle
-    (or, for tweet, the pasted URL in either field) instead of requiring the
-    url field specifically; everything else still requires a plausible URL
-    via normalize_source_url.
+    Term-type platforms and reddit/telegram/tweet/linkedin/threads/facebook/
+    instagram accept a bare name/handle (or, for tweet, the pasted URL in
+    either field) instead of requiring the url field specifically; everything
+    else still requires a plausible URL via normalize_source_url. `kind`
+    disambiguates a bare term for the KIND_PLATFORMS above (e.g. a bare
+    "acme" as a subreddit vs. a Reddit user vs. a search term) - same
+    contract as the Sources page's own kind selectors; it's ignored for an
+    explicit full URL and for platforms with no kind concept.
     """
     term = (handle or "").strip()
     if platform in TERM_PLATFORMS:
         return _derive_term_url(platform, term) or None
     if platform == "reddit":
-        return _derive_reddit_url(url or term) or None
+        return _derive_reddit_url(url or term, kind) or None
     if platform == "telegram":
         return _derive_telegram_url(url or term) or None
     if platform == "tweet":
         return _derive_tweet_url(url or term) or None
+    if platform == "linkedin":
+        return _derive_linkedin_url(url or term, kind) or None
+    if platform == "threads":
+        return _derive_threads_url(url or term, kind) or None
+    if platform == "facebook":
+        return _derive_facebook_url(url or term, kind) or None
+    if platform == "instagram":
+        return _derive_instagram_url(url or term, kind) or None
     return normalize_source_url(url)
 
 
@@ -374,7 +406,8 @@ def list_accounts_for_project(project_id: int) -> list[dict]:
 def upsert_account(competitor_id: int, values: dict) -> dict | None:
     platform = str(values.get("platform") or "").strip().lower()
     handle_input = str(values.get("handle") or "").strip().lstrip("@")
-    url = resolve_account_url(platform, values.get("url"), handle_input)
+    kind = str(values.get("kind") or "").strip().lower() or None
+    url = resolve_account_url(platform, values.get("url"), handle_input, kind)
     if not url or not platform:
         return None
 

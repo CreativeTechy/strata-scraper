@@ -112,7 +112,56 @@ export const SOURCE_KIND_OPTIONS = [
   { value: 'tweet', label: 'Single Post' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'threads', label: 'Threads' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
 ];
+
+/** Platforms whose bare-term entry is ambiguous without a "kind" to
+ *  disambiguate it - mirrors the Sources page / project wizard's
+ *  reddit_kind/linkedin_kind/threads_kind/facebook_kind/instagram_kind
+ *  selectors (SourcesPage.jsx/ProjectsPage.jsx) and the backend's
+ *  KIND_PLATFORMS (services/competitors/competitors_store.py). Only matters
+ *  for a bare handle/slug typed in - kind is ignored once a full URL is
+ *  pasted instead, same as those pages. */
+export const KIND_SOURCE_TYPES = new Set(['reddit', 'linkedin', 'threads', 'facebook', 'instagram']);
+
+export const SOURCE_KIND_SUB_OPTIONS = {
+  reddit: [
+    { value: 'subreddit', label: 'Subreddit' },
+    { value: 'user', label: 'User / profile' },
+    { value: 'search', label: 'Keyword / search' },
+  ],
+  linkedin: [
+    { value: 'company', label: 'Company page' },
+    { value: 'profile', label: 'Personal profile' },
+    { value: 'search', label: 'Keyword / hashtag search' },
+  ],
+  threads: [
+    { value: 'profile', label: 'Profile' },
+    { value: 'search', label: 'Keyword / search' },
+  ],
+  facebook: [
+    { value: 'page', label: 'Page' },
+    { value: 'group', label: 'Group' },
+    { value: 'profile', label: 'Personal profile' },
+    { value: 'search', label: 'Keyword / search' },
+  ],
+  instagram: [
+    { value: 'profile', label: 'Profile' },
+    { value: 'hashtag', label: 'Hashtag' },
+    { value: 'search', label: 'Keyword / search' },
+  ],
+};
+
+export const SOURCE_KIND_DEFAULTS = {
+  reddit: 'subreddit',
+  linkedin: 'company',
+  threads: 'profile',
+  facebook: 'page',
+  instagram: 'profile',
+};
 
 /** These take a bare name/term instead of a URL — the source row hides its
  *  URL field and derives the real URL server-side. */
@@ -122,6 +171,19 @@ export const TERM_SOURCE_PLACEHOLDERS = {
   hashtag: 'Hashtag, without # (e.g. EVSummit)',
   username: 'X account, without @ (e.g. elonmusk)',
   keyword: 'Keyword or phrase (e.g. electric vehicles)',
+};
+
+// Same copy as the Sources page's URL_FIELD_PLACEHOLDERS (SourcesPage.jsx) -
+// these platforms' URL field doubles as a bare-term input, disambiguated by
+// the kind selector above, not just a paste-a-URL field.
+export const URL_FIELD_PLACEHOLDERS = {
+  reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
+  telegram: '@channelname, channelname, or https://t.me/channelname',
+  linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
+  tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
+  threads: 'Handle (without @), a search phrase, or a threads.com URL',
+  facebook: 'Page/group/profile slug, a search phrase, or a facebook.com URL',
+  instagram: 'Handle (without @), a hashtag, a search phrase, or an instagram.com URL',
 };
 
 export const PLATFORM_LABELS = Object.fromEntries(

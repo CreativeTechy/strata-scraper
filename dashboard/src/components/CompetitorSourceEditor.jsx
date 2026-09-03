@@ -8,11 +8,74 @@
 import { useState } from 'react';
 import { AlertTriangle, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
-  SOURCE_KIND_OPTIONS, TERM_SOURCE_TYPES, TERM_SOURCE_PLACEHOLDERS, isPlausibleUrl,
+  SOURCE_KIND_OPTIONS, TERM_SOURCE_TYPES, TERM_SOURCE_PLACEHOLDERS,
+  KIND_SOURCE_TYPES, SOURCE_KIND_SUB_OPTIONS, SOURCE_KIND_DEFAULTS,
+  URL_FIELD_PLACEHOLDERS, PLATFORM_LABELS, isPlausibleUrl,
 } from '../competitorApi.js';
 
 function emptySource() {
-  return { platform: 'web', url: '', handle: '' };
+  return { platform: 'web', url: '', handle: '', kind: '' };
+}
+
+/** A bare handle/slug is valid for a kind-disambiguated platform (the
+ *  backend derives the real URL from it, same as the Sources page) even
+ *  though it doesn't look like a URL on its own - only a genuinely empty
+ *  value is rejected there. Every other platform still needs a plausible URL. */
+function isUsableSourceValue(row) {
+  if (isPlausibleUrl(row.url)) return true;
+  return KIND_SOURCE_TYPES.has(row.platform) && row.url.trim().length > 0;
+}
+
+/** Platform picker as a tab row instead of a `<select>` - matches the
+ *  source-type tabs on the Sources page and the project wizard
+ *  (SourcesPage.jsx / ProjectsPage.jsx's SOURCE_TYPE_FORM_TABS) so picking a
+ *  source's platform looks and behaves the same everywhere in the app. */
+function SourceTypeTabs({ value, onChange }) {
+  return (
+    <div className="source-type-tabs cs-source-type-tabs" role="tablist" aria-label="Choose source type">
+      {SOURCE_KIND_OPTIONS.map((option) => {
+        const isActive = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            className={`source-type-tab ${isActive ? 'active' : ''}`}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Disambiguates a bare handle/slug for platforms where one is ambiguous
+ *  (subreddit vs. user vs. search, company vs. profile, ...) - same
+ *  reddit_kind/linkedin_kind/threads_kind/facebook_kind/instagram_kind
+ *  selector as the Sources page and project wizard, just one shared select
+ *  keyed off the current platform instead of five separate fields. Hidden
+ *  entirely for platforms with no kind concept (web, rss, tweet, ...) - an
+ *  explicit full URL also makes it moot, but it stays visible even then
+ *  since it's ignored rather than wrong in that case. */
+function SourceKindSelect({ platform, kind, onChange }) {
+  const options = SOURCE_KIND_SUB_OPTIONS[platform];
+  if (!options) return null;
+  return (
+    <select
+      className="cs-select"
+      style={{ flex: '0 1 180px' }}
+      value={kind || SOURCE_KIND_DEFAULTS[platform]}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={`${PLATFORM_LABELS[platform] || platform} source kind`}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  );
 }
 
 /** Comma-separated alternate-name editor for one competitor, e.g. "Younes
@@ -80,7 +143,7 @@ function SourceRowFields({ row, onChange }) {
       <input
         className="cs-input"
         style={{ flex: '1 1 220px' }}
-        placeholder="https://..."
+        placeholder={URL_FIELD_PLACEHOLDERS[row.platform] || 'https://...'}
         value={row.url}
         onChange={(event) => onChange({ url: event.target.value })}
       />
@@ -123,7 +186,7 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
     usable.forEach((row, index) => {
       if (TERM_SOURCE_TYPES.has(row.platform)) {
         if (!row.handle.trim()) nextErrors[`source-${index}`] = 'Enter a value.';
-      } else if (!isPlausibleUrl(row.url)) {
+      } else if (!isUsableSourceValue(row)) {
         nextErrors[`source-${index}`] = 'Enter a valid URL.';
       }
     });
@@ -138,7 +201,12 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
       sources: usable.map((row) => (
         TERM_SOURCE_TYPES.has(row.platform)
           ? { platform: row.platform, url: '', handle: row.handle.trim() }
-          : { platform: row.platform, url: row.url.trim(), handle: row.handle.trim() || null }
+          : {
+            platform: row.platform,
+            url: row.url.trim(),
+            handle: row.handle.trim() || null,
+            kind: KIND_SOURCE_TYPES.has(row.platform) ? (row.kind || SOURCE_KIND_DEFAULTS[row.platform]) : null,
+          }
       )),
     });
 
@@ -193,15 +261,11 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
       <label className="cs-label">Sources<span className="cs-label-hint">optional — add now or later</span></label>
       {sources.map((row, index) => (
         <div key={index} className="cs-source-row">
-          <select
-            className="cs-select"
+          <SourceTypeTabs
             value={row.platform}
-            onChange={(event) => updateSource(index, { platform: event.target.value })}
-          >
-            {SOURCE_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+            onChange={(platform) => updateSource(index, { platform, kind: SOURCE_KIND_DEFAULTS[platform] || '' })}
+          />
+          <SourceKindSelect platform={row.platform} kind={row.kind} onChange={(kind) => updateSource(index, { kind })} />
           <SourceRowFields row={row} onChange={(patch) => updateSource(index, patch)} />
           {sources.length > 1 ? (
             <button type="button" className="cs-btn cs-btn-sm cs-btn-danger" onClick={() => removeSource(index)} aria-label="Remove source">
@@ -244,7 +308,7 @@ export function AddSourceRow({ onSubmit, busy }) {
         setError('Enter a value.');
         return;
       }
-    } else if (!isPlausibleUrl(row.url)) {
+    } else if (!isUsableSourceValue(row)) {
       setError('Enter a valid URL.');
       return;
     }
@@ -252,7 +316,12 @@ export function AddSourceRow({ onSubmit, busy }) {
     await onSubmit(
       isTermType
         ? { platform: row.platform, url: '', handle: row.handle.trim() }
-        : { platform: row.platform, url: row.url.trim(), handle: row.handle.trim() || null },
+        : {
+          platform: row.platform,
+          url: row.url.trim(),
+          handle: row.handle.trim() || null,
+          kind: KIND_SOURCE_TYPES.has(row.platform) ? (row.kind || SOURCE_KIND_DEFAULTS[row.platform]) : null,
+        },
     );
     setRow(emptySource());
   };
@@ -260,11 +329,11 @@ export function AddSourceRow({ onSubmit, busy }) {
   return (
     <div>
       <div className="cs-source-row">
-        <select className="cs-select" value={row.platform} onChange={(event) => setRow({ ...row, platform: event.target.value })}>
-          {SOURCE_KIND_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+        <SourceTypeTabs
+          value={row.platform}
+          onChange={(platform) => setRow({ ...row, platform, kind: SOURCE_KIND_DEFAULTS[platform] || '' })}
+        />
+        <SourceKindSelect platform={row.platform} kind={row.kind} onChange={(kind) => setRow({ ...row, kind })} />
         <SourceRowFields row={row} onChange={(patch) => setRow({ ...row, ...patch })} />
         <button
           type="button"
