@@ -46,6 +46,14 @@ from scraper.social_sources import (
     reddit_oauth_request_url,
 )
 from scraper.apify_common import ApifyBillingError
+from scraper.apify_facebook import (
+    apify_facebook_group_posts,
+    apify_facebook_page_posts,
+    apify_facebook_profile_posts,
+    apify_facebook_search_posts,
+    facebook_kind,
+    facebook_search_query,
+)
 from scraper.apify_linkedin import (
     apify_linkedin_page_posts,
     apify_linkedin_search_posts,
@@ -361,6 +369,42 @@ class SourceRssSpider(scrapy.Spider):
                     self._note_source_status(source_name, url, note=str(exc))
                     continue
                 self.logger.info("Threads %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
+                for article in articles:
+                    self._progress_articles += 1
+                    yield article
+                self._push_progress()
+                continue
+
+            if source_type == "facebook":
+                # A Facebook page, group, profile, or search-results page is
+                # either gated behind a login wall or served as a
+                # client-rendered shell - same "no unauthenticated HTML worth
+                # fetching" situation as "linkedin"/"threads" above, so this
+                # replaces the seed request entirely rather than adding an
+                # extra tier on top of it. See scraper/apify_facebook.py.
+                if not config.apify_configured():
+                    self._note_source_status(
+                        source_name, url,
+                        note="APIFY_API_TOKEN not set - facebook sources require Apify (see backend/.env).",
+                    )
+                    continue
+                kind = facebook_kind(url)
+                try:
+                    if kind == "search":
+                        articles = apify_facebook_search_posts(facebook_search_query(url) or source_name, url, source_name)
+                    elif kind == "group":
+                        articles = apify_facebook_group_posts(url, url, source_name)
+                    elif kind == "profile":
+                        articles = apify_facebook_profile_posts(url, url, source_name)
+                    elif kind == "page":
+                        articles = apify_facebook_page_posts(url, url, source_name)
+                    else:
+                        self._note_source_status(source_name, url, note=f"Unrecognized Facebook source URL: {url!r}")
+                        continue
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
+                    continue
+                self.logger.info("Facebook %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
                 for article in articles:
                     self._progress_articles += 1
                     yield article

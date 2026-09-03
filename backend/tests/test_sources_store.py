@@ -180,6 +180,83 @@ class DeriveThreadsUrlTests(unittest.TestCase):
         self.assertEqual(sources_store._derive_threads_url(""), "")
 
 
+class DeriveFacebookUrlTests(unittest.TestCase):
+    def test_full_group_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/groups/evfires/"),
+            "https://www.facebook.com/groups/evfires",
+        )
+
+    def test_fb_com_host_is_canonicalized_to_facebook_com(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://fb.com/groups/evfires"),
+            "https://www.facebook.com/groups/evfires",
+        )
+
+    def test_full_search_url_keeps_q_param(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/search/top/?q=ev+fires&epa=SEARCH_BOX"),
+            "https://www.facebook.com/search/top/?q=ev+fires",
+        )
+
+    def test_full_search_url_without_q_is_rejected(self):
+        self.assertEqual(sources_store._derive_facebook_url("https://www.facebook.com/search/top/?epa=SEARCH_BOX"), "")
+
+    def test_profile_php_url_keeps_id_param(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/profile.php?id=100012345&sk=about"),
+            "https://www.facebook.com/profile.php?id=100012345",
+        )
+
+    def test_profile_php_url_without_id_is_rejected(self):
+        self.assertEqual(sources_store._derive_facebook_url("https://www.facebook.com/profile.php?sk=about"), "")
+
+    def test_people_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/people/John-Doe/pfbid123/"),
+            "https://www.facebook.com/people/John-Doe/pfbid123",
+        )
+
+    def test_bare_vanity_url_defaults_to_page(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/CocaCola"),
+            "https://www.facebook.com/CocaCola",
+        )
+
+    def test_bare_vanity_url_with_profile_kind_is_marked(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("https://www.facebook.com/johndoe", kind="profile"),
+            "https://www.facebook.com/johndoe?fb_kind=profile",
+        )
+
+    def test_non_facebook_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_facebook_url("https://example.com/groups/evfires"), "")
+
+    def test_bare_word_defaults_to_page(self):
+        self.assertEqual(sources_store._derive_facebook_url("CocaCola"), "https://www.facebook.com/CocaCola")
+
+    def test_bare_word_with_profile_kind_is_marked(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("johndoe", kind="profile"),
+            "https://www.facebook.com/johndoe?fb_kind=profile",
+        )
+
+    def test_bare_word_with_group_kind(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("evfires", kind="group"),
+            "https://www.facebook.com/groups/evfires",
+        )
+
+    def test_bare_phrase_with_search_kind(self):
+        self.assertEqual(
+            sources_store._derive_facebook_url("electric vehicles", kind="search"),
+            "https://www.facebook.com/search/top/?q=electric+vehicles",
+        )
+
+    def test_empty_input_returns_empty_string(self):
+        self.assertEqual(sources_store._derive_facebook_url(""), "")
+
+
 class DeriveTweetUrlTests(unittest.TestCase):
     def test_normalizes_a_status_url(self):
         self.assertEqual(
@@ -269,6 +346,29 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
 
     def test_threads_non_threads_host_is_rejected_not_saved_raw(self):
         payload = sources_store._upsert_payload({"source_type": "threads", "url": "https://example.com/@nasa"})
+        self.assertEqual(payload["url"], "")
+
+    def test_facebook_source_normalizes_bare_page_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "facebook", "url": "CocaCola", "facebook_kind": "page"})
+        self.assertEqual(payload["url"], "https://www.facebook.com/CocaCola")
+        self.assertEqual(payload["source_type"], "facebook")
+
+    def test_facebook_source_normalizes_bare_group_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "facebook", "url": "evfires", "facebook_kind": "group"})
+        self.assertEqual(payload["url"], "https://www.facebook.com/groups/evfires")
+
+    def test_facebook_source_normalizes_bare_profile_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "facebook", "url": "johndoe", "facebook_kind": "profile"})
+        self.assertEqual(payload["url"], "https://www.facebook.com/johndoe?fb_kind=profile")
+
+    def test_facebook_source_normalizes_bare_search_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "facebook", "url": "ev fires", "facebook_kind": "search"}
+        )
+        self.assertEqual(payload["url"], "https://www.facebook.com/search/top/?q=ev+fires")
+
+    def test_facebook_non_facebook_host_is_rejected_not_saved_raw(self):
+        payload = sources_store._upsert_payload({"source_type": "facebook", "url": "https://example.com/groups/x"})
         self.assertEqual(payload["url"], "")
 
     def test_tweet_source_normalizes_status_url(self):

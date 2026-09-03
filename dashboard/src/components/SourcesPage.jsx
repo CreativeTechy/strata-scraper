@@ -30,11 +30,12 @@ const emptyDraft = {
   reddit_kind: 'subreddit',
   linkedin_kind: 'company',
   threads_kind: 'profile',
+  facebook_kind: 'page',
 };
 
 // No "Social" option - the backend has no dedicated scraping tier for
-// Facebook/Instagram/TikTok/YouTube/etc, so a URL on any of those platforms
-// is just stored (and crawled) as a "web" source instead (see
+// Instagram/TikTok/YouTube/etc, so a URL on one of those platforms is just
+// stored (and crawled) as a "web" source instead (see
 // backend/app/core/settings.py's _infer_source_type/_resolve_source_type,
 // which reassigns any entered URL to its real platform type regardless of
 // what was picked here).
@@ -49,6 +50,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: 'telegram', label: 'Telegram' },
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'threads', label: 'Threads' },
+  { value: 'facebook', label: 'Facebook' },
 ];
 
 const SOURCE_TYPE_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];
@@ -83,6 +85,7 @@ const SOURCE_TYPE_FORM_TABS = [
   { value: 'telegram', label: 'Telegram' },
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'threads', label: 'Threads' },
+  { value: 'facebook', label: 'Facebook' },
 ];
 
 const TWITTER_SUB_TYPE_OPTIONS = [
@@ -108,6 +111,7 @@ const URL_FIELD_PLACEHOLDERS = {
   linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
   tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
   threads: 'Handle (without @), a search phrase, or a threads.com URL',
+  facebook: 'Page/group/profile slug, a search phrase, or a facebook.com URL',
 };
 
 function inferRedditKind(url) {
@@ -145,6 +149,22 @@ function inferThreadsKind(url) {
   return 'profile';
 }
 
+function inferFacebookKind(url) {
+  let path = url || '';
+  let search = '';
+  try {
+    const parsed = new URL(url);
+    path = parsed.pathname;
+    search = parsed.search;
+  } catch {
+    // Not a full URL (e.g. a bare term saved before this field existed) - fall through.
+  }
+  if (/\/groups\//i.test(path)) return 'group';
+  if (/\/search/i.test(path)) return 'search';
+  if (/\/people\//i.test(path) || /profile\.php/i.test(path) || /fb_kind=profile/i.test(search)) return 'profile';
+  return 'page';
+}
+
 function sourceTypeLabel(sourceType) {
   const match = SOURCE_TYPE_OPTIONS.find((option) => option.value === (sourceType || 'rss'));
   return match ? match.label : (sourceType || 'RSS');
@@ -165,6 +185,7 @@ function normalizeDraftForCompare(value) {
     reddit_kind: String(value?.reddit_kind || 'subreddit').trim().toLowerCase(),
     linkedin_kind: String(value?.linkedin_kind || 'company').trim().toLowerCase(),
     threads_kind: String(value?.threads_kind || 'profile').trim().toLowerCase(),
+    facebook_kind: String(value?.facebook_kind || 'page').trim().toLowerCase(),
   };
 }
 
@@ -237,6 +258,7 @@ export default function SourcesPage({
         reddit_kind: inferRedditKind(currentSource.url),
         linkedin_kind: inferLinkedinKind(currentSource.url),
         threads_kind: inferThreadsKind(currentSource.url),
+        facebook_kind: inferFacebookKind(currentSource.url),
       };
       setDraft(nextDraft);
       setInitialDraft(nextDraft);
@@ -360,6 +382,9 @@ export default function SourcesPage({
     }
     if (draft.source_type === 'threads') {
       payload.threads_kind = draft.threads_kind || 'profile';
+    }
+    if (draft.source_type === 'facebook') {
+      payload.facebook_kind = draft.facebook_kind || 'page';
     }
 
     if (isTermType ? !payload.name : !payload.url) return;
@@ -542,6 +567,26 @@ export default function SourcesPage({
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
                 Requires APIFY API TOKEN
+              </span>
+            </label>
+          )}
+          {draft.source_type === 'facebook' && (
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Facebook source kind</span>
+              <select
+                className="filter-select"
+                value={draft.facebook_kind}
+                onChange={(e) => setDraft((prev) => ({ ...prev, facebook_kind: e.target.value }))}
+              >
+                <option value="page">Page</option>
+                <option value="group">Group</option>
+                <option value="profile">Personal profile</option>
+                <option value="search">Keyword / search</option>
+              </select>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                Only used to interpret a bare slug below (page vs. personal profile) - Facebook uses the same URL shape
+                for both. Groups, search, and full profile.php/people/... URLs are unambiguous either way. Requires
+                APIFY API TOKEN.
               </span>
             </label>
           )}

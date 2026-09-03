@@ -23,6 +23,8 @@ LINKEDIN_KINDS = {"company", "profile", "search"}
 
 THREADS_KINDS = {"profile", "search"}
 
+FACEBOOK_KINDS = {"page", "group", "profile", "search"}
+
 
 def _default_name(url):
     if not url:
@@ -228,6 +230,65 @@ def _derive_threads_url(term, kind=None):
     return f"https://www.threads.com/@{handle}" if handle else ""
 
 
+def _derive_facebook_url(term, kind=None):
+    """Turn a full facebook.com/fb.com URL, or a bare page/group/profile slug
+    or search phrase, into a canonical facebook.com URL - same "kind
+    disambiguates a bare term" contract as _derive_linkedin_url/
+    _derive_threads_url above, since `apify_facebook.py` reads the kind
+    (page/group/profile/search) straight back off the stored URL's path
+    shape (see its facebook_kind()) rather than a separate column.
+
+    Unlike LinkedIn's clean /company/ vs /in/ split, a plain facebook.com/
+    <slug> vanity URL is genuinely ambiguous between a page and a personal
+    profile - Facebook uses the identical shape for both. `kind="profile"`
+    against a bare slug (or a full vanity URL with no other recognizable
+    shape) is therefore tagged with an `fb_kind=profile` marker query param
+    so facebook_kind() can recover it later; every other kind's URL shape
+    (groups/<slug>, people/<name>/<id>, profile.php?id=<id>, search/top/?q=)
+    is already unambiguous on its own and needs no marker.
+    """
+    text = (term or "").strip()
+    if not text:
+        return ""
+
+    if re.match(r"^https?://", text, re.I):
+        parsed = urlparse(text)
+        host = parsed.netloc.lower().removeprefix("www.").removeprefix("m.")
+        if host not in {"facebook.com", "fb.com"}:
+            return ""
+        path = (parsed.path or "").rstrip("/")
+        if path.startswith("/groups/"):
+            return f"https://www.facebook.com{path}"
+        if path.startswith("/search"):
+            query_term = (parse_qs(parsed.query).get("q") or [""])[0].strip()
+            return f"https://www.facebook.com/search/top/?q={quote_plus(query_term)}" if query_term else ""
+        if path == "/profile.php":
+            fb_id = (parse_qs(parsed.query).get("id") or [""])[0].strip()
+            return f"https://www.facebook.com/profile.php?id={fb_id}" if fb_id else ""
+        if path.startswith("/people/"):
+            return f"https://www.facebook.com{path}"
+        if not path:
+            return ""
+        kind = (kind or "").strip().lower()
+        return f"https://www.facebook.com{path}?fb_kind=profile" if kind == "profile" else f"https://www.facebook.com{path}"
+
+    kind = (kind or "").strip().lower()
+    if kind not in FACEBOOK_KINDS:
+        kind = "page"
+
+    if kind == "search":
+        return f"https://www.facebook.com/search/top/?q={quote_plus(text)}"
+    if kind == "group":
+        slug = re.sub(r"[^A-Za-z0-9_.]", "", text.lstrip("/"))
+        return f"https://www.facebook.com/groups/{slug}" if slug else ""
+    slug = re.sub(r"[^A-Za-z0-9_.]", "", text.lstrip("@").lstrip("/"))
+    if not slug:
+        return ""
+    if kind == "profile":
+        return f"https://www.facebook.com/{slug}?fb_kind=profile"
+    return f"https://www.facebook.com/{slug}"
+
+
 def _normalize_record(row, include_project_ids=False):
     url = (row.get("url") or "").strip()
     name = (row.get("name") or "").strip() or _default_name(url)
@@ -286,6 +347,13 @@ def _upsert_payload(source, default_limited=True):
         # search query).
         threads_kind = str(source.get("threads_kind") or "").strip().lower()
         url = _derive_threads_url(url or name, threads_kind)
+    elif source_type_input == "facebook" and (url or name):
+        # Same reasoning as reddit/telegram/linkedin/threads above - a
+        # non-facebook.com URL must be rejected here, not saved as-is only to
+        # silently scrape zero articles later (Apify's actors only accept a
+        # Facebook page/group/profile URL or search query).
+        facebook_kind = str(source.get("facebook_kind") or "").strip().lower()
+        url = _derive_facebook_url(url or name, facebook_kind)
     elif source_type_input == "tweet" and (url or name):
         # Same reasoning as reddit/telegram/linkedin above - anything that
         # isn't really a tweet/status URL must be rejected here, not saved

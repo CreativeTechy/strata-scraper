@@ -73,9 +73,9 @@ ACCOUNT_COLUMNS = """
 # config._infer_source_type) - "x" resolves to "username" (a tracked X account
 # is virtually always a profile link, not a hashtag or single tweet), and
 # every other social platform this app has no dedicated scraping tier for
-# (Facebook, Instagram, YouTube) maps straight to "web". The "social" key
-# itself is kept mapped to "web" only so a competitor_accounts row saved under
-# that pre-unification generic label still resolves to something crawlable -
+# (Instagram, YouTube) maps straight to "web". The "social" key itself is
+# kept mapped to "web" only so a competitor_accounts row saved under that
+# pre-unification generic label still resolves to something crawlable -
 # .get()'s own default below would already do this even without the explicit
 # entry, but it's spelled out here for the same "kept so it still resolves"
 # reason as the rest of this legacy block.
@@ -93,7 +93,7 @@ PLATFORM_SOURCE_TYPE = {
     "news": "web",
     "x": "username",
     "linkedin": "linkedin",
-    "facebook": "web",
+    "facebook": "facebook",
     "instagram": "web",
     "youtube": "web",
     "social": "web",

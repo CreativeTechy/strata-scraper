@@ -70,9 +70,9 @@ class RedditTelegramSourceTypeTests(unittest.TestCase):
     def test_other_social_urls_do_not_infer_as_reddit(self):
         # No generic "social" bucket any more (see TwitterSourceTypeTests) -
         # x.com resolves to its own concrete type, and a platform with no
-        # dedicated scraping tier (Facebook) falls through to "web".
+        # dedicated scraping tier (Instagram) falls through to "web".
         self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
-        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
+        self.assertEqual(config._infer_source_type("https://www.instagram.com/someone"), "web")
 
     def test_explicit_reddit_and_telegram_types_are_trusted(self):
         self.assertEqual(config._resolve_source_type("reddit", "https://www.reddit.com/r/test"), "reddit")
@@ -119,12 +119,12 @@ class TwitterSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._resolve_source_type("tweet", "https://x.com/someone"), "username")
 
     def test_uncrawlable_social_platforms_are_not_reassigned_away_from_web_or_rss(self):
-        # Facebook/Instagram/TikTok/YouTube have no dedicated type to promote
-        # to - "web" is correct and final, and an explicit "rss" pick (e.g. a
+        # Instagram/TikTok/YouTube have no dedicated type to promote to -
+        # "web" is correct and final, and an explicit "rss" pick (e.g. a
         # homepage URL saved for parse_homepage to discover its feed) is left
         # alone rather than getting flipped to "web".
-        self.assertEqual(config._resolve_source_type("web", "https://www.facebook.com/someone"), "web")
-        self.assertEqual(config._resolve_source_type("rss", "https://www.facebook.com/someone"), "rss")
+        self.assertEqual(config._resolve_source_type("web", "https://www.instagram.com/someone"), "web")
+        self.assertEqual(config._resolve_source_type("rss", "https://www.instagram.com/someone"), "rss")
 
 
 class LinkedinSourceTypeTests(unittest.TestCase):
@@ -138,7 +138,7 @@ class LinkedinSourceTypeTests(unittest.TestCase):
 
     def test_other_social_urls_do_not_infer_as_linkedin(self):
         self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
-        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
+        self.assertEqual(config._infer_source_type("https://www.instagram.com/someone"), "web")
 
     def test_explicit_linkedin_type_is_trusted(self):
         self.assertEqual(config._resolve_source_type("linkedin", "https://www.linkedin.com/company/google"), "linkedin")
@@ -162,13 +162,34 @@ class ThreadsSourceTypeTests(unittest.TestCase):
 
     def test_other_social_urls_do_not_infer_as_threads(self):
         self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
-        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
+        self.assertEqual(config._infer_source_type("https://www.instagram.com/someone"), "web")
 
     def test_explicit_threads_type_is_trusted(self):
         self.assertEqual(config._resolve_source_type("threads", "https://www.threads.com/@nasa"), "threads")
 
     def test_any_entry_gets_reassigned_to_threads_when_the_url_is_threads(self):
         self.assertEqual(config._resolve_source_type("linkedin", "https://www.threads.com/@nasa"), "threads")
+
+
+class FacebookSourceTypeTests(unittest.TestCase):
+    """facebook source-type inference and resolution (config.py's half of the
+    feature - see services/sources/sources_store.py for URL derivation and
+    scraper/apify_facebook.py for the Apify tier itself)."""
+
+    def test_facebook_urls_are_inferred_as_facebook(self):
+        self.assertEqual(config._infer_source_type("https://www.facebook.com/CocaCola"), "facebook")
+        self.assertEqual(config._infer_source_type("https://facebook.com/groups/evfires"), "facebook")
+        self.assertEqual(config._infer_source_type("https://fb.com/CocaCola"), "facebook")
+
+    def test_other_social_urls_do_not_infer_as_facebook(self):
+        self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
+        self.assertEqual(config._infer_source_type("https://www.instagram.com/someone"), "web")
+
+    def test_explicit_facebook_type_is_trusted(self):
+        self.assertEqual(config._resolve_source_type("facebook", "https://www.facebook.com/CocaCola"), "facebook")
+
+    def test_any_entry_gets_reassigned_to_facebook_when_the_url_is_facebook(self):
+        self.assertEqual(config._resolve_source_type("linkedin", "https://www.facebook.com/CocaCola"), "facebook")
 
 
 class ApifyConfiguredTests(unittest.TestCase):

@@ -37,7 +37,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from app.core import settings as config
-from content_guard import is_blocked_article, is_tweet_url
+from content_guard import is_blocked_article, is_short_form_social_url, is_tweet_url
 from services.projects.projects_store import get_project
 from services.pipeline.pipeline_runs import update_pipeline_run, upsert_pipeline_run_source_stats
 from services.pipeline.source_diagnostics import build_fetch_note, load_source_diagnostics
@@ -231,10 +231,12 @@ def clean_articles(articles, seen_urls=None):
         # Secondary safeguard: the scraper already rejects Google consent/search
         # pages (see content_guard.py), but this also catches rows coming from
         # an articles.json produced before that guard existed.
-        # Tweets are exempt from the length floor - a short reply or one-line
-        # take is normal for a tweet, not a stub (_hydrate_tweet in
-        # source_rss.py already guarantees non-empty text for these).
-        min_length = 0 if is_tweet_url(url) else MIN_TEXT_LENGTH
+        # Tweets and LinkedIn/Threads/Facebook posts are exempt from the
+        # length floor - a short reply, one-line update, or single hashtag
+        # is normal for a social post, not a stub (_hydrate_tweet in
+        # source_rss.py already guarantees non-empty text for tweets; the
+        # other three tiers' own actor-response checks do the same).
+        min_length = 0 if is_tweet_url(url) or is_short_form_social_url(url) else MIN_TEXT_LENGTH
         if len(text) < min_length or not a.get("title") or is_blocked_article(url, a.get("title")):
             removed_by_source[source]["content_filtered"] += 1
             continue
