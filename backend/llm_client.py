@@ -428,25 +428,32 @@ def chat_completion(*, messages, model=None, temperature=0.2, max_tokens=512, ti
         else:
             raise
 
-    try:
-        return _extract_output_text(payload, api_style=api_style)
-    except LLMInvalidResponseError as exc:
-        retry_body = body
-        max_tokens_key = _max_tokens_key(api_style)
-        if exc.finish_reason == "max_output_tokens":
-            # The model spent its entire token budget on hidden reasoning (or
-            # hit the length cap) and never got to write visible content -
-            # retrying with the same budget would just hit the same wall.
-            # Give it more room instead.
-            current = int(body.get(max_tokens_key) or max_tokens)
-            retry_body = {**body, max_tokens_key: min(current * 2, 16000)}
-            print(
-                f"llm_client: empty response from truncation ({exc.detail}); "
-                f"retrying once with {max_tokens_key}={retry_body[max_tokens_key]}"
-            )
-        else:
-            # Otherwise treat it as a transient glitch (stray refusal turn)
-            # and retry once with the same request.
-            print(f"llm_client: empty/invalid response ({exc.detail}); retrying once")
-        payload = _post_with_cold_start_retry(base_url, retry_body, timeout, api_key=api_key)
-        return _extract_output_text(payload, api_style=api_style)
+    max_tokens_key = _max_tokens_key(api_style)
+    retry_body = body
+    # A non-truncation failure (stray refusal turn) only ever gets one retry
+    # with the same request - a second refusal is treated as final. A
+    # truncation failure gets repeated doubling instead: a reasoning model
+    # that burns its whole budget on hidden thinking can need several
+    # doublings before enough room is left over to write visible output, and
+    # giving up after a single double (as this used to) left genuinely
+    # heavy-reasoning models unable to ever complete a call.
+    for attempt in range(4):
+        try:
+            return _extract_output_text(payload, api_style=api_style)
+        except LLMInvalidResponseError as exc:
+            if attempt == 3:
+                raise
+            if exc.finish_reason == "max_output_tokens":
+                current = int(retry_body.get(max_tokens_key) or max_tokens)
+                if current >= 16000:
+                    raise
+                retry_body = {**retry_body, max_tokens_key: min(current * 2, 16000)}
+                print(
+                    f"llm_client: empty response from truncation ({exc.detail}); "
+                    f"retrying with {max_tokens_key}={retry_body[max_tokens_key]}"
+                )
+            elif attempt == 0:
+                print(f"llm_client: empty/invalid response ({exc.detail}); retrying once")
+            else:
+                raise
+            payload = _post_with_cold_start_retry(base_url, retry_body, timeout, api_key=api_key)

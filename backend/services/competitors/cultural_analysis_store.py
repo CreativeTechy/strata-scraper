@@ -54,7 +54,7 @@ def derive_cultural_analysis(profile: dict, target_countries: list[str]) -> dict
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
-            max_tokens=1600,
+            max_tokens=4000,
             timeout=90,
         )
         parsed = json.loads(_strip_fences(raw))

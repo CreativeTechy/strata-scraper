@@ -183,7 +183,7 @@ def derive_profile(name: str, website: str, description: str, scraped_text: str)
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
-            max_tokens=1400,
+            max_tokens=4000,
             timeout=90,
         )
         parsed = json.loads(_strip_fences(raw))
