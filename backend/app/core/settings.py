@@ -411,6 +411,20 @@ APIFY_FACEBOOK_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_SEARCH_TIMEOUT_
 APIFY_FACEBOOK_PROFILE_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_PROFILE_TIMEOUT_SECONDS", 180)
 
 
+# --- Apify (optional) - Instagram scraping tier ------------------------------
+# Reuses APIFY_API_TOKEN above. instagram.com is a JS-rendered SPA that gates
+# a profile's or hashtag page's posts behind a logged-in session beyond the
+# first handful, the same "no unauthenticated HTML worth fetching" situation
+# as LinkedIn/Threads/Facebook - so "instagram" sources go through this actor
+# in place of the normal per-source request entirely (see
+# scraper/apify_instagram.py), not alongside it like the Twitter/Reddit tiers
+# above. Unset (the default), "instagram" sources report 0 articles with an
+# explanatory fetch note, same contract as an unconfigured "linkedin" source.
+APIFY_INSTAGRAM_ACTOR = os.environ.get("APIFY_INSTAGRAM_ACTOR", "apify/instagram-scraper").strip()
+APIFY_INSTAGRAM_MAX_POSTS = _env_int("APIFY_INSTAGRAM_MAX_POSTS", 20)
+APIFY_INSTAGRAM_TIMEOUT_SECONDS = _env_int("APIFY_INSTAGRAM_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
@@ -514,6 +528,11 @@ def _looks_like_facebook_url(url: str) -> bool:
     return host in {"facebook.com", "fb.com"}
 
 
+def _looks_like_instagram_url(url: str) -> bool:
+    host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
+    return host == "instagram.com"
+
+
 def _looks_like_x_url(url: str) -> bool:
     host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
     return host in {"x.com", "twitter.com"}
@@ -530,12 +549,12 @@ def _infer_source_type(url: str) -> str:
     """Best-guess source_type from a URL's own shape - no generic "social"
     bucket: an x.com/twitter.com URL resolves straight to whichever of
     tweet/hashtag/username it actually is, and every other social platform
-    this app has no dedicated scraping tier for (Instagram, TikTok, YouTube,
-    ...) falls through to "web" like any other non-feed URL, per the "we
-    can't scrape it as its own platform, so treat it as a plain web page"
-    rule. Threads and Facebook (see "linkedin" and "facebook" below) are
-    exceptions among Meta/X-adjacent platforms, since both get their own
-    dedicated Apify-backed tier instead of falling through too.
+    this app has no dedicated scraping tier for (TikTok, YouTube, ...) falls
+    through to "web" like any other non-feed URL, per the "we can't scrape it
+    as its own platform, so treat it as a plain web page" rule. LinkedIn,
+    Threads, Facebook, and Instagram (see below) are exceptions among
+    Meta/X-adjacent platforms, since each gets its own dedicated
+    Apify-backed tier instead of falling through too.
     """
     if _looks_like_feed_url(url):
         return "rss"
@@ -549,6 +568,8 @@ def _infer_source_type(url: str) -> str:
         return "threads"
     if _looks_like_facebook_url(url):
         return "facebook"
+    if _looks_like_instagram_url(url):
+        return "instagram"
     if is_tweet_url(url):
         return "tweet"
     if _looks_like_hashtag_url(url):
@@ -560,7 +581,7 @@ def _infer_source_type(url: str) -> str:
 
 KNOWN_SOURCE_TYPES = {
     "rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram",
-    "linkedin", "threads", "facebook",
+    "linkedin", "threads", "facebook", "instagram",
 }
 
 # hashtag/keyword/username store a URL derived FROM the chosen type itself
@@ -573,7 +594,7 @@ _TERM_DERIVED_TYPES = {"hashtag", "keyword", "username"}
 # Every other known type is a dedicated platform whose URL shape alone
 # determines it - if a user-entered URL for any of these actually belongs to
 # a different one, _resolve_source_type corrects it below.
-_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "threads", "facebook", "tweet", "hashtag", "username"}
+_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "threads", "facebook", "instagram", "tweet", "hashtag", "username"}
 
 
 def _resolve_source_type(source_type_input: str, url: str) -> str:
@@ -582,17 +603,17 @@ def _resolve_source_type(source_type_input: str, url: str) -> str:
     _TERM_DERIVED_TYPES), but every other type is corrected to whatever the
     URL itself actually is whenever that disagrees with a dedicated
     platform's own shape (reddit.com, t.me, linkedin.com, threads.com,
-    facebook.com, an x.com/twitter.com status/hashtag/profile link) - so e.g.
-    pasting a tweet URL while "Reddit" is still selected still ends up stored
-    as "tweet", not an uncrawlable "reddit" source. This also carries forward
-    legacy rows from before reddit/telegram/linkedin/threads/facebook/tweet/
-    hashtag/username existed as their own types (previously lumped into a
-    generic "social"/rss/web bucket).
+    facebook.com, instagram.com, an x.com/twitter.com status/hashtag/profile
+    link) - so e.g. pasting a tweet URL while "Reddit" is still selected
+    still ends up stored as "tweet", not an uncrawlable "reddit" source. This
+    also carries forward legacy rows from before reddit/telegram/linkedin/
+    threads/facebook/instagram/tweet/hashtag/username existed as their own
+    types (previously lumped into a generic "social"/rss/web bucket).
     A plain rss/web pick is left alone even if its URL doesn't look feed-like
     (a homepage URL saved as "rss" is normal - see parse_homepage) or looks
-    like a social platform with no dedicated scraping tier (Instagram,
-    TikTok, YouTube, ... - see _infer_source_type) - correctly stays "web",
-    since there's no dedicated type to promote it to.
+    like a social platform with no dedicated scraping tier (TikTok, YouTube,
+    ... - see _infer_source_type) - correctly stays "web", since there's no
+    dedicated type to promote it to.
     """
     source_type_input = (source_type_input or "").strip().lower()
     inferred_type = _infer_source_type(url)

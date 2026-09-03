@@ -51,20 +51,24 @@ def is_tweet_url(url):
     return bool(TWEET_STATUS_RE.search(url or ""))
 
 
-# LinkedIn/Threads/Facebook posts are just as caption-length as a tweet - a
-# one-line update or a single hashtag is normal for all three, not a stub -
-# but none of them have a single-status-URL shape the way TWEET_STATUS_RE
-# checks for, so this is a plain host check instead. Confirmed live: real
-# posts from apify_facebook.py's profile tier (e.g. "#الاصل_هو_الله") were
-# being discarded by the 200-character floor below before this existed, even
-# though the actor genuinely fetched them successfully.
-SHORT_FORM_SOCIAL_HOSTS = {"linkedin.com", "threads.com", "threads.net", "facebook.com", "fb.com"}
+# LinkedIn/Threads/Facebook/Instagram posts are just as caption-length as a
+# tweet - a one-line update or a single hashtag is normal for all four, not a
+# stub - but none of them have a single-status-URL shape the way
+# TWEET_STATUS_RE checks for, so this is a plain host check instead.
+# Confirmed live: real posts from apify_facebook.py's profile tier (e.g.
+# "#الاصل_هو_الله") were being discarded by the 200-character floor below
+# before this existed, even though the actor genuinely fetched them
+# successfully.
+SHORT_FORM_SOCIAL_HOSTS = {
+    "linkedin.com", "threads.com", "threads.net", "facebook.com", "fb.com", "instagram.com",
+}
 
 
 def is_short_form_social_url(url):
-    """True for a LinkedIn/Threads/Facebook URL - see SHORT_FORM_SOCIAL_HOSTS.
-    Callers combine this with is_tweet_url to exempt every short-form social
-    platform from the article-length quality filter, not just tweets."""
+    """True for a LinkedIn/Threads/Facebook/Instagram URL - see
+    SHORT_FORM_SOCIAL_HOSTS. Callers combine this with is_tweet_url to
+    exempt every short-form social platform from the article-length quality
+    filter, not just tweets."""
     netloc = (urlparse(url or "").netloc or "").lower()
     for prefix in ("www.", "m."):
         if netloc.startswith(prefix):
