@@ -119,10 +119,10 @@ class TwitterSourceTypeTests(unittest.TestCase):
         self.assertEqual(config._resolve_source_type("tweet", "https://x.com/someone"), "username")
 
     def test_uncrawlable_social_platforms_are_not_reassigned_away_from_web_or_rss(self):
-        # Facebook/Instagram/TikTok/YouTube/Threads have no dedicated type to
-        # promote to - "web" is correct and final, and an explicit "rss" pick
-        # (e.g. a homepage URL saved for parse_homepage to discover its feed)
-        # is left alone rather than getting flipped to "web".
+        # Facebook/Instagram/TikTok/YouTube have no dedicated type to promote
+        # to - "web" is correct and final, and an explicit "rss" pick (e.g. a
+        # homepage URL saved for parse_homepage to discover its feed) is left
+        # alone rather than getting flipped to "web".
         self.assertEqual(config._resolve_source_type("web", "https://www.facebook.com/someone"), "web")
         self.assertEqual(config._resolve_source_type("rss", "https://www.facebook.com/someone"), "rss")
 
@@ -149,6 +149,26 @@ class LinkedinSourceTypeTests(unittest.TestCase):
         # load, the same way legacy reddit/telegram rows already upgrade.
         self.assertEqual(config._resolve_source_type("social", "https://www.linkedin.com/company/google"), "linkedin")
         self.assertEqual(config._resolve_source_type("rss", "https://www.linkedin.com/in/satyanadella"), "linkedin")
+
+
+class ThreadsSourceTypeTests(unittest.TestCase):
+    """threads source-type inference and resolution (config.py's half of the
+    feature - see services/sources/sources_store.py for URL derivation and
+    scraper/apify_threads.py for the Apify tier itself)."""
+
+    def test_threads_urls_are_inferred_as_threads(self):
+        self.assertEqual(config._infer_source_type("https://www.threads.com/@nasa"), "threads")
+        self.assertEqual(config._infer_source_type("https://threads.net/@nasa"), "threads")
+
+    def test_other_social_urls_do_not_infer_as_threads(self):
+        self.assertEqual(config._infer_source_type("https://x.com/someone"), "username")
+        self.assertEqual(config._infer_source_type("https://www.facebook.com/someone"), "web")
+
+    def test_explicit_threads_type_is_trusted(self):
+        self.assertEqual(config._resolve_source_type("threads", "https://www.threads.com/@nasa"), "threads")
+
+    def test_any_entry_gets_reassigned_to_threads_when_the_url_is_threads(self):
+        self.assertEqual(config._resolve_source_type("linkedin", "https://www.threads.com/@nasa"), "threads")
 
 
 class ApifyConfiguredTests(unittest.TestCase):

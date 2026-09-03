@@ -136,6 +136,50 @@ class DeriveLinkedinUrlTests(unittest.TestCase):
         self.assertEqual(sources_store._derive_linkedin_url(""), "")
 
 
+class DeriveThreadsUrlTests(unittest.TestCase):
+    def test_full_profile_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_threads_url("https://www.threads.com/@nasa/"),
+            "https://www.threads.com/@nasa",
+        )
+
+    def test_threads_net_host_is_canonicalized_to_threads_com(self):
+        self.assertEqual(
+            sources_store._derive_threads_url("https://www.threads.net/@nasa"),
+            "https://www.threads.com/@nasa",
+        )
+
+    def test_full_search_url_keeps_q_param(self):
+        self.assertEqual(
+            sources_store._derive_threads_url("https://www.threads.com/search?q=ev+fires&serp_type=default"),
+            "https://www.threads.com/search?q=ev+fires",
+        )
+
+    def test_full_search_url_without_q_is_rejected(self):
+        self.assertEqual(sources_store._derive_threads_url("https://www.threads.com/search?serp_type=default"), "")
+
+    def test_non_threads_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_threads_url("https://example.com/@nasa"), "")
+
+    def test_unrecognized_threads_path_is_rejected(self):
+        self.assertEqual(sources_store._derive_threads_url("https://www.threads.com/feed/"), "")
+
+    def test_bare_word_defaults_to_profile(self):
+        self.assertEqual(sources_store._derive_threads_url("nasa"), "https://www.threads.com/@nasa")
+
+    def test_bare_word_with_at_prefix(self):
+        self.assertEqual(sources_store._derive_threads_url("@nasa"), "https://www.threads.com/@nasa")
+
+    def test_bare_phrase_with_search_kind(self):
+        self.assertEqual(
+            sources_store._derive_threads_url("electric vehicles", kind="search"),
+            "https://www.threads.com/search?q=electric+vehicles",
+        )
+
+    def test_empty_input_returns_empty_string(self):
+        self.assertEqual(sources_store._derive_threads_url(""), "")
+
+
 class DeriveTweetUrlTests(unittest.TestCase):
     def test_normalizes_a_status_url(self):
         self.assertEqual(
@@ -210,6 +254,21 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
 
     def test_linkedin_non_linkedin_host_is_rejected_not_saved_raw(self):
         payload = sources_store._upsert_payload({"source_type": "linkedin", "url": "https://example.com/company/google"})
+        self.assertEqual(payload["url"], "")
+
+    def test_threads_source_normalizes_bare_profile_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "threads", "url": "nasa", "threads_kind": "profile"})
+        self.assertEqual(payload["url"], "https://www.threads.com/@nasa")
+        self.assertEqual(payload["source_type"], "threads")
+
+    def test_threads_source_normalizes_bare_search_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "threads", "url": "ev fires", "threads_kind": "search"}
+        )
+        self.assertEqual(payload["url"], "https://www.threads.com/search?q=ev+fires")
+
+    def test_threads_non_threads_host_is_rejected_not_saved_raw(self):
+        payload = sources_store._upsert_payload({"source_type": "threads", "url": "https://example.com/@nasa"})
         self.assertEqual(payload["url"], "")
 
     def test_tweet_source_normalizes_status_url(self):
