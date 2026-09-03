@@ -377,7 +377,8 @@ def add_competitor_manual(project_id: int, payload: dict, user: dict = Depends(r
         if platform not in competitors_store.PLATFORM_SOURCE_TYPE:
             raise HTTPException(status_code=400, detail=f"Source {index}: unsupported source type '{platform}'.")
         handle_input = str(source.get("handle") or "").strip().lstrip("@")
-        url = competitors_store.resolve_account_url(platform, source.get("url"), handle_input)
+        kind = str(source.get("kind") or "").strip().lower() or None
+        url = competitors_store.resolve_account_url(platform, source.get("url"), handle_input, kind)
         if not url:
             raise HTTPException(status_code=400, detail=f"Source {index}: enter a valid value.")
         normalized_sources.append({

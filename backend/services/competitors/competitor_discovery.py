@@ -63,13 +63,18 @@ DISCOVERY_SYSTEM_PROMPT = load_prompt("competitor_discovery_system_prompt.txt")
 ACCOUNTS_SYSTEM_PROMPT = load_prompt("competitor_accounts_system_prompt.txt")
 
 # Restricted to platforms we can actually scrape (backend/scraper/spiders/source_rss.py
-# and config.KNOWN_SOURCE_TYPES) — LinkedIn/Facebook/Instagram/YouTube are dropped
-# because nothing in this app fetches them. `reddit`/`web` are found via direct
-# web-search hits (see _review_candidates), never asked of the LLM - unlike an
-# X handle or hashtag, a review-site URL isn't something a model can reliably
-# recall, but it's exactly the kind of normally-indexed page search engines do
-# find well.
-VALID_PLATFORMS = {"x", "hashtag", "keyword", "blog", "news", "reddit", "web"}
+# and config.KNOWN_SOURCE_TYPES) — LinkedIn/Threads/Facebook/Instagram are included
+# since each has its own dedicated Apify-backed tier (apify_linkedin.py/
+# apify_threads.py/apify_facebook.py/apify_instagram.py); YouTube is still
+# dropped because nothing in this app fetches it. `reddit`/`web` are found via
+# direct web-search hits (see _review_candidates), never asked of the LLM -
+# unlike an X handle or hashtag, a review-site URL isn't something a model can
+# reliably recall, but it's exactly the kind of normally-indexed page search
+# engines do find well.
+VALID_PLATFORMS = {
+    "x", "hashtag", "keyword", "blog", "news", "reddit", "web",
+    "linkedin", "threads", "facebook", "instagram",
+}
 
 # Phase 3 asks for several X accounts (main brand, regional, support, product
 # lines), several hashtags (branded + relevant industry ones worth monitoring),
@@ -77,8 +82,12 @@ VALID_PLATFORMS = {"x", "hashtag", "keyword", "blog", "news", "reddit", "web"}
 # would miss), not just one of each — cap per platform so a verbose model
 # response can't flood a competitor with low-value channels. `reddit`/`web`
 # come from search hits rather than the model, but are capped the same way for
-# the same reason.
-MAX_ACCOUNTS_PER_PLATFORM = {"x": 5, "hashtag": 8, "keyword": 5, "blog": 2, "news": 1, "reddit": 2, "web": 3}
+# the same reason. LinkedIn/Threads/Facebook/Instagram are capped low (2, like
+# reddit) since a competitor typically has one owned account per platform.
+MAX_ACCOUNTS_PER_PLATFORM = {
+    "x": 5, "hashtag": 8, "keyword": 5, "blog": 2, "news": 1, "reddit": 2, "web": 3,
+    "linkedin": 2, "threads": 2, "facebook": 2, "instagram": 2,
+}
 
 # Always added on top of whatever the model suggests, not counted against
 # MAX_ACCOUNTS_PER_PLATFORM's keyword cap above (that cap exists to bound a
@@ -89,9 +98,9 @@ AUTO_KEYWORD_SUFFIXES = ("branches", "reviews", "news", "complaints", "promotion
 NON_COMPANY_HOSTS = {
     "wikipedia.org", "linkedin.com", "crunchbase.com", "glassdoor.com",
     "indeed.com", "facebook.com", "x.com", "twitter.com", "youtube.com",
-    "instagram.com", "medium.com", "reddit.com", "quora.com", "g2.com",
-    "capterra.com", "trustpilot.com", "bloomberg.com", "reuters.com",
-    "forbes.com", "techcrunch.com", "producthunt.com", "github.com",
+    "instagram.com", "threads.com", "threads.net", "medium.com", "reddit.com",
+    "quora.com", "g2.com", "capterra.com", "trustpilot.com", "bloomberg.com",
+    "reuters.com", "forbes.com", "techcrunch.com", "producthunt.com", "github.com",
 }
 
 
@@ -712,8 +721,18 @@ def _ask_for_accounts(
                 {"role": "user", "content": f"Company: {name}\nWebsite: {website or 'unknown'}{directive}"},
             ],
             temperature=0.0,
-            max_tokens=1400,
-            timeout=90,
+            # Same budget as _ask_for_candidates' competitor-list call above,
+            # not the smaller 1400 this used to be. A reasoning-capable model
+            # (e.g. DeepSeek's "-pro"/"-reasoner" tiers) can spend most or all
+            # of its budget on hidden reasoning before writing any of the
+            # actual JSON, and that doesn't shrink with a smaller prompt -
+            # confirmed live: 1400 (and chat_completion's own 2800 retry)
+            # failed outright for every competitor in a real run, both before
+            # and after this module's own account-platform list grew to
+            # include linkedin/threads/facebook/instagram, while the exact
+            # same request succeeded on the first try at 6000.
+            max_tokens=6000,
+            timeout=120,
         )
         parsed = json.loads(_strip_fences(raw))
     except (LLMError, json.JSONDecodeError, ValueError) as exc:
@@ -801,7 +820,8 @@ def discover_accounts(
         counts["news"] = counts.get("news", 0) + 1
 
     grounding = _account_grounding_context(name, log)
-    log(f"{name}: asking the model for channels — X accounts, hashtags, and keywords to monitor...")
+    log(f"{name}: asking the model for channels — X, LinkedIn, Threads, Facebook, "
+        f"Instagram accounts, hashtags, and keywords to monitor...")
     candidates = [
         entry for entry in _ask_for_accounts(name, site, target_countries, grounding) if isinstance(entry, dict)
     ]

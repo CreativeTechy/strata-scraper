@@ -39,9 +39,9 @@ class NormalizeSourceUrlTests(unittest.TestCase):
 
 class PlatformSourceTypeTests(unittest.TestCase):
     """No generic "social" source_type any more (see config._infer_source_type) -
-    an "x" account resolves to "username", "facebook" resolves to its own
-    dedicated Apify-backed type, and platforms with no dedicated scraping
-    tier (Instagram/YouTube) resolve to "web"."""
+    an "x" account resolves to "username", and linkedin/threads/facebook/
+    instagram each resolve to their own dedicated Apify-backed type, while a
+    platform with no dedicated scraping tier (YouTube) resolves to "web"."""
 
     def test_x_resolves_to_username(self):
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["x"], "username")
@@ -49,8 +49,16 @@ class PlatformSourceTypeTests(unittest.TestCase):
     def test_facebook_resolves_to_facebook(self):
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["facebook"], "facebook")
 
-    def test_instagram_youtube_resolve_to_web(self):
-        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["instagram"], "web")
+    def test_linkedin_resolves_to_linkedin(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["linkedin"], "linkedin")
+
+    def test_threads_resolves_to_threads(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["threads"], "threads")
+
+    def test_instagram_resolves_to_instagram(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["instagram"], "instagram")
+
+    def test_youtube_resolves_to_web(self):
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["youtube"], "web")
 
     def test_tweet_resolves_to_tweet(self):
@@ -84,7 +92,42 @@ class ResolveAccountUrlTests(unittest.TestCase):
 
     def test_other_platforms_fall_back_to_plain_url_normalization(self):
         self.assertEqual(competitors_store.resolve_account_url("web", "example.com", ""), "https://example.com")
-        self.assertEqual(competitors_store.resolve_account_url("facebook", "facebook.com/acme", ""), "https://facebook.com/acme")
+
+    def test_linkedin_threads_facebook_instagram_derive_full_urls(self):
+        self.assertEqual(
+            competitors_store.resolve_account_url("linkedin", "https://linkedin.com/company/acme", ""),
+            "https://www.linkedin.com/company/acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("threads", "https://threads.net/@acme", ""),
+            "https://www.threads.com/@acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("facebook", "https://facebook.com/acme", ""),
+            "https://www.facebook.com/acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("instagram", "https://instagram.com/acme", ""),
+            "https://www.instagram.com/acme/",
+        )
+
+    def test_kind_disambiguates_a_bare_term_like_the_sources_page(self):
+        self.assertEqual(
+            competitors_store.resolve_account_url("reddit", "", "acme", "user"),
+            "https://www.reddit.com/user/acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("linkedin", "", "acme", "profile"),
+            "https://www.linkedin.com/in/acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("facebook", "", "acme", "group"),
+            "https://www.facebook.com/groups/acme",
+        )
+        self.assertEqual(
+            competitors_store.resolve_account_url("instagram", "", "acme", "hashtag"),
+            "https://www.instagram.com/explore/tags/acme/",
+        )
 
 
 class ExportCompetitorsTests(unittest.TestCase):
