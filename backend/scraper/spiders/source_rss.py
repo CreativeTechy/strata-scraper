@@ -54,6 +54,13 @@ from scraper.apify_facebook import (
     facebook_kind,
     facebook_search_query,
 )
+from scraper.apify_instagram import (
+    apify_instagram_hashtag_posts,
+    apify_instagram_profile_posts,
+    apify_instagram_search_posts,
+    instagram_kind,
+    instagram_search_query,
+)
 from scraper.apify_linkedin import (
     apify_linkedin_page_posts,
     apify_linkedin_search_posts,
@@ -405,6 +412,41 @@ class SourceRssSpider(scrapy.Spider):
                     self._note_source_status(source_name, url, note=str(exc))
                     continue
                 self.logger.info("Facebook %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
+                for article in articles:
+                    self._progress_articles += 1
+                    yield article
+                self._push_progress()
+                continue
+
+            if source_type == "instagram":
+                # instagram.com is a JS-rendered SPA that gates a profile's
+                # or hashtag page's posts behind a logged-in session beyond
+                # the first handful - same "no unauthenticated HTML worth
+                # fetching" situation as "linkedin"/"threads"/"facebook"
+                # above, so this replaces the seed request entirely rather
+                # than adding an extra tier on top of it. See
+                # scraper/apify_instagram.py.
+                if not config.apify_configured():
+                    self._note_source_status(
+                        source_name, url,
+                        note="APIFY_API_TOKEN not set - instagram sources require Apify (see backend/.env).",
+                    )
+                    continue
+                kind = instagram_kind(url)
+                try:
+                    if kind == "search":
+                        articles = apify_instagram_search_posts(instagram_search_query(url) or source_name, url, source_name)
+                    elif kind == "hashtag":
+                        articles = apify_instagram_hashtag_posts(url, url, source_name)
+                    elif kind == "profile":
+                        articles = apify_instagram_profile_posts(url, url, source_name)
+                    else:
+                        self._note_source_status(source_name, url, note=f"Unrecognized Instagram source URL: {url!r}")
+                        continue
+                except ApifyBillingError as exc:
+                    self._note_source_status(source_name, url, note=str(exc))
+                    continue
+                self.logger.info("Instagram %r (%s) -> %d post(s) via Apify", source_name, kind, len(articles))
                 for article in articles:
                     self._progress_articles += 1
                     yield article

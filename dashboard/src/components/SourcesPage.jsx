@@ -31,14 +31,14 @@ const emptyDraft = {
   linkedin_kind: 'company',
   threads_kind: 'profile',
   facebook_kind: 'page',
+  instagram_kind: 'profile',
 };
 
 // No "Social" option - the backend has no dedicated scraping tier for
-// Instagram/TikTok/YouTube/etc, so a URL on one of those platforms is just
-// stored (and crawled) as a "web" source instead (see
-// backend/app/core/settings.py's _infer_source_type/_resolve_source_type,
-// which reassigns any entered URL to its real platform type regardless of
-// what was picked here).
+// TikTok/YouTube/etc, so a URL on one of those platforms is just stored (and
+// crawled) as a "web" source instead (see backend/app/core/settings.py's
+// _infer_source_type/_resolve_source_type, which reassigns any entered URL
+// to its real platform type regardless of what was picked here).
 const SOURCE_TYPE_OPTIONS = [
   { value: 'rss', label: 'RSS' },
   { value: 'web', label: 'Web' },
@@ -51,6 +51,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'threads', label: 'Threads' },
   { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
 ];
 
 const SOURCE_TYPE_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];
@@ -86,6 +87,7 @@ const SOURCE_TYPE_FORM_TABS = [
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'threads', label: 'Threads' },
   { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
 ];
 
 const TWITTER_SUB_TYPE_OPTIONS = [
@@ -112,6 +114,7 @@ const URL_FIELD_PLACEHOLDERS = {
   tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
   threads: 'Handle (without @), a search phrase, or a threads.com URL',
   facebook: 'Page/group/profile slug, a search phrase, or a facebook.com URL',
+  instagram: 'Handle (without @), a hashtag, a search phrase, or an instagram.com URL',
 };
 
 function inferRedditKind(url) {
@@ -165,6 +168,18 @@ function inferFacebookKind(url) {
   return 'page';
 }
 
+function inferInstagramKind(url) {
+  let path = url || '';
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    // Not a full URL (e.g. a bare term saved before this field existed) - fall through.
+  }
+  if (/\/explore\/tags\//i.test(path)) return 'hashtag';
+  if (/\/explore\/search\//i.test(path)) return 'search';
+  return 'profile';
+}
+
 function sourceTypeLabel(sourceType) {
   const match = SOURCE_TYPE_OPTIONS.find((option) => option.value === (sourceType || 'rss'));
   return match ? match.label : (sourceType || 'RSS');
@@ -186,6 +201,7 @@ function normalizeDraftForCompare(value) {
     linkedin_kind: String(value?.linkedin_kind || 'company').trim().toLowerCase(),
     threads_kind: String(value?.threads_kind || 'profile').trim().toLowerCase(),
     facebook_kind: String(value?.facebook_kind || 'page').trim().toLowerCase(),
+    instagram_kind: String(value?.instagram_kind || 'profile').trim().toLowerCase(),
   };
 }
 
@@ -259,6 +275,7 @@ export default function SourcesPage({
         linkedin_kind: inferLinkedinKind(currentSource.url),
         threads_kind: inferThreadsKind(currentSource.url),
         facebook_kind: inferFacebookKind(currentSource.url),
+        instagram_kind: inferInstagramKind(currentSource.url),
       };
       setDraft(nextDraft);
       setInitialDraft(nextDraft);
@@ -385,6 +402,9 @@ export default function SourcesPage({
     }
     if (draft.source_type === 'facebook') {
       payload.facebook_kind = draft.facebook_kind || 'page';
+    }
+    if (draft.source_type === 'instagram') {
+      payload.instagram_kind = draft.instagram_kind || 'profile';
     }
 
     if (isTermType ? !payload.name : !payload.url) return;
@@ -587,6 +607,23 @@ export default function SourcesPage({
                 Only used to interpret a bare slug below (page vs. personal profile) - Facebook uses the same URL shape
                 for both. Groups, search, and full profile.php/people/... URLs are unambiguous either way. Requires
                 APIFY API TOKEN.
+              </span>
+            </label>
+          )}
+          {draft.source_type === 'instagram' && (
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Instagram source kind</span>
+              <select
+                className="filter-select"
+                value={draft.instagram_kind}
+                onChange={(e) => setDraft((prev) => ({ ...prev, instagram_kind: e.target.value }))}
+              >
+                <option value="profile">Profile</option>
+                <option value="hashtag">Hashtag</option>
+                <option value="search">Keyword / search</option>
+              </select>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
+                Requires APIFY API TOKEN
               </span>
             </label>
           )}

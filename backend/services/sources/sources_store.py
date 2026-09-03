@@ -25,6 +25,8 @@ THREADS_KINDS = {"profile", "search"}
 
 FACEBOOK_KINDS = {"page", "group", "profile", "search"}
 
+INSTAGRAM_KINDS = {"profile", "hashtag", "search"}
+
 
 def _default_name(url):
     if not url:
@@ -289,6 +291,50 @@ def _derive_facebook_url(term, kind=None):
     return f"https://www.facebook.com/{slug}"
 
 
+def _derive_instagram_url(term, kind=None):
+    """Turn a full instagram.com URL, or a bare handle/hashtag/search
+    phrase, into a canonical instagram.com URL - same "kind disambiguates a
+    bare term" contract as _derive_threads_url/_derive_facebook_url above,
+    since `apify_instagram.py` reads the kind (profile/hashtag/search)
+    straight back off the stored URL's path shape (see its instagram_kind())
+    rather than a separate column. Instagram has no post-content search of
+    its own (see apify_instagram.py's module docstring), so "search" is
+    stored under the same explore/search/keyword path Instagram's own web UI
+    uses - a storage-only convention, never fetched directly.
+    """
+    text = (term or "").strip()
+    if not text:
+        return ""
+
+    if re.match(r"^https?://", text, re.I):
+        parsed = urlparse(text)
+        host = parsed.netloc.lower().removeprefix("www.")
+        if host != "instagram.com":
+            return ""
+        path = (parsed.path or "").rstrip("/")
+        if path.startswith("/explore/tags/"):
+            return f"https://www.instagram.com{path}/"
+        if path.startswith("/explore/search/"):
+            query_term = (parse_qs(parsed.query).get("q") or [""])[0].strip()
+            return f"https://www.instagram.com/explore/search/keyword/?q={quote_plus(query_term)}" if query_term else ""
+        segment = path.strip("/").split("/", 1)[0].lower()
+        if not segment or segment in {"explore", "accounts", "direct", "stories", "reels", "reel", "p", "tv"}:
+            return ""
+        return f"https://www.instagram.com/{segment}/"
+
+    kind = (kind or "").strip().lower()
+    if kind not in INSTAGRAM_KINDS:
+        kind = "profile"
+
+    if kind == "search":
+        return f"https://www.instagram.com/explore/search/keyword/?q={quote_plus(text)}"
+    if kind == "hashtag":
+        tag = re.sub(r"[^A-Za-z0-9_]", "", text.lstrip("#").lstrip("/"))
+        return f"https://www.instagram.com/explore/tags/{tag}/" if tag else ""
+    handle = re.sub(r"[^A-Za-z0-9_.]", "", text.lstrip("@").lstrip("/"))
+    return f"https://www.instagram.com/{handle}/" if handle else ""
+
+
 def _normalize_record(row, include_project_ids=False):
     url = (row.get("url") or "").strip()
     name = (row.get("name") or "").strip() or _default_name(url)
@@ -354,6 +400,13 @@ def _upsert_payload(source, default_limited=True):
         # Facebook page/group/profile URL or search query).
         facebook_kind = str(source.get("facebook_kind") or "").strip().lower()
         url = _derive_facebook_url(url or name, facebook_kind)
+    elif source_type_input == "instagram" and (url or name):
+        # Same reasoning as reddit/telegram/linkedin/threads/facebook above -
+        # a non-instagram.com URL must be rejected here, not saved as-is only
+        # to silently scrape zero articles later (Apify's actor only accepts
+        # an Instagram handle, hashtag, or search term).
+        instagram_kind = str(source.get("instagram_kind") or "").strip().lower()
+        url = _derive_instagram_url(url or name, instagram_kind)
     elif source_type_input == "tweet" and (url or name):
         # Same reasoning as reddit/telegram/linkedin above - anything that
         # isn't really a tweet/status URL must be rejected here, not saved

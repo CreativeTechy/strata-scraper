@@ -257,6 +257,56 @@ class DeriveFacebookUrlTests(unittest.TestCase):
         self.assertEqual(sources_store._derive_facebook_url(""), "")
 
 
+class DeriveInstagramUrlTests(unittest.TestCase):
+    def test_full_profile_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_instagram_url("https://www.instagram.com/nasa/"),
+            "https://www.instagram.com/nasa/",
+        )
+
+    def test_full_hashtag_url_is_passed_through(self):
+        self.assertEqual(
+            sources_store._derive_instagram_url("https://www.instagram.com/explore/tags/evfires/"),
+            "https://www.instagram.com/explore/tags/evfires/",
+        )
+
+    def test_full_search_url_keeps_q_param(self):
+        self.assertEqual(
+            sources_store._derive_instagram_url("https://www.instagram.com/explore/search/keyword/?q=ev+fires"),
+            "https://www.instagram.com/explore/search/keyword/?q=ev+fires",
+        )
+
+    def test_full_search_url_without_q_is_rejected(self):
+        self.assertEqual(sources_store._derive_instagram_url("https://www.instagram.com/explore/search/keyword/"), "")
+
+    def test_non_instagram_url_is_rejected(self):
+        self.assertEqual(sources_store._derive_instagram_url("https://example.com/nasa"), "")
+
+    def test_reserved_path_is_rejected(self):
+        self.assertEqual(sources_store._derive_instagram_url("https://www.instagram.com/accounts/login/"), "")
+
+    def test_bare_word_defaults_to_profile(self):
+        self.assertEqual(sources_store._derive_instagram_url("nasa"), "https://www.instagram.com/nasa/")
+
+    def test_bare_word_with_at_prefix(self):
+        self.assertEqual(sources_store._derive_instagram_url("@nasa"), "https://www.instagram.com/nasa/")
+
+    def test_bare_word_with_hashtag_kind(self):
+        self.assertEqual(
+            sources_store._derive_instagram_url("evfires", kind="hashtag"),
+            "https://www.instagram.com/explore/tags/evfires/",
+        )
+
+    def test_bare_phrase_with_search_kind(self):
+        self.assertEqual(
+            sources_store._derive_instagram_url("electric vehicles", kind="search"),
+            "https://www.instagram.com/explore/search/keyword/?q=electric+vehicles",
+        )
+
+    def test_empty_input_returns_empty_string(self):
+        self.assertEqual(sources_store._derive_instagram_url(""), "")
+
+
 class DeriveTweetUrlTests(unittest.TestCase):
     def test_normalizes_a_status_url(self):
         self.assertEqual(
@@ -369,6 +419,27 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
 
     def test_facebook_non_facebook_host_is_rejected_not_saved_raw(self):
         payload = sources_store._upsert_payload({"source_type": "facebook", "url": "https://example.com/groups/x"})
+        self.assertEqual(payload["url"], "")
+
+    def test_instagram_source_normalizes_bare_profile_kind(self):
+        payload = sources_store._upsert_payload({"source_type": "instagram", "url": "nasa", "instagram_kind": "profile"})
+        self.assertEqual(payload["url"], "https://www.instagram.com/nasa/")
+        self.assertEqual(payload["source_type"], "instagram")
+
+    def test_instagram_source_normalizes_bare_hashtag_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "instagram", "url": "evfires", "instagram_kind": "hashtag"}
+        )
+        self.assertEqual(payload["url"], "https://www.instagram.com/explore/tags/evfires/")
+
+    def test_instagram_source_normalizes_bare_search_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "instagram", "url": "ev fires", "instagram_kind": "search"}
+        )
+        self.assertEqual(payload["url"], "https://www.instagram.com/explore/search/keyword/?q=ev+fires")
+
+    def test_instagram_non_instagram_host_is_rejected_not_saved_raw(self):
+        payload = sources_store._upsert_payload({"source_type": "instagram", "url": "https://example.com/nasa"})
         self.assertEqual(payload["url"], "")
 
     def test_tweet_source_normalizes_status_url(self):
