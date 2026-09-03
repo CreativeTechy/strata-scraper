@@ -15,10 +15,13 @@ import {
   ChevronRight,
   Globe2,
   Search,
-  AtSign,
-  MessageCircle,
+  Feather,
+  MessagesSquare,
   Send,
-  Link2,
+  Briefcase,
+  AtSign,
+  ThumbsUp,
+  Camera,
   PackageOpen,
   Layers3,
 } from 'lucide-react';
@@ -86,15 +89,22 @@ const PLATFORM_ICONS = {
   rss: Rss,
   web: Globe2,
   keyword: Search,
-  twitter: AtSign,
-  reddit: MessageCircle,
+  twitter: Feather,
+  reddit: MessagesSquare,
   telegram: Send,
-  linkedin: Link2,
+  linkedin: Briefcase,
+  threads: AtSign,
+  facebook: ThumbsUp,
+  instagram: Camera,
   other: PackageOpen,
 };
 
 function PlatformBreakdown({ items, totalArticles }) {
-  if (!items.length) {
+  const ranked = items
+    .filter((item) => (Number(item.count) || 0) > 0)
+    .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+
+  if (!ranked.length) {
     return (
       <div className="admin-empty-state">
         <div className="admin-empty-state-icon">
@@ -110,7 +120,7 @@ function PlatformBreakdown({ items, totalArticles }) {
 
   return (
     <div className="dashboard-platform-grid">
-      {items.map((item) => {
+      {ranked.map((item) => {
         const Icon = PLATFORM_ICONS[item.platform] || Layers3;
         const count = Math.max(0, Number(item.count) || 0);
         const sourceCount = Math.max(0, Number(item.source_count) || 0);
