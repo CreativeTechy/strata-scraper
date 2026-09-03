@@ -10,10 +10,10 @@
  * keyboard-reachable, since the whole surface is the click target.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  BarChart3, CalendarClock, Check, ChevronRight,
+  BarChart3, CalendarClock, Check, ChevronDown, ChevronRight, ChevronUp,
   ExternalLink, Layers, Link2, Pencil, Play, Radar, RefreshCw, Search,
   ShieldCheck, Sparkles, Trash2, Users,
 } from 'lucide-react';
@@ -38,25 +38,22 @@ import '../styles/Competitors.css';
 // many competitors, so it's paged rather than rendered all at once.
 const SOURCES_PAGE_SIZE = 20;
 
-// Fixed identity -> colour mapping for the sources chart, in the order the
-// chart always draws them (never re-ordered by count, so a colour always
-// means the same platform group). The three hues are a validated-passing
-// subset of the standard categorical order (run
-// dataviz/scripts/validate_palette.js "#1baf7a,#2a78d6,#4a3aa7" to reproduce);
-// "Other" stays neutral gray rather than a fourth hue, and none of the three
-// overlap the green/amber/red already reserved for validation-status pills
-// elsewhere on this page.
-const SOURCE_GROUPS = [
-  { key: 'content', label: 'Owned content', platforms: new Set(['news', 'web', 'website', 'blog', 'rss']), color: '#1baf7a' },
-  { key: 'x', label: 'X accounts', platforms: new Set(['x']), color: '#2a78d6' },
-  { key: 'hashtag', label: 'Hashtags', platforms: new Set(['hashtag']), color: '#4a3aa7' },
-  { key: 'other', label: 'Other', platforms: new Set(), color: '#94a3b8' },
-];
-const SOURCE_GROUP_BY_KEY = Object.fromEntries(SOURCE_GROUPS.map((group) => [group.key, group]));
+// The distribution chart lists every source type actually present (there can
+// be more than a screenful once LinkedIn/Threads/Facebook/Instagram/Reddit/...
+// are all in play), so it's paged too - 4 rows at a time.
+const DISTRIBUTION_PAGE_SIZE = 4;
 
-function sourceGroupKey(platform) {
-  const found = SOURCE_GROUPS.find((group) => group.platforms.has(platform));
-  return found ? found.key : 'other';
+// Every row is already text-labeled by type, so the bar itself only needs to
+// carry magnitude, not a second identity encoding - one accent hue for every
+// bar (part of the app's validated categorical set) rather than inventing a
+// colour per platform, which would run out of distinguishable hues well
+// before a study accumulates its 8th or 9th source type.
+const DISTRIBUTION_BAR_COLOR = '#2a78d6';
+
+function sourceTypeLabel(platform) {
+  const key = String(platform || '').toLowerCase();
+  if (!key) return 'Unknown';
+  return PLATFORM_LABELS[key] || `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
 }
 
 function StatTile({ icon: Icon, label, value, tone }) {
@@ -79,40 +76,76 @@ const SOURCE_STATUS_FILTERS = [
   { key: 'rejected', label: 'Rejected' },
 ];
 
-/** Bar-per-group chart, always in SOURCE_GROUPS order regardless of count -
- *  a group's colour never changes as filters change which ones have data. */
-function SourceGroupChart({ groupCounts }) {
-  const rows = SOURCE_GROUPS.map((group) => ({ ...group, count: groupCounts[group.key] || 0 }));
+/** Bar-per-source-type distribution, ranked by count (highest first) and
+ *  paged 4 at a time - a study with LinkedIn/Threads/Facebook/Instagram/
+ *  Reddit/etc. all in play can easily have more distinct types than fit in
+ *  one screenful. */
+function SourceDistributionChart({ rows, page, totalPages, onPageChange }) {
   const max = Math.max(1, ...rows.map((row) => row.count));
+  const paged = rows.slice((page - 1) * DISTRIBUTION_PAGE_SIZE, page * DISTRIBUTION_PAGE_SIZE);
 
   return (
     <div className="cs-panel" style={{ marginBottom: 20 }}>
-      <h2 className="cs-panel-title"><BarChart3 size={16} /> Sources by channel</h2>
-      <p className="cs-panel-hint">Every discovered or manually-added source across all competitors, by channel type.</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-        {rows.map((row) => (
-          <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ width: 128, flexShrink: 0, fontSize: '0.8rem', color: 'var(--text-dark)', fontWeight: 560 }}>
-              {row.label}
-            </span>
-            <div style={{ flex: 1, height: 16, borderRadius: 8, background: '#f1f5f9', overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${(row.count / max) * 100}%`,
-                  minWidth: row.count ? 4 : 0,
-                  borderRadius: 8,
-                  background: row.color,
-                  transition: 'width 0.2s ease',
-                }}
-              />
-            </div>
-            <span style={{ width: 28, flexShrink: 0, textAlign: 'right', fontSize: '0.82rem', fontWeight: 650, color: 'var(--text-dark)' }}>
-              {row.count}
-            </span>
+      <h2 className="cs-panel-title"><BarChart3 size={16} /> Sources distribution</h2>
+      <p className="cs-panel-hint">Every discovered or manually-added source across all competitors, by source type.</p>
+
+      {rows.length ? (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+            {paged.map((row) => (
+              <div key={row.platform} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ width: 128, flexShrink: 0, fontSize: '0.8rem', color: 'var(--text-dark)', fontWeight: 560 }}>
+                  {row.label}
+                </span>
+                <div style={{ flex: 1, height: 16, borderRadius: 8, background: '#f1f5f9', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${(row.count / max) * 100}%`,
+                      minWidth: row.count ? 4 : 0,
+                      borderRadius: 8,
+                      background: DISTRIBUTION_BAR_COLOR,
+                      transition: 'width 0.2s ease',
+                    }}
+                  />
+                </div>
+                <span style={{ width: 28, flexShrink: 0, textAlign: 'right', fontSize: '0.82rem', fontWeight: 650, color: 'var(--text-dark)' }}>
+                  {row.count}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+
+          <div className="cs-pagination" style={{ marginTop: 14 }}>
+            <div className="cs-pagination-info">
+              {rows.length} source type{rows.length === 1 ? '' : 's'}
+            </div>
+            <div className="cs-pagination-controls">
+              <button
+                type="button"
+                className="cs-btn cs-btn-sm"
+                onClick={() => onPageChange(Math.max(1, page - 1))}
+                disabled={page <= 1}
+              >
+                Previous
+              </button>
+              <span className="cs-pill cs-pill-signal">Page {page} of {totalPages}</span>
+              <button
+                type="button"
+                className="cs-btn cs-btn-sm"
+                onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="cs-panel-hint" style={{ marginTop: 12, marginBottom: 0 }}>
+          No sources yet.
+        </p>
+      )}
     </div>
   );
 }
@@ -121,12 +154,19 @@ function SourceGroupChart({ groupCounts }) {
  *  per-competitor "Sources" drawer shows the same data scoped to one company;
  *  this is the aggregate view across the whole study. */
 function SourcesPanel({
-  sources, filteredTotal, total, groupCounts, search, onSearch, groupFilter, onGroupFilter,
+  sources, filteredTotal, total, distributionRows, distributionPage, distributionTotalPages,
+  onDistributionPageChange, search, onSearch, typeFilter, onTypeFilter, typeOptions,
+  competitorFilter, onCompetitorFilter, competitorOptions,
   statusFilter, onStatusFilter, onChooseCompetitors, page, totalPages, onPageChange,
 }) {
   return (
     <>
-      <SourceGroupChart groupCounts={groupCounts} />
+      <SourceDistributionChart
+        rows={distributionRows}
+        page={distributionPage}
+        totalPages={distributionTotalPages}
+        onPageChange={onDistributionPageChange}
+      />
 
       <div className="cs-panel">
         <h2 className="cs-panel-title"><Link2 size={16} /> All sources</h2>
@@ -147,11 +187,19 @@ function SourcesPanel({
                 />
               </label>
 
-              <select className="cs-select" value={groupFilter} onChange={(event) => onGroupFilter(event.target.value)}
-                aria-label="Filter by channel">
-                <option value="">All channels</option>
-                {SOURCE_GROUPS.map((group) => (
-                  <option key={group.key} value={group.key}>{group.label}</option>
+              <select className="cs-select" value={competitorFilter} onChange={(event) => onCompetitorFilter(event.target.value)}
+                aria-label="Filter by competitor">
+                <option value="">All competitors</option>
+                {competitorOptions.map((competitor) => (
+                  <option key={competitor.id} value={competitor.id}>{competitor.name}</option>
+                ))}
+              </select>
+
+              <select className="cs-select" value={typeFilter} onChange={(event) => onTypeFilter(event.target.value)}
+                aria-label="Filter by source type">
+                <option value="">All source types</option>
+                {typeOptions.map((option) => (
+                  <option key={option.platform} value={option.platform}>{option.label}</option>
                 ))}
               </select>
 
@@ -165,51 +213,44 @@ function SourcesPanel({
 
             {filteredTotal ? (
               <div className="cs-rows" style={{ marginTop: 4 }}>
-                {sources.map((source) => {
-                  const group = SOURCE_GROUP_BY_KEY[sourceGroupKey(source.platform)];
-                  return (
-                    <div key={source.id} className="cs-row">
-                      <span
-                        aria-hidden="true"
-                        style={{ width: 8, height: 8, borderRadius: 4, background: group.color, flexShrink: 0 }}
-                      />
-                      <div
-                        className="cs-avatar"
-                        style={{ background: avatarGradient(source.competitor_name), width: 28, height: 28, fontSize: '0.68rem' }}
-                        aria-hidden="true"
-                      >
-                        {initials(source.competitor_name)}
+                {sources.map((source) => (
+                  <div key={source.id} className="cs-row">
+                    <div
+                      className="cs-avatar"
+                      style={{ background: avatarGradient(source.competitor_name), width: 28, height: 28, fontSize: '0.68rem' }}
+                      aria-hidden="true"
+                    >
+                      {initials(source.competitor_name)}
+                    </div>
+                    <div className="cs-row-main">
+                      <div className="cs-row-name">
+                        {source.competitor_name}
+                        <span style={{ fontWeight: 400, color: 'var(--text-light)' }}>
+                          {' '}· {sourceTypeLabel(source.platform)}
+                          {source.handle ? ` @${source.handle}` : ''}
+                        </span>
                       </div>
-                      <div className="cs-row-main">
-                        <div className="cs-row-name">
-                          {source.competitor_name}
-                          <span style={{ fontWeight: 400, color: 'var(--text-light)' }}>
-                            {' '}· {PLATFORM_LABELS[source.platform] || source.platform}
-                            {source.handle ? ` @${source.handle}` : ''}
-                          </span>
-                        </div>
-                        <div className="cs-row-desc">
-                          <a href={source.url} target="_blank" rel="noopener noreferrer"
-                            style={{ color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            {source.url} <ExternalLink size={11} />
-                          </a>
-                        </div>
-                      </div>
-                      <div className="cs-row-side">
-                        {typeof source.confidence === 'number' ? (
-                          <span className="cs-pill cs-pill-signal">{Math.round(source.confidence * 100)}% confidence</span>
-                        ) : null}
-                        <span className={`cs-pill cs-pill-${source.validation_status}`}>{source.validation_status}</span>
+                      <div className="cs-row-desc">
+                        <a href={source.url} target="_blank" rel="noopener noreferrer"
+                          style={{ color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {source.url} <ExternalLink size={11} />
+                        </a>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="cs-row-side">
+                      {typeof source.confidence === 'number' ? (
+                        <span className="cs-pill cs-pill-signal">{Math.round(source.confidence * 100)}% confidence</span>
+                      ) : null}
+                      <span className={`cs-pill cs-pill-${source.validation_status}`}>{source.validation_status}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="cs-empty">
                 <div className="cs-empty-icon"><Search size={20} /></div>
                 <h3>No matching sources</h3>
-                <p>Try a different search term or clear the channel/status filters.</p>
+                <p>Try a different search term or clear the filters.</p>
               </div>
             )}
 
@@ -258,9 +299,20 @@ function SourcesPanel({
 /** How well the business fits the culture(s) it's targeting — generated once
  *  from the wizard's "Cultural analysis" step (skippable there), and
  *  re-runnable from here. Only rendered when the profile actually has target
- *  countries; a study with none never has anything region-specific to show. */
+ *  countries; a study with none never has anything region-specific to show.
+ *  The generated result is collapsible - it's the longest single block of text
+ *  on the page, so it starts collapsed and only expands on request, or
+ *  automatically right after a fresh run completes so the new result is
+ *  immediately visible instead of hidden behind a click. */
 function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
   const hasResult = analysis && analysis.status === 'success';
+  const [collapsed, setCollapsed] = useState(true);
+  const wasRunning = useRef(running);
+  useEffect(() => {
+    if (wasRunning.current && !running) setCollapsed(false);
+    wasRunning.current = running;
+  }, [running]);
+
   return (
     <div className="cs-panel" style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -272,13 +324,26 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
             Targeting {targetCountries.map(countryLabel).join(', ')}.
           </p>
         </div>
-        <button type="button" className="cs-btn" onClick={onRun} disabled={running}>
-          {running ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-          {running ? 'Analyzing...' : hasResult ? 'Re-run analysis' : 'Run analysis'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!running && hasResult ? (
+            <button
+              type="button"
+              className="cs-btn"
+              onClick={() => setCollapsed((value) => !value)}
+              aria-expanded={!collapsed}
+            >
+              {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+              {collapsed ? 'Show details' : 'Hide details'}
+            </button>
+          ) : null}
+          <button type="button" className="cs-btn" onClick={onRun} disabled={running}>
+            {running ? <span className="cs-spinner" /> : <Sparkles size={15} />}
+            {running ? 'Analyzing...' : hasResult ? 'Re-run analysis' : 'Run analysis'}
+          </button>
+        </div>
       </div>
 
-      {!running && hasResult ? (
+      {!running && hasResult && !collapsed ? (
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="cs-field" style={{ marginBottom: 0 }}>
             <label className="cs-label">Summary</label>
@@ -334,9 +399,11 @@ export default function CompetitorWorkspace() {
   const [triggeringScrape, setTriggeringScrape] = useState(false);
   const [scrapeNotice, setScrapeNotice] = useState(null);
   const [sourceSearch, setSourceSearch] = useState('');
-  const [sourceGroupFilter, setSourceGroupFilter] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('');
+  const [sourceCompetitorFilter, setSourceCompetitorFilter] = useState('');
   const [sourceStatusFilter, setSourceStatusFilter] = useState('');
   const [sourcePage, setSourcePage] = useState(1);
+  const [distributionPage, setDistributionPage] = useState(1);
 
   // Fetch inside the effect with a cancel guard, so switching studies mid-request
   // cannot resolve into the newly-selected study's state.
@@ -439,11 +506,26 @@ export default function CompetitorWorkspace() {
     [competitors],
   );
 
-  const sourceGroupCounts = useMemo(() => {
-    const counts = Object.fromEntries(SOURCE_GROUPS.map((group) => [group.key, 0]));
-    for (const source of allSources) counts[sourceGroupKey(source.platform)] += 1;
-    return counts;
+  // Ranked by count, highest first - the chart and the "filter by source
+  // type" dropdown share this list so a type only ever shows up as a filter
+  // option once it actually has a source.
+  const sourceTypeCounts = useMemo(() => {
+    const counts = new Map();
+    for (const source of allSources) {
+      const key = String(source.platform || '').toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([platform, count]) => ({ platform, label: sourceTypeLabel(platform), count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [allSources]);
+
+  const competitorOptions = useMemo(
+    () => competitors
+      .map((competitor) => ({ id: String(competitor.id), name: competitor.name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [competitors],
+  );
 
   const sourceStats = useMemo(() => ({
     total: allSources.length,
@@ -455,7 +537,8 @@ export default function CompetitorWorkspace() {
   const filteredSources = useMemo(() => {
     const query = sourceSearch.trim().toLowerCase();
     return allSources.filter((source) => {
-      if (sourceGroupFilter && sourceGroupKey(source.platform) !== sourceGroupFilter) return false;
+      if (sourceTypeFilter && String(source.platform || '').toLowerCase() !== sourceTypeFilter) return false;
+      if (sourceCompetitorFilter && String(source.competitor_id) !== sourceCompetitorFilter) return false;
       if (sourceStatusFilter && source.validation_status !== sourceStatusFilter) return false;
       if (query) {
         const haystack = `${source.competitor_name} ${source.handle || ''} ${source.url || ''}`.toLowerCase();
@@ -463,13 +546,13 @@ export default function CompetitorWorkspace() {
       }
       return true;
     });
-  }, [allSources, sourceGroupFilter, sourceStatusFilter, sourceSearch]);
+  }, [allSources, sourceTypeFilter, sourceCompetitorFilter, sourceStatusFilter, sourceSearch]);
 
   // A new search/filter should land back on page 1, not wherever the user was
   // scrolled to on the old result set - adjusted during render (React's
   // documented pattern for this) rather than an effect, so it takes effect in
   // the same render as the filter change instead of one tick later.
-  const sourceFilterKey = `${sourceSearch}|${sourceGroupFilter}|${sourceStatusFilter}`;
+  const sourceFilterKey = `${sourceSearch}|${sourceTypeFilter}|${sourceCompetitorFilter}|${sourceStatusFilter}`;
   const [prevSourceFilterKey, setPrevSourceFilterKey] = useState(sourceFilterKey);
   if (sourceFilterKey !== prevSourceFilterKey) {
     setPrevSourceFilterKey(sourceFilterKey);
@@ -478,6 +561,8 @@ export default function CompetitorWorkspace() {
 
   const sourceTotalPages = Math.max(1, Math.ceil(filteredSources.length / SOURCES_PAGE_SIZE));
   const sourceSafePage = Math.min(sourcePage, sourceTotalPages);
+  const distributionTotalPages = Math.max(1, Math.ceil(sourceTypeCounts.length / DISTRIBUTION_PAGE_SIZE));
+  const distributionSafePage = Math.min(distributionPage, distributionTotalPages);
   const pagedSources = useMemo(
     () => filteredSources.slice((sourceSafePage - 1) * SOURCES_PAGE_SIZE, sourceSafePage * SOURCES_PAGE_SIZE),
     [filteredSources, sourceSafePage],
@@ -601,11 +686,18 @@ export default function CompetitorWorkspace() {
         sources={pagedSources}
         filteredTotal={filteredSources.length}
         total={allSources.length}
-        groupCounts={sourceGroupCounts}
+        distributionRows={sourceTypeCounts}
+        distributionPage={distributionSafePage}
+        distributionTotalPages={distributionTotalPages}
+        onDistributionPageChange={setDistributionPage}
         search={sourceSearch}
         onSearch={setSourceSearch}
-        groupFilter={sourceGroupFilter}
-        onGroupFilter={setSourceGroupFilter}
+        typeFilter={sourceTypeFilter}
+        onTypeFilter={setSourceTypeFilter}
+        typeOptions={sourceTypeCounts}
+        competitorFilter={sourceCompetitorFilter}
+        onCompetitorFilter={setSourceCompetitorFilter}
+        competitorOptions={competitorOptions}
         statusFilter={sourceStatusFilter}
         onStatusFilter={setSourceStatusFilter}
         onChooseCompetitors={() => navigate(`/competitors/${studyId}/competitors`)}
