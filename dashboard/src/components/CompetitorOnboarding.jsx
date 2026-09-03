@@ -5,6 +5,8 @@
  *                       so it is asked for first and its scrape is shown honestly.
  *   2. Market context — the AI's reading of the site, editable. Shown rather than
  *                       hidden because everything downstream is judged against it.
+ *                       "Re-run analysis" re-scrapes and re-derives from scratch,
+ *                       overwriting any hand edits, without going back to step 1.
  *   3. Cultural analysis — optional, and only shown when target countries were
  *                       chosen in step 1: an AI assessment of how the business
  *                       would fare in that culture (success factors, benefits,
@@ -51,6 +53,7 @@ import {
   getProfile, initials, listAccounts, listCompetitors, listStudies,
   pollDiscoveryRun, runCulturalAnalysis, saveProfile, setCompetitorStatus, setSchedule, validateAccount,
 } from '../competitorApi.js';
+import { SCRAPE_STAGES } from '../constants/competitorStages.js';
 import { COUNTRIES, countryLabel } from '../constants/countries.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
 import { AddCompetitorForm, AddSourceRow } from './CompetitorSourceEditor.jsx';
@@ -65,13 +68,6 @@ const STEPS = [
   { id: 5, label: 'Competitors', icon: Radar },
   { id: 6, label: 'Channels', icon: Link2 },
   { id: 7, label: 'Schedule', icon: CalendarClock },
-];
-
-const SCRAPE_STAGES = [
-  'Fetching your website',
-  'Extracting page text',
-  'Reading how you position yourself',
-  'Writing your market context',
 ];
 
 // Phase 1 only asks the model for names and ranks them - no web verification
@@ -163,7 +159,7 @@ export function DiscoveryLog({ logs, active }) {
  *  reads as progress; it never claims the work finished — that is driven by the
  *  response, which replaces this component entirely. Rendered only while a
  *  request is in flight, so each run mounts it fresh at stage zero. */
-function StageList({ stages }) {
+export function StageList({ stages }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -348,6 +344,9 @@ export default function CompetitorOnboarding() {
   const [scrape, setScrape] = useState(null);
   const [culturalAnalysis, setCulturalAnalysis] = useState(null);
   const [culturalBusy, setCulturalBusy] = useState(false);
+  // Re-running step 3's context derivation (re-scrape + re-derive) without
+  // leaving the step, distinct from `busy` which covers saving/continuing.
+  const [contextBusy, setContextBusy] = useState(false);
 
   // 'new' builds a fresh business profile (scrape+AI, or manual); 'existing'
   // reuses one already derived for a past study, skipping both.
@@ -567,6 +566,28 @@ export default function CompetitorOnboarding() {
     } finally {
       setBusy(false);
       setStep1Mode(null);
+    }
+  };
+
+  // Step 3: re-scrape the website and re-derive the market context from
+  // scratch, overwriting whatever is on screen (including hand edits) —
+  // the escape hatch for a bad first read, without going back to step 2.
+  const rerunContext = async () => {
+    setError('');
+    setContextBusy(true);
+    try {
+      const result = await buildProfile(studyId, { ...business, target_countries: targetCountries });
+      setProfile(result.profile);
+      setScrape(result.scrape);
+      if (!result.ai_derived) {
+        setError(
+          'The site was read but the market context could not be generated. Fill it in below and continue.',
+        );
+      }
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setContextBusy(false);
     }
   };
 
@@ -1105,11 +1126,30 @@ export default function CompetitorOnboarding() {
           ) : null}
 
           <div className="cs-panel">
-            <h2 className="cs-panel-title"><Sparkles size={16} /> What we understood</h2>
-            <p className="cs-panel-hint">
-              Edit anything that is off. This is the description competitors get matched against and
-              that every &ldquo;how does this affect us&rdquo; judgement is measured by.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Sparkles size={16} /> What we understood</h2>
+                <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
+                  Edit anything that is off. This is the description competitors get matched against and
+                  that every &ldquo;how does this affect us&rdquo; judgement is measured by.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="cs-btn"
+                onClick={rerunContext}
+                disabled={!business.website.trim() || contextBusy || busy}
+              >
+                {contextBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
+                {contextBusy ? 'Reading your site...' : 'Re-run analysis'}
+              </button>
+            </div>
+
+            {contextBusy ? (
+              <div className="cs-panel" style={{ marginTop: 14, background: '#fcfdff' }}>
+                <StageList stages={SCRAPE_STAGES} />
+              </div>
+            ) : null}
 
             <div className="cs-grid-2">
               <div className="cs-field">
@@ -1148,10 +1188,10 @@ export default function CompetitorOnboarding() {
             </div>
 
             <div className="cs-wizard-foot">
-              <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(2)} disabled={busy}>
+              <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(2)} disabled={busy || contextBusy}>
                 <ArrowLeft size={15} /> Back
               </button>
-              <button type="button" className="cs-btn cs-btn-primary" onClick={submitContext} disabled={busy}>
+              <button type="button" className="cs-btn cs-btn-primary" onClick={submitContext} disabled={busy || contextBusy}>
                 {busy ? <span className="cs-spinner" /> : <ArrowRight size={15} />}
                 {busy ? 'Saving...' : targetCountries.length ? 'Continue to cultural analysis' : 'Continue to competitors'}
               </button>
