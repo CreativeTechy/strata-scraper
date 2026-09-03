@@ -39,14 +39,17 @@ class NormalizeSourceUrlTests(unittest.TestCase):
 
 class PlatformSourceTypeTests(unittest.TestCase):
     """No generic "social" source_type any more (see config._infer_source_type) -
-    an "x" account resolves to "username", and platforms with no dedicated
-    scraping tier (Facebook/Instagram/YouTube) resolve to "web"."""
+    an "x" account resolves to "username", "facebook" resolves to its own
+    dedicated Apify-backed type, and platforms with no dedicated scraping
+    tier (Instagram/YouTube) resolve to "web"."""
 
     def test_x_resolves_to_username(self):
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["x"], "username")
 
-    def test_facebook_instagram_youtube_resolve_to_web(self):
-        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["facebook"], "web")
+    def test_facebook_resolves_to_facebook(self):
+        self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["facebook"], "facebook")
+
+    def test_instagram_youtube_resolve_to_web(self):
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["instagram"], "web")
         self.assertEqual(competitors_store.PLATFORM_SOURCE_TYPE["youtube"], "web")
 

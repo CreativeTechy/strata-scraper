@@ -58,6 +58,40 @@ class CleanArticlesTests(unittest.TestCase):
         self.assertEqual(len(cleaned), 1)
         self.assertEqual(removed["x.com/someuser"]["content_filtered"], 0)
 
+    def test_short_facebook_post_is_kept(self):
+        # Confirmed live: real profile posts as short as a single hashtag
+        # were being discarded by the length floor before facebook.com was
+        # added to content_guard.is_short_form_social_url.
+        articles = [
+            self._article(
+                url="https://www.facebook.com/reel/1093624413320995/",
+                title="A Facebook page",
+                text="#a_single_hashtag",
+                source="facebook.com",
+            )
+        ]
+        cleaned, removed = collect.clean_articles(articles)
+        self.assertEqual(len(cleaned), 1)
+        self.assertEqual(removed["facebook.com"]["content_filtered"], 0)
+
+    def test_short_linkedin_and_threads_posts_are_kept(self):
+        articles = [
+            self._article(
+                url="https://www.linkedin.com/company/google/posts/123",
+                title="A LinkedIn page",
+                text="short update",
+                source="linkedin.com",
+            ),
+            self._article(
+                url="https://www.threads.com/@nasa/post/C1234",
+                title="@nasa",
+                text="short thread",
+                source="threads.com/@nasa",
+            ),
+        ]
+        cleaned, removed = collect.clean_articles(articles)
+        self.assertEqual(len(cleaned), 2)
+
     def test_clean_article_is_kept(self):
         articles = [self._article()]
         cleaned, removed = collect.clean_articles(articles)

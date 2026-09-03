@@ -355,6 +355,62 @@ APIFY_THREADS_MAX_POSTS = _env_int("APIFY_THREADS_MAX_POSTS", 20)
 APIFY_THREADS_TIMEOUT_SECONDS = _env_int("APIFY_THREADS_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
 
 
+# --- Apify (optional) - Facebook scraping tier -------------------------------
+# Reuses APIFY_API_TOKEN above. A Facebook page, group, profile, or search
+# results page is either gated behind a login wall or served as a
+# client-rendered shell, the same "no unauthenticated HTML worth fetching"
+# situation as LinkedIn/Threads - so "facebook" sources go through one of
+# these four actors in place of the normal per-source request entirely (see
+# scraper/apify_facebook.py), not alongside it like the Twitter/Reddit tiers
+# above. Unset (the default), "facebook" sources report 0 articles with an
+# explanatory fetch note, same contract as an unconfigured "linkedin" source.
+# Each kind gets its own actor (page/group/profile/search have no shared
+# dataset shape the way LinkedIn's two actors do) and its own timeout var,
+# same reasoning as APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS below.
+#
+# Actor picks were confirmed live against Apify's own API/schema, not just
+# guessed by name - two nearby-sounding actors turned out to be the wrong
+# tool: apify/facebook-pages-scraper (a plausible first guess for "page")
+# only returns page *metadata* (likes, address, phone, rating), never post
+# text - apify/facebook-posts-scraper is the one that actually returns post
+# captions, with the same startUrls/resultsLimit input shape. Likewise
+# apify/facebook-search-scraper (the original "search" pick) searches for
+# Facebook *Pages* by name/category, not post content - its dataset items
+# are page listings with no post-text field at all, so it could never have
+# produced an article. cleansyntax/facebook-profile-posts-scraper was picked
+# for "profile" after comparing several third-party actors' Apify-store
+# reliability stats (99%+ success over 70k+ runs/30 days, vs. sub-60% for the
+# alternatives checked) - its input shape differs from the other three
+# actors (a `urls_text`/`max_posts` pair keyed by an `endpoint` selector, not
+# startUrls/resultsLimit), which apify_facebook.py's
+# apify_facebook_profile_posts accounts for directly. That same actor also
+# has a `search_posts_by_keyword` endpoint that genuinely searches post
+# content across Facebook (confirmed live) - APIFY_FACEBOOK_SEARCH_ACTOR now
+# defaults to it too, in place of facebook-search-scraper, so "search"-kind
+# facebook sources actually get posts. The profile-posts endpoint is far
+# slower per post than the other three actors (confirmed live: ~55s for 5
+# posts, ~135s for 10, still running past 270s for 20 - the shared
+# APIFY_FACEBOOK_MAX_POSTS default of 20 would starve it under any
+# reasonable timeout), hence its own smaller max-posts var and longer
+# timeout below, same "this one actor genuinely needs a different budget"
+# reasoning as APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS - the keyword-search
+# endpoint doesn't share that problem (confirmed live: ~7-9s per query), so
+# APIFY_FACEBOOK_SEARCH_TIMEOUT_SECONDS keeps the shared default.
+APIFY_FACEBOOK_PAGES_ACTOR = os.environ.get("APIFY_FACEBOOK_PAGES_ACTOR", "apify/facebook-posts-scraper").strip()
+APIFY_FACEBOOK_GROUPS_ACTOR = os.environ.get("APIFY_FACEBOOK_GROUPS_ACTOR", "apify/facebook-groups-scraper").strip()
+APIFY_FACEBOOK_SEARCH_ACTOR = os.environ.get("APIFY_FACEBOOK_SEARCH_ACTOR", "cleansyntax/facebook-profile-posts-scraper").strip()
+APIFY_FACEBOOK_PROFILE_ACTOR = os.environ.get("APIFY_FACEBOOK_PROFILE_ACTOR", "cleansyntax/facebook-profile-posts-scraper").strip()
+APIFY_FACEBOOK_MAX_POSTS = _env_int("APIFY_FACEBOOK_MAX_POSTS", 20)
+APIFY_FACEBOOK_PROFILE_MAX_POSTS = _env_int("APIFY_FACEBOOK_PROFILE_MAX_POSTS", 5)
+APIFY_FACEBOOK_PAGES_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_PAGES_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+APIFY_FACEBOOK_GROUPS_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_GROUPS_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+APIFY_FACEBOOK_SEARCH_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_SEARCH_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
+# Confirmed live at 5 posts (APIFY_FACEBOOK_PROFILE_MAX_POSTS's default)
+# taking ~55s - defaults above the shared 120s budget as headroom, not
+# because 5 posts is expected to need that long.
+APIFY_FACEBOOK_PROFILE_TIMEOUT_SECONDS = _env_int("APIFY_FACEBOOK_PROFILE_TIMEOUT_SECONDS", 180)
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see
@@ -453,6 +509,11 @@ def _looks_like_threads_url(url: str) -> bool:
     return host in {"threads.com", "threads.net"}
 
 
+def _looks_like_facebook_url(url: str) -> bool:
+    host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.").removeprefix("m.")
+    return host in {"facebook.com", "fb.com"}
+
+
 def _looks_like_x_url(url: str) -> bool:
     host = urlparse((url or "").strip()).netloc.lower().removeprefix("www.")
     return host in {"x.com", "twitter.com"}
@@ -469,12 +530,12 @@ def _infer_source_type(url: str) -> str:
     """Best-guess source_type from a URL's own shape - no generic "social"
     bucket: an x.com/twitter.com URL resolves straight to whichever of
     tweet/hashtag/username it actually is, and every other social platform
-    (Facebook, Instagram, TikTok, YouTube, ...) - none of which this app has
-    any dedicated scraping tier for - falls through to "web" like any other
-    non-feed URL, per the "we can't scrape it as its own platform, so treat
-    it as a plain web page" rule. Threads (threads.com/threads.net) is the
-    one exception among Meta/X-adjacent platforms: see "linkedin" for why it
-    gets its own type instead of falling through too.
+    this app has no dedicated scraping tier for (Instagram, TikTok, YouTube,
+    ...) falls through to "web" like any other non-feed URL, per the "we
+    can't scrape it as its own platform, so treat it as a plain web page"
+    rule. Threads and Facebook (see "linkedin" and "facebook" below) are
+    exceptions among Meta/X-adjacent platforms, since both get their own
+    dedicated Apify-backed tier instead of falling through too.
     """
     if _looks_like_feed_url(url):
         return "rss"
@@ -486,6 +547,8 @@ def _infer_source_type(url: str) -> str:
         return "linkedin"
     if _looks_like_threads_url(url):
         return "threads"
+    if _looks_like_facebook_url(url):
+        return "facebook"
     if is_tweet_url(url):
         return "tweet"
     if _looks_like_hashtag_url(url):
@@ -495,7 +558,10 @@ def _infer_source_type(url: str) -> str:
     return "web"
 
 
-KNOWN_SOURCE_TYPES = {"rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram", "linkedin", "threads"}
+KNOWN_SOURCE_TYPES = {
+    "rss", "web", "hashtag", "keyword", "username", "tweet", "reddit", "telegram",
+    "linkedin", "threads", "facebook",
+}
 
 # hashtag/keyword/username store a URL derived FROM the chosen type itself
 # (see sources_store._derive_term_url) - it is always self-consistent with
@@ -507,7 +573,7 @@ _TERM_DERIVED_TYPES = {"hashtag", "keyword", "username"}
 # Every other known type is a dedicated platform whose URL shape alone
 # determines it - if a user-entered URL for any of these actually belongs to
 # a different one, _resolve_source_type corrects it below.
-_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "threads", "tweet", "hashtag", "username"}
+_PLATFORM_TYPES = {"reddit", "telegram", "linkedin", "threads", "facebook", "tweet", "hashtag", "username"}
 
 
 def _resolve_source_type(source_type_input: str, url: str) -> str:
@@ -515,17 +581,18 @@ def _resolve_source_type(source_type_input: str, url: str) -> str:
     hashtag/keyword/username are trusted as explicitly chosen (see
     _TERM_DERIVED_TYPES), but every other type is corrected to whatever the
     URL itself actually is whenever that disagrees with a dedicated
-    platform's own shape (reddit.com, t.me, linkedin.com, an x.com/twitter.com
-    status/hashtag/profile link) - so e.g. pasting a tweet URL while "Reddit"
-    is still selected still ends up stored as "tweet", not an uncrawlable
-    "reddit" source. This also carries forward legacy rows from before
-    reddit/telegram/linkedin/tweet/hashtag/username existed as their own
-    types (previously lumped into a generic "social"/rss/web bucket).
+    platform's own shape (reddit.com, t.me, linkedin.com, threads.com,
+    facebook.com, an x.com/twitter.com status/hashtag/profile link) - so e.g.
+    pasting a tweet URL while "Reddit" is still selected still ends up stored
+    as "tweet", not an uncrawlable "reddit" source. This also carries forward
+    legacy rows from before reddit/telegram/linkedin/threads/facebook/tweet/
+    hashtag/username existed as their own types (previously lumped into a
+    generic "social"/rss/web bucket).
     A plain rss/web pick is left alone even if its URL doesn't look feed-like
     (a homepage URL saved as "rss" is normal - see parse_homepage) or looks
-    like a non-X social platform (Facebook/Instagram/... - see
-    _infer_source_type - correctly stays "web", since there's no dedicated
-    type to promote it to).
+    like a social platform with no dedicated scraping tier (Instagram,
+    TikTok, YouTube, ... - see _infer_source_type) - correctly stays "web",
+    since there's no dedicated type to promote it to.
     """
     source_type_input = (source_type_input or "").strip().lower()
     inferred_type = _infer_source_type(url)
