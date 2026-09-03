@@ -13,13 +13,14 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Building2, Calendar, CheckCircle2, ChevronRight,
-  Layers, Loader2, Save,
+  Layers, Loader2, Save, Sparkles,
 } from 'lucide-react';
 import {
-  getProfile, getSchedule, getStudy, saveProfile, setSchedule, updateStudy,
+  buildProfile, getProfile, getSchedule, getStudy, saveProfile, setSchedule, updateStudy,
 } from '../competitorApi.js';
+import { SCRAPE_STAGES } from '../constants/competitorStages.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
-import { CountryPicker, ListEditor } from './CompetitorOnboarding.jsx';
+import { CountryPicker, ListEditor, StageList } from './CompetitorOnboarding.jsx';
 import ErrorNotice from './ErrorNotice';
 import { WeekdayPicker } from './ProjectsPage.jsx';
 import '../styles/Competitors.css';
@@ -44,6 +45,10 @@ export default function CompetitorEditPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
+
+  // Re-scraping the site and re-deriving the profile from scratch, distinct
+  // from `saving` which persists the (possibly hand-edited) draft as-is.
+  const [contextBusy, setContextBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +130,30 @@ export default function CompetitorEditPage() {
     }
   };
 
+  // Re-scrapes the site and re-derives the whole profile from scratch
+  // (everything but name/website/description/target_countries is
+  // overwritten), the same escape hatch onboarding's step 2 offers for a bad
+  // first read — without discarding the rest of this draft's unsaved edits.
+  const rerunContext = async () => {
+    if (!profileDraft) return;
+    setSaveError('');
+    setSaved(false);
+    setContextBusy(true);
+    try {
+      const result = await buildProfile(studyId, {
+        name: profileDraft.name,
+        website: profileDraft.website,
+        description: profileDraft.description,
+        target_countries: profileDraft.target_countries,
+      });
+      setProfileDraft((prev) => ({ ...prev, ...(result.profile || {}) }));
+    } catch (caught) {
+      setSaveError(caught.message);
+    } finally {
+      setContextBusy(false);
+    }
+  };
+
   const scheduleWeekdaysSupported = scheduleDraft.repeat_interval_unit === 'days';
 
   if (loading) {
@@ -161,7 +190,7 @@ export default function CompetitorEditPage() {
           <button type="button" className="cs-btn cs-btn-ghost" onClick={() => navigate(`/competitors/${studyId}`)}>
             Cancel
           </button>
-          <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving}>
+          <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving || contextBusy}>
             {saving ? <span className="cs-spinner" /> : <Save size={15} />}
             {saving ? 'Saving...' : 'Save changes'}
           </button>
@@ -203,11 +232,30 @@ export default function CompetitorEditPage() {
 
       {/* ---------------- Business context ---------------- */}
       <div className="cs-panel" style={{ marginBottom: 20 }}>
-        <h2 className="cs-panel-title"><Building2 size={16} /> Business context</h2>
-        <p className="cs-panel-hint">
-          This is the description competitors get matched against, and what every &ldquo;how does this
-          affect us&rdquo; judgement is measured by.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Building2 size={16} /> Business context</h2>
+            <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
+              This is the description competitors get matched against, and what every &ldquo;how does this
+              affect us&rdquo; judgement is measured by.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="cs-btn"
+            onClick={rerunContext}
+            disabled={!profileDraft?.website?.trim() || contextBusy || saving}
+          >
+            {contextBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
+            {contextBusy ? 'Reading your site...' : 'Re-run analysis'}
+          </button>
+        </div>
+
+        {contextBusy ? (
+          <div className="cs-panel" style={{ marginTop: 14, background: '#fcfdff' }}>
+            <StageList stages={SCRAPE_STAGES} />
+          </div>
+        ) : null}
 
         {profileDraft ? (
           <>
@@ -348,7 +396,7 @@ export default function CompetitorEditPage() {
         <button type="button" className="cs-btn cs-btn-ghost" onClick={() => navigate(`/competitors/${studyId}`)}>
           Cancel
         </button>
-        <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving}>
+        <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving || contextBusy}>
           {saving ? <Loader2 size={15} className="cs-spin" /> : <Save size={15} />}
           {saving ? 'Saving...' : 'Save changes'}
         </button>
