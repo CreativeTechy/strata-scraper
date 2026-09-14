@@ -172,6 +172,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState(() => (normalizedProjectId != null ? String(normalizedProjectId) : 'all'));
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [pipelineRunFilter, setPipelineRunFilter] = useState('all');
+  const [pipelineRuns, setPipelineRuns] = useState([]);
   const [limit, setLimit] = useState(24);
   const [offset, setOffset] = useState(0);
   const [sort, setSort] = useState('published.desc');
@@ -216,7 +218,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
   useEffect(() => {
     setOffset(0);
-  }, [search, projectFilter, sourceFilter, limit, sort, scrapedFrom, scrapedTo]);
+  }, [search, projectFilter, sourceFilter, pipelineRunFilter, limit, sort, scrapedFrom, scrapedTo]);
 
   const activeProject = useMemo(() => {
     if (projectFilter === 'all') return null;
@@ -233,7 +235,41 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
   useEffect(() => {
     setSourceFilter('all');
+    setPipelineRunFilter('all');
   }, [projectFilter]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadPipelineRuns() {
+      if (!activeProject) {
+        setPipelineRuns([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/pipeline-runs?project_id=${encodeURIComponent(activeProject.id)}&limit=50`, {
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        setPipelineRuns(Array.isArray(data?.runs) ? data.runs : []);
+      } catch (err) {
+        if (err?.name !== 'AbortError') setPipelineRuns([]);
+      }
+    }
+    loadPipelineRuns();
+    return () => controller.abort();
+  }, [activeProject]);
+
+  const pipelineRunOptions = useMemo(
+    () =>
+      pipelineRuns.map((run) => ({
+        value: run.id,
+        label: `${run.sequence_number ? `Pipeline #${run.sequence_number}` : 'Pipeline run'} - ${
+          run.started_at ? new Date(run.started_at).toLocaleString() : 'unknown date'
+        }`,
+      })),
+    [pipelineRuns],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -245,6 +281,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
         if (search) params.set('search', search);
         if (projectFilter !== 'all') params.set('project_id', String(projectFilter));
         if (sourceFilter !== 'all') params.set('source_url', sourceFilter);
+        if (pipelineRunFilter !== 'all') params.set('pipeline_run_id', pipelineRunFilter);
         if (scrapedFrom) params.set('scraped_from', scrapedFrom);
         if (scrapedTo) params.set('scraped_to', scrapedTo);
         params.set('limit', String(limit));
@@ -274,7 +311,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
     loadArticles();
     return () => controller.abort();
-  }, [search, projectFilter, sourceFilter, limit, offset, sort, scrapedFrom, scrapedTo, reloadToken]);
+  }, [search, projectFilter, sourceFilter, pipelineRunFilter, limit, offset, sort, scrapedFrom, scrapedTo, reloadToken]);
 
   useEffect(() => {
     hasArticlesRef.current = articles.length > 0;
@@ -354,6 +391,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
       if (search) params.set('search', search);
       if (projectFilter !== 'all') params.set('project_id', String(projectFilter));
       if (sourceFilter !== 'all') params.set('source_url', sourceFilter);
+      if (pipelineRunFilter !== 'all') params.set('pipeline_run_id', pipelineRunFilter);
       if (scrapedFrom) params.set('scraped_from', scrapedFrom);
       if (scrapedTo) params.set('scraped_to', scrapedTo);
       params.set('sort', sort);
@@ -690,6 +728,23 @@ export default function ArticlesPage({ project = null, projectId = null, project
               ))}
             </select>
 
+            <select
+              className="filter-select"
+              value={pipelineRunFilter}
+              onChange={(e) => setPipelineRunFilter(e.target.value)}
+              disabled={!activeProject || pipelineRunOptions.length === 0}
+              aria-label="Filter by pipeline run"
+            >
+              <option value="all">
+                {activeProject ? 'All pipeline runs' : 'Select a project for pipeline runs'}
+              </option>
+              {pipelineRunOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
             <div className="articles-date-range">
               <span className="articles-date-range-label">
                 <Calendar size={14} /> Scraped between
@@ -770,6 +825,12 @@ export default function ArticlesPage({ project = null, projectId = null, project
               <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 <Filter size={12} />
                 {sourceOptions.find((option) => option.value === sourceFilter)?.label || sourceFilter}
+              </span>
+            )}
+            {pipelineRunFilter !== 'all' && (
+              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                <Layers size={12} />
+                {pipelineRunOptions.find((option) => option.value === pipelineRunFilter)?.label || 'Pipeline run'}
               </span>
             )}
             {(scrapedFrom || scrapedTo) && (

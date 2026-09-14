@@ -12,10 +12,11 @@ import {
   Rss,
   Filter,
   Save,
-  Layers,
+  Download,
   ExternalLink,
 } from 'lucide-react';
 import ErrorNotice from './ErrorNotice';
+import ConfirmModal from './ConfirmModal';
 
 function prettyStage(stage) {
   if (!stage) return 'queued';
@@ -85,7 +86,6 @@ const TOTAL_STATS = [
   { key: 'articles_scraped', label: 'Articles scraped', Icon: Rss, tint: 'rgba(255, 159, 67, 0.14)', color: 'var(--primary-color)' },
   { key: 'articles_cleaned', label: 'Articles cleaned', Icon: Filter, tint: 'rgba(46, 134, 222, 0.14)', color: '#2e86de' },
   { key: 'articles_saved', label: 'Articles saved', Icon: Save, tint: 'rgba(46, 213, 115, 0.14)', color: '#2ed573' },
-  { key: 'crawl_pages', label: 'Pages crawled', Icon: Layers, tint: 'rgba(116, 125, 140, 0.14)', color: '#747d8c' },
 ];
 
 // Anchor target for a source row: prefer the real configured URL recorded
@@ -171,6 +171,9 @@ export default function PipelineRunDetailPage({ projects = [] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedSources, setExpandedSources] = useState(() => new Set());
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
+  const [exportingArticles, setExportingArticles] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const projectsById = useMemo(() => {
     const map = new Map();
@@ -233,6 +236,33 @@ export default function PipelineRunDetailPage({ projects = [] }) {
     };
   }, [runId]);
 
+  const handleExportRunArticles = async () => {
+    if (exportingArticles || !runId) return;
+    setExportingArticles(true);
+    setExportError('');
+    try {
+      const res = await fetch(`/api/articles/export?pipeline_run_id=${encodeURIComponent(runId)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || data?.error || `Failed to export articles (${res.status})`);
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      anchor.href = objectUrl;
+      anchor.download = `pipeline-run-${runId}-articles-${timestamp}.jsonl`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      setExportError(err?.message || 'Failed to export articles.');
+    } finally {
+      setExportingArticles(false);
+    }
+  };
+
   const toggleSource = (key) => {
     setExpandedSources((prev) => {
       const next = new Set(prev);
@@ -275,6 +305,8 @@ export default function PipelineRunDetailPage({ projects = [] }) {
         <ErrorNotice error={error} context="load this pipeline run" />
       ) : !run ? null : (
         <>
+          <ErrorNotice error={exportError} context="extract articles for this pipeline run" onDismiss={() => setExportError('')} />
+
           <div className="admin-stats-grid">
             {TOTAL_STATS.map(({ key, label, Icon, tint, color }) => (
               <div className="admin-stat-card" key={key}>
@@ -287,6 +319,24 @@ export default function PipelineRunDetailPage({ projects = [] }) {
                 </div>
               </div>
             ))}
+            <button
+              type="button"
+              className="admin-stat-card admin-stat-action-card"
+              onClick={() => setShowExportConfirm(true)}
+              disabled={exportingArticles || !run.articles_saved}
+              title={run.articles_saved ? 'Download this run\'s articles as JSONL' : 'No articles were saved in this run'}
+              style={{ textAlign: 'left', width: '100%', font: 'inherit', color: 'inherit' }}
+            >
+              <div className="admin-stat-icon" style={{ background: 'rgba(249, 115, 22, 0.14)', color: 'var(--primary-color)' }}>
+                {exportingArticles ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
+              </div>
+              <div>
+                <span>{exportingArticles ? 'Exporting...' : 'Extract articles'}</span>
+                <strong>{(run.articles_saved || 0).toLocaleString()}</strong>
+                <span className="admin-stat-action-hint">Download as JSONL</span>
+              </div>
+              <ChevronRight size={16} className="admin-stat-action-arrow" />
+            </button>
           </div>
 
           <div className="glass-card" style={{ marginBottom: 18 }}>
@@ -497,6 +547,25 @@ export default function PipelineRunDetailPage({ projects = [] }) {
           </div>
         </>
       )}
+
+      <ConfirmModal
+        open={showExportConfirm}
+        title="Extract articles?"
+        message={`This will export ${(run?.articles_saved || 0).toLocaleString()} article${
+          (run?.articles_saved || 0) === 1 ? '' : 's'
+        } collected in this pipeline run as a JSONL file.`}
+        confirmLabel={exportingArticles ? 'Exporting...' : 'Extract'}
+        cancelLabel="Cancel"
+        confirmDisabled={exportingArticles}
+        onClose={() => {
+          if (!exportingArticles) setShowExportConfirm(false);
+        }}
+        onConfirm={async () => {
+          if (exportingArticles) return;
+          setShowExportConfirm(false);
+          await handleExportRunArticles();
+        }}
+      />
     </div>
   );
 }

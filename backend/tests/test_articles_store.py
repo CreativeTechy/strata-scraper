@@ -39,6 +39,71 @@ class ContentHashTests(unittest.TestCase):
         self.assertIsNone(store._content_hash("   \n  "))
 
 
+class PipelineRunFilterTests(unittest.TestCase):
+    """pipeline_run_id scopes a listing/export to one crawl - the filter behind
+    "extract articles" on a pipeline run's detail page and the /articles
+    per-run filter."""
+
+    def test_where_parts_adds_pipeline_run_clause(self):
+        where_sql, params = articles_store._where_parts(pipeline_run_id="run-abc")
+        self.assertIn("pipeline_run_id = %s", where_sql)
+        self.assertIn("run-abc", params)
+
+    def test_where_parts_omits_clause_when_blank(self):
+        where_sql, params = articles_store._where_parts(pipeline_run_id="   ")
+        self.assertNotIn("pipeline_run_id", where_sql)
+
+    def test_list_articles_filters_by_pipeline_run_id(self):
+        captured = {}
+
+        def fetch_all(sql, params=()):
+            captured["sql"] = sql
+            captured["params"] = params
+            return []
+
+        patchers = [
+            patch("services.articles.articles_store.config.DATABASE_URL", "postgresql://x"),
+            patch("services.articles.articles_store.db.fetch_all", side_effect=fetch_all),
+            patch("services.articles.articles_store.db.fetch_one", return_value={"total": 0}),
+        ]
+        for patcher in patchers:
+            patcher.start()
+        try:
+            articles_store.list_articles(pipeline_run_id="run-1")
+        finally:
+            for patcher in patchers:
+                patcher.stop()
+
+        self.assertIn("pipeline_run_id = %s", captured["sql"])
+        self.assertIn("run-1", captured["params"])
+
+    def test_export_articles_filters_by_pipeline_run_id(self):
+        captured = {}
+
+        def fetch_all(sql, params=()):
+            if "information_schema" in sql:
+                return []
+            captured["sql"] = sql
+            captured["params"] = params
+            return []
+
+        patchers = [
+            patch("services.articles.articles_store.config.DATABASE_URL", "postgresql://x"),
+            patch("services.articles.articles_store.db.fetch_all", side_effect=fetch_all),
+            patch("services.articles.articles_store.db.fetch_one", return_value={"total": 0}),
+        ]
+        for patcher in patchers:
+            patcher.start()
+        try:
+            list(articles_store.export_articles(pipeline_run_id="run-1"))
+        finally:
+            for patcher in patchers:
+                patcher.stop()
+
+        self.assertIn("pipeline_run_id = %s", captured["sql"])
+        self.assertIn("run-1", captured["params"])
+
+
 class BulkPagingTests(unittest.TestCase):
     """MAX_LIMIT caps what a single API response may return. Readers that walk
     the whole result set page through _fetch_articles, so if they ask for a

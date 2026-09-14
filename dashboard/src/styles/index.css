@@ -1423,6 +1423,61 @@ h1, h2, h3 {
   flex-shrink: 0;
 }
 
+/* A stat card that doubles as a button (e.g. "Extract articles" on a pipeline
+   run's detail page) - same shape as .admin-stat-card, but with an accent
+   border, a hover/focus lift, and a trailing arrow so it reads as an action
+   rather than a passive number. */
+.admin-stat-action-card {
+  position: relative;
+  border: 1px solid rgba(249, 115, 22, 0.28);
+  background: linear-gradient(135deg, rgba(255, 159, 67, 0.09), rgba(255, 255, 255, 0.55));
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-stat-action-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(249, 115, 22, 0.18);
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.admin-stat-action-card:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.admin-stat-action-card:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.admin-stat-action-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-stat-action-card .admin-stat-action-arrow {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--primary-color);
+  opacity: 0.55;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.admin-stat-action-card:hover:not(:disabled) .admin-stat-action-arrow {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.admin-stat-action-card .admin-stat-action-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-light);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 2px;
+}
+
 .admin-toolbar-row {
   display: flex;
   gap: 12px;

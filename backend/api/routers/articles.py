@@ -37,6 +37,7 @@ def get_articles(
     sort: str = "published.desc",
     scraped_from: str | None = None,
     scraped_to: str | None = None,
+    pipeline_run_id: str | None = None,
     user: dict = Depends(require_permission("articles.view")),
 ):
     return list_articles(
@@ -48,6 +49,7 @@ def get_articles(
         sort=sort,
         scraped_from=scraped_from,
         scraped_to=scraped_to,
+        pipeline_run_id=pipeline_run_id,
     )
 
 
@@ -70,6 +72,7 @@ def export_articles_jsonl(
     sort: str = "published.desc",
     scraped_from: str | None = None,
     scraped_to: str | None = None,
+    pipeline_run_id: str | None = None,
     user: dict = Depends(require_permission("articles.view")),
 ):
     def line_stream():
@@ -83,6 +86,7 @@ def export_articles_jsonl(
             sort=sort,
             scraped_from=scraped_from,
             scraped_to=scraped_to,
+            pipeline_run_id=pipeline_run_id,
         )
         for row in rows:
             yield json.dumps(row, ensure_ascii=False, default=str) + "\n"
