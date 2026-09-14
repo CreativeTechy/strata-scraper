@@ -152,7 +152,7 @@ def _normalize_sort(value: str | None):
     return field, direction
 
 
-def _where_parts(search=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None):
+def _where_parts(search=None, project_id=None, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, pipeline_run_id=None):
     clauses = []
     params = []
 
@@ -209,12 +209,17 @@ def _where_parts(search=None, project_id=None, date_from=None, date_to=None, sou
         clauses.append("fetched_at <= %s")
         params.append(scraped_to_value)
 
+    run_id_value = _normalize_text(pipeline_run_id)
+    if run_id_value:
+        clauses.append("pipeline_run_id = %s")
+        params.append(run_id_value)
+
     if clauses:
         return " where " + " and ".join(clauses), params
     return "", params
 
 
-def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order="published.desc", select=ARTICLES_SELECT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, max_limit=MAX_LIMIT):
+def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order="published.desc", select=ARTICLES_SELECT, date_from=None, date_to=None, source_url=None, scraped_from=None, scraped_to=None, pipeline_run_id=None, max_limit=MAX_LIMIT):
     if not config.DATABASE_URL:
         return [], 0
 
@@ -228,6 +233,7 @@ def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order
         source_url=source_url,
         scraped_from=scraped_from,
         scraped_to=scraped_to,
+        pipeline_run_id=pipeline_run_id,
     )
 
     # A search term always ranks by relevance - the caller's requested sort
@@ -263,7 +269,7 @@ def _fetch_articles(limit=None, offset=None, search=None, project_id=None, order
     return rows, total
 
 
-def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
+def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None, pipeline_run_id=None):
     limit = _normalize_limit(limit)
     offset = _normalize_offset(offset)
     field, direction = _normalize_sort(sort)
@@ -279,6 +285,7 @@ def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, s
         source_url=source_url,
         scraped_from=scraped_from,
         scraped_to=scraped_to,
+        pipeline_run_id=pipeline_run_id,
     )
     # _fetch_articles ranks by relevance itself whenever `search` is set,
     # ignoring the requested sort - this label just reflects that back.
@@ -292,7 +299,7 @@ def list_articles(search=None, project_id=None, limit=DEFAULT_LIMIT, offset=0, s
     }
 
 
-def export_articles(search=None, project_id=None, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None):
+def export_articles(search=None, project_id=None, sort=DEFAULT_SORT, source_url=None, scraped_from=None, scraped_to=None, pipeline_run_id=None):
     """Yield full article rows for the JSONL export, one page at a time.
 
     A generator rather than a list: the export carries `text` for every row
@@ -323,6 +330,7 @@ def export_articles(search=None, project_id=None, sort=DEFAULT_SORT, source_url=
             source_url=source_url,
             scraped_from=scraped_from,
             scraped_to=scraped_to,
+            pipeline_run_id=pipeline_run_id,
             max_limit=page_size,
         )
         if not batch:
