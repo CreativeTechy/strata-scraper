@@ -17,7 +17,7 @@ SOURCE_SELECT = "id,url,name,enabled,source_type,limited,created_at,updated_at"
 
 TERM_SOURCE_TYPES = {"username", "hashtag", "keyword"}
 
-REDDIT_KINDS = {"subreddit", "user", "search"}
+REDDIT_KINDS = {"subreddit", "user", "search", "subreddit_search"}
 
 LINKEDIN_KINDS = {"company", "profile", "search"}
 
@@ -89,6 +89,20 @@ def _derive_reddit_url(term, kind=None):
     disambiguates it. It only matters for bare terms; an explicit `r/...`,
     `u/.../user/...`, or full URL is unambiguous on its own and `kind` is
     ignored.
+
+    `subreddit_search` (a keyword scoped to one subreddit, e.g. "search r/lebanon
+    for protest") has no dedicated URL shape of its own to canonicalize to -
+    reddit.com/r/<sub>/search only works with a session-scoped `restrict_sr`
+    param that a plain search.json/actor request doesn't carry. Instead it
+    reuses the plain `search` kind's URL shape and Reddit's own `subreddit:`
+    search operator (the same operator Reddit's own UI relies on for "search
+    this community"), folding the subreddit into the `q` term itself -
+    `reddit.com/search?q=subreddit:lebanon+protest`. That keeps
+    reddit_fetch_url() (scraper/social_sources.py) and apify_reddit.py's
+    _search_query() working unmodified: both already forward a `/search`
+    URL's whole `q` string verbatim to Reddit's search backend (public
+    .json endpoint or the Apify actor's `searches` field), which parses
+    `subreddit:` itself.
     """
     text = (term or "").strip()
     if not text:
@@ -100,6 +114,18 @@ def _derive_reddit_url(term, kind=None):
         if host != "reddit.com" and not host.endswith(".reddit.com"):
             return ""
         path = (parsed.path or "").rstrip("/")
+        # A URL copied straight out of Reddit's own "search this community"
+        # box, e.g. reddit.com/r/lebanon/search/?q=protest&restrict_sr=1 -
+        # fold it into the subreddit:-operator form above rather than falling
+        # into the generic branch below, which keeps only `path` and would
+        # silently drop the query (and the keyword with it).
+        subreddit_search = re.match(r"^/r/([A-Za-z0-9_]+)/search$", path, re.I)
+        if subreddit_search:
+            sub = subreddit_search.group(1)
+            query_term = (parse_qs(parsed.query).get("q") or [""])[0].strip()
+            if not query_term:
+                return ""
+            return f"https://www.reddit.com/search?q={quote_plus(f'subreddit:{sub} {query_term}')}"
         if path.startswith("/search"):
             # Reddit's search UI appends its own tracking params (cId/iId/type/...)
             # alongside the real query - keep only `q`, don't drop the query
@@ -114,6 +140,20 @@ def _derive_reddit_url(term, kind=None):
         kind = "subreddit"
 
     stripped = text.lstrip("/")
+
+    if kind == "subreddit_search":
+        # Bare-term shape: "<subreddit> <keyword...>" - e.g. "lebanon protest"
+        # or "r/lebanon protest" - the first whitespace-separated token is the
+        # subreddit, everything after it is the keyword/phrase.
+        match = re.match(r"^(?:r/)?([A-Za-z0-9_]+)\s+(.+)$", stripped, re.I)
+        if not match:
+            return ""
+        sub = re.sub(r"[^A-Za-z0-9_]", "", match.group(1))
+        query_term = match.group(2).strip()
+        if not sub or not query_term:
+            return ""
+        return f"https://www.reddit.com/search?q={quote_plus(f'subreddit:{sub} {query_term}')}"
+
     lowered = stripped.lower()
     if lowered.startswith("r/"):
         sub = re.sub(r"[^A-Za-z0-9_]", "", stripped[2:])

@@ -20,6 +20,15 @@ out and sent through the actor's own `searches` field instead, so one
 function still covers all three kinds - unlike apify_linkedin.py's split
 between a page-posts actor and a separate search actor.
 
+A `subreddit_search` source (a keyword scoped to one subreddit) is stored as
+this same search-kind URL shape, with the subreddit folded into `q` via
+Reddit's own `subreddit:` search operator (e.g.
+`/search?q=subreddit:lebanon+protest`) rather than a distinct URL shape or
+actor field - see _derive_reddit_url's docstring. `_search_query` below
+doesn't need to know the difference: it forwards the whole `q` string to the
+actor's `searches` field either way, and the actor's own search (like
+Reddit's public search.json) parses the operator itself.
+
 Same contract as gdelt.py/web_search.py/apify_linkedin.py/apify_twitter.py
 throughout: unconfigured or any ordinary failure (bad token, actor error,
 timeout) returns [] rather than raising, so one broken tier can't take down
