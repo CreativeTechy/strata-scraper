@@ -65,6 +65,32 @@ class DeriveRedditUrlTests(unittest.TestCase):
     def test_full_search_url_without_q_is_rejected(self):
         self.assertEqual(sources_store._derive_reddit_url("https://www.reddit.com/search?type=posts"), "")
 
+    def test_bare_words_with_subreddit_search_kind_build_scoped_search_url(self):
+        self.assertEqual(
+            sources_store._derive_reddit_url("lebanon protest", kind="subreddit_search"),
+            "https://www.reddit.com/search?q=subreddit%3Alebanon+protest",
+        )
+
+    def test_bare_words_with_subreddit_search_kind_accept_r_prefix(self):
+        self.assertEqual(
+            sources_store._derive_reddit_url("r/lebanon protest", kind="subreddit_search"),
+            "https://www.reddit.com/search?q=subreddit%3Alebanon+protest",
+        )
+
+    def test_subreddit_search_kind_without_keyword_is_rejected(self):
+        self.assertEqual(sources_store._derive_reddit_url("lebanon", kind="subreddit_search"), "")
+
+    def test_full_subreddit_search_url_folds_subreddit_into_q(self):
+        url = "https://www.reddit.com/r/lebanon/search/?q=protest&restrict_sr=1"
+        self.assertEqual(
+            sources_store._derive_reddit_url(url),
+            "https://www.reddit.com/search?q=subreddit%3Alebanon+protest",
+        )
+
+    def test_full_subreddit_search_url_without_q_is_rejected(self):
+        url = "https://www.reddit.com/r/lebanon/search?restrict_sr=1"
+        self.assertEqual(sources_store._derive_reddit_url(url), "")
+
 
 class DeriveTelegramUrlTests(unittest.TestCase):
     def test_full_channel_url_normalizes_to_s_preview(self):
@@ -347,6 +373,12 @@ class UpsertPayloadRedditTelegramTests(unittest.TestCase):
     def test_reddit_source_normalizes_bare_search_kind(self):
         payload = sources_store._upsert_payload({"source_type": "reddit", "url": "ev fires", "reddit_kind": "search"})
         self.assertEqual(payload["url"], "https://www.reddit.com/search?q=ev+fires")
+
+    def test_reddit_source_normalizes_bare_subreddit_search_kind(self):
+        payload = sources_store._upsert_payload(
+            {"source_type": "reddit", "url": "lebanon protest", "reddit_kind": "subreddit_search"}
+        )
+        self.assertEqual(payload["url"], "https://www.reddit.com/search?q=subreddit%3Alebanon+protest")
 
     def test_telegram_source_normalizes_at_handle(self):
         payload = sources_store._upsert_payload({"source_type": "telegram", "url": "@somechannel"})

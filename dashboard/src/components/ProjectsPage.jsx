@@ -1837,11 +1837,13 @@ export default function ProjectsPage({
                         >
                           <option value="subreddit">Subreddit</option>
                           <option value="user">User / profile</option>
-                          <option value="search">Keyword / search</option>
+                          <option value="search">Keyword / search (all of Reddit)</option>
+                          <option value="subreddit_search">Keyword within a subreddit</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                          Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed
-                          input (r/..., u/...) and full reddit.com URLs are unambiguous either way.
+                          {newSourceDraft.reddit_kind === 'subreddit_search'
+                            ? 'Enter the subreddit and the keyword below, e.g. "lebanon protest" or "r/lebanon protest".'
+                            : 'Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input (r/..., u/...) and full reddit.com URLs are unambiguous either way.'}
                         </span>
                       </label>
                     )}
@@ -1924,7 +1926,11 @@ export default function ProjectsPage({
                       <input
                         type="text"
                         className="source-input"
-                        placeholder={URL_FIELD_PLACEHOLDERS[newSourceDraft.source_type] || 'Source URL'}
+                        placeholder={
+                          newSourceDraft.source_type === 'reddit' && newSourceDraft.reddit_kind === 'subreddit_search'
+                            ? 'Subreddit and keyword (e.g. lebanon protest)'
+                            : URL_FIELD_PLACEHOLDERS[newSourceDraft.source_type] || 'Source URL'
+                        }
                         value={newSourceDraft.url}
                         onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, url: e.target.value }))}
                         disabled={isCreatingSource}

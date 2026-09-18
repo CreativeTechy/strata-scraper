@@ -119,12 +119,20 @@ const URL_FIELD_PLACEHOLDERS = {
 
 function inferRedditKind(url) {
   let path = url || '';
+  let query = '';
   try {
-    path = new URL(url).pathname;
+    const parsed = new URL(url);
+    path = parsed.pathname;
+    query = parsed.search;
   } catch {
     // Not a full URL (e.g. a bare term saved before this field existed) - fall through.
   }
   if (/\/user\//i.test(path)) return 'user';
+  // A subreddit-scoped search is stored as a plain search URL with the
+  // subreddit folded into `q` via Reddit's subreddit: operator (see
+  // backend's _derive_reddit_url) - a `/r/.../search` path is also handled
+  // in case a raw copy-pasted URL like that ever ends up here unconverted.
+  if (/^\/r\/[^/]+\/search/i.test(path) || /subreddit%3A|subreddit:/i.test(query)) return 'subreddit_search';
   if (/\/search/i.test(path)) return 'search';
   return 'subreddit';
 }
@@ -549,11 +557,13 @@ export default function SourcesPage({
               >
                 <option value="subreddit">Subreddit</option>
                 <option value="user">User / profile</option>
-                <option value="search">Keyword / search</option>
+                <option value="search">Keyword / search (all of Reddit)</option>
+                <option value="subreddit_search">Keyword within a subreddit</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input
-                (r/..., u/...) and full reddit.com URLs are unambiguous either way.
+                {draft.reddit_kind === 'subreddit_search'
+                  ? 'Enter the subreddit and the keyword below, e.g. "lebanon protest" or "r/lebanon protest".'
+                  : 'Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input (r/..., u/...) and full reddit.com URLs are unambiguous either way.'}
               </span>
             </label>
           )}
@@ -633,7 +643,11 @@ export default function SourcesPage({
               <input
                 type="text"
                 className="source-input"
-                placeholder={URL_FIELD_PLACEHOLDERS[draft.source_type] || 'Source URL'}
+                placeholder={
+                  draft.source_type === 'reddit' && draft.reddit_kind === 'subreddit_search'
+                    ? 'Subreddit and keyword (e.g. lebanon protest)'
+                    : URL_FIELD_PLACEHOLDERS[draft.source_type] || 'Source URL'
+                }
                 value={draft.url}
                 onChange={(e) => setDraft((prev) => ({ ...prev, url: e.target.value }))}
               />
