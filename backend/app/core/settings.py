@@ -305,6 +305,23 @@ def apify_configured() -> bool:
     return bool(APIFY_API_TOKEN)
 
 
+# --- Official X API (optional) - recent hashtag search ----------------------
+# Application-only Bearer authentication for X API v2 recent search. This is
+# a server credential: dashboard users do not sign into X. When configured,
+# hashtag sources prefer this tier and use Apify only if the official search
+# returns no usable posts. Recent search covers the previous seven days.
+X_API_BEARER_TOKEN = os.environ.get("X_API_BEARER_TOKEN", "").strip()
+X_API_RECENT_SEARCH_URL = os.environ.get(
+    "X_API_RECENT_SEARCH_URL", "https://api.x.com/2/tweets/search/recent"
+).strip()
+X_API_HASHTAG_MAX_POSTS = _env_int("X_API_HASHTAG_MAX_POSTS", 10)
+X_API_TIMEOUT_SECONDS = _env_int("X_API_TIMEOUT_SECONDS", 20)
+
+
+def x_api_configured() -> bool:
+    return bool(X_API_BEARER_TOKEN)
+
+
 # --- Apify (optional) - Twitter/X scraping tier ------------------------------
 # Reuses APIFY_API_TOKEN above - this only adds the actor id, result cap, and
 # timeout for "keyword"/"hashtag" X sources (see scraper/apify_twitter.py).
@@ -624,5 +641,3 @@ def _resolve_source_type(source_type_input: str, url: str) -> str:
             return inferred_type
         return source_type_input
     return inferred_type or "rss"
-
-

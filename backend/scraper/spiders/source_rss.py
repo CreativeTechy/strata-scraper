@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 import scrapy
@@ -77,6 +77,7 @@ from scraper.apify_threads import (
 from scraper.apify_twitter import apify_twitter_search_posts
 from scraper.gdelt import gdelt_search
 from scraper.web_search import google_cse_search
+from scraper.x_api import x_api_recent_hashtag_posts
 from services.pipeline.pipeline_runs import update_pipeline_run
 from services.sources.sources_store import load_source_records
 
@@ -642,10 +643,28 @@ class SourceRssSpider(scrapy.Spider):
                 # HTML (confirmed by hand against the live site - unlike a
                 # profile page, X does not server-render anything there for
                 # crawlers), so there's nothing to follow from the seed
-                # request in parse_social_page below. Two independent
-                # best-effort tiers make up for that instead, each gated on
-                # its own config and neither depending on the other:
-                tag = url.rsplit("/hashtag/", 1)[-1].strip("/") or source_name
+                # request in parse_social_page below. Independent discovery
+                # tiers make up for that instead, each gated on its own
+                # configuration:
+                tag = unquote(url.rsplit("/hashtag/", 1)[-1].strip("/")) or source_name
+
+                # Prefer X's supported recent-search API when its application
+                # Bearer token is configured. It returns stable post IDs and
+                # full text without any end-user login. Apify remains a
+                # fallback below when this tier is unavailable or returns no
+                # usable posts.
+                x_api_tweets = []
+                if config.x_api_configured():
+                    x_api_tweets = x_api_recent_hashtag_posts(tag, url, source_name)
+                    if x_api_tweets:
+                        self.logger.info(
+                            "Hashtag %r -> %d tweet(s) via official X API",
+                            source_name,
+                            len(x_api_tweets),
+                        )
+                    for tweet in x_api_tweets:
+                        self._progress_articles += 1
+                        yield tweet
 
                 if config.google_cse_configured():
                     # Ask Google CSE for individual tweet URLs mentioning the
@@ -678,7 +697,7 @@ class SourceRssSpider(scrapy.Spider):
                             },
                         )
 
-                if config.apify_configured():
+                if config.apify_configured() and not x_api_tweets:
                     # Apify's hosted tweet-search actor, queried directly for
                     # the hashtag - full tweet text comes back in the
                     # actor's own dataset, so these are yielded as articles
