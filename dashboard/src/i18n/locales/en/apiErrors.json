@@ -1,0 +1,96 @@
+{
+  "internal_error": "Internal server error.",
+  "http": {
+    "400": "The request was invalid.",
+    "401": "You are not signed in.",
+    "403": "You don't have permission to do this.",
+    "404": "The requested item could not be found.",
+    "409": "The request conflicts with the current state.",
+    "429": "Too many requests. Try again shortly.",
+    "500": "Internal server error."
+  },
+  "auth": {
+    "credentials_required": "Username and password are required.",
+    "invalid_credentials": "Invalid username or password.",
+    "too_many_attempts": "Too many login attempts. Try again shortly.",
+    "not_authenticated": "Not authenticated.",
+    "csrf_invalid": "Missing or invalid CSRF token.",
+    "insufficient_permissions": "Insufficient permissions."
+  },
+  "users": {
+    "credentials_required": "Username and password are required.",
+    "password_too_short": "Password must be at least {{min}} characters.",
+    "unknown_role": "Unknown role: {{role}}",
+    "create_failed": "Unable to create user.",
+    "cannot_modify_self": "You cannot change your own role or disable yourself.",
+    "cannot_delete_self": "You cannot delete your own account.",
+    "invalid_status": "Invalid status: {{status}}",
+    "not_found": "User not found."
+  },
+  "roles": {
+    "name_required": "Role name is required.",
+    "create_failed": "Unable to create role.",
+    "update_failed": "Unable to update role.",
+    "not_found": "Role not found.",
+    "system_role": "This role is required by the system and cannot be deleted.",
+    "in_use": "Cannot delete a role that is still assigned to users."
+  },
+  "projects": {
+    "not_found": "Project not found.",
+    "invalid_payload": "Invalid project payload.",
+    "create_failed": "Unable to create project. Check database connection settings.",
+    "update_failed": "Unable to update project. Check database connection settings.",
+    "delete_failed": "Unable to delete project. Check database connection settings.",
+    "name_required": "Project name is required."
+  },
+  "sources": {
+    "unsafe_url": "This URL can't be used as a source.",
+    "create_failed": "Unable to create source. Check database connection settings.",
+    "update_failed": "Unable to update source. Check database connection settings.",
+    "delete_failed": "Unable to delete source. Check database connection settings."
+  },
+  "pipeline": {
+    "run_not_found": "Pipeline run not found.",
+    "no_projects": "Create a project before running the scraper.",
+    "project_required": "Select a project before running the scraper.",
+    "no_project_sources": "Assign at least one source to the selected project before scraping.",
+    "sources_required": "Select at least one source to scrape.",
+    "invalid_source_selection": "Invalid source selection.",
+    "sources_not_in_project": "None of the selected sources belong to this project."
+  },
+  "articles": {
+    "import_too_large": "File is larger than the {{limit_mb}}MB import limit. Split it and import in parts.",
+    "import_empty": "The uploaded file is empty.",
+    "import_not_jsonl": "Expected JSON Lines (one article object per line), not a JSON array.",
+    "import_run_not_found": "Import run not found.",
+    "delete_confirmation_required": "Confirm this irreversible action before deleting all articles.",
+    "delete_failed": "Unable to delete articles.",
+    "import_line_invalid_json": "Invalid JSON: {{reason}}",
+    "import_line_not_object": "Expected a JSON object.",
+    "import_line_missing_url": "Missing url."
+  },
+  "competitors": {
+    "study_name_required": "A study name is required.",
+    "study_create_failed": "Could not create the study.",
+    "study_not_found": "Study not found.",
+    "study_delete_failed": "Unable to delete the study.",
+    "competitor_not_found": "Competitor not found.",
+    "business_name_required": "A business name is required.",
+    "target_countries_invalid": "Target countries must be a list of ISO country codes.",
+    "profile_save_failed": "Could not save the profile.",
+    "profile_required": "Add the business profile before discovering competitors.",
+    "profile_missing": "Build a business profile for this study first.",
+    "target_countries_missing": "Select target countries on the business profile first.",
+    "discovery_run_not_found": "Discovery run not found.",
+    "competitor_name_required": "A competitor name is required.",
+    "competitor_save_failed": "Could not save the competitor.",
+    "sources_not_list": "Sources must be a list.",
+    "source_unsupported_type": "Source {{index}}: unsupported source type “{{platform}}”.",
+    "source_invalid_value": "Source {{index}}: enter a valid value.",
+    "invalid_competitor_status": "Status must be suggested, tracked, or ignored.",
+    "account_fields_required": "Platform and URL are required.",
+    "invalid_account_status": "Status must be pending, valid, or rejected.",
+    "invalid_repeat_unit": "Repeat interval unit must be minutes, hours, or days.",
+    "invalid_repeat_value": "Repeat interval must be a positive number."
+  }
+}

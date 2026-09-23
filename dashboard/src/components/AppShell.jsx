@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 
 const COLLAPSE_STORAGE_KEY = 'strata.sidebarCollapsed';
 
 export default function AppShell() {
+  const { t } = useTranslation();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -32,7 +34,7 @@ export default function AppShell() {
           type="button"
           className="mobile-nav-toggle"
           onClick={() => setMobileOpen(true)}
-          aria-label="Open navigation"
+          aria-label={t('nav.openNavigation')}
         >
           <Menu size={20} />
         </button>

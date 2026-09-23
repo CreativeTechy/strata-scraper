@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { UserPlus, Users as UsersIcon, Ban, CheckCircle2, Trash2 } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
+import { apiError } from '../errors/apiError.js';
+import { formatNumber } from '../i18n/format.js';
 import '../styles/AdminUsers.css';
 
 const emptyDraft = { username: '', email: '', password: '', role: '' };
 
 export default function UsersPage() {
+  const { t } = useTranslation('admin');
   const { user: currentUser, hasPermission } = useAuth();
   const canDelete = hasPermission('users.delete');
   const [users, setUsers] = useState([]);
@@ -19,15 +23,19 @@ export default function UsersPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Role names are stable codes; the built-in ones have display labels and a
+  // custom role shows the name it was created with.
+  const roleLabel = (name) => t(`common:roleNames.${name}`, { defaultValue: name });
+
   const loadUsers = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/users');
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Failed to load users (${res.status})`);
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: t('users.loadFailed') });
       setUsers(Array.isArray(data?.users) ? data.users : []);
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -50,6 +58,9 @@ export default function UsersPage() {
   useEffect(() => {
     loadUsers();
     loadRoles();
+    // Load once on mount: `t` (used for fallback error text) only changes
+    // with the UI language, which is no reason to refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createUser = async (e) => {
@@ -63,11 +74,11 @@ export default function UsersPage() {
         body: JSON.stringify(draft),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Failed to create user (${res.status})`);
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: t('users.createFailed') });
       setDraft(emptyDraft);
       await loadUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setCreating(false);
     }
@@ -82,10 +93,10 @@ export default function UsersPage() {
         body: JSON.stringify({ status }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Failed to update user (${res.status})`);
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: t('users.updateFailed') });
       await loadUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     }
   };
 
@@ -98,10 +109,10 @@ export default function UsersPage() {
         body: JSON.stringify({ role }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Failed to update user (${res.status})`);
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: t('users.updateFailed') });
       await loadUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     }
   };
 
@@ -113,11 +124,11 @@ export default function UsersPage() {
     try {
       const res = await fetch(`/api/users/${target.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Failed to delete user (${res.status})`);
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: t('users.deleteFailed') });
       setDeleteTarget(null);
       await loadUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setDeleting(false);
     }
@@ -128,42 +139,42 @@ export default function UsersPage() {
       <div className="admin-page-header">
         <div>
           <div className="admin-page-kicker">
-            <UsersIcon size={14} /> User management
+            <UsersIcon size={14} /> {t('kicker.userManagement')}
           </div>
-          <h1 className="admin-page-title">Users</h1>
-          <p className="admin-page-subtitle">Create and manage dashboard accounts.</p>
+          <h1 className="admin-page-title">{t('users.title')}</h1>
+          <p className="admin-page-subtitle">{t('users.subtitle')}</p>
         </div>
         <div className="admin-page-toolbar">
           <div className="admin-page-toolbar-meta">
-            <span>Total users</span>
-            <strong>{users.length.toLocaleString()}</strong>
+            <span>{t('users.totalUsers')}</span>
+            <strong>{formatNumber(users.length)}</strong>
           </div>
         </div>
       </div>
 
-      <ErrorNotice error={error} context="manage users" onDismiss={() => setError('')} />
+      <ErrorNotice error={error} context={t('errorContext.manageUsers')} onDismiss={() => setError('')} />
 
       <form onSubmit={createUser} className="glass-card user-create-form" style={{ marginBottom: 24 }}>
         <label className="user-create-field">
-          <span style={{ fontSize: '0.8rem' }}>Username</span>
-          <input className="filter-select" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} required />
+          <span style={{ fontSize: '0.8rem' }}>{t('users.fields.username')}</span>
+          <input className="filter-select" dir="auto" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} required />
         </label>
         <label className="user-create-field">
-          <span style={{ fontSize: '0.8rem' }}>Email</span>
-          <input className="filter-select" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+          <span style={{ fontSize: '0.8rem' }}>{t('users.fields.email')}</span>
+          <input className="filter-select" type="email" dir="ltr" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
         </label>
         <label className="user-create-field">
-          <span style={{ fontSize: '0.8rem' }}>Password</span>
-          <input className="filter-select" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} minLength={8} required />
+          <span style={{ fontSize: '0.8rem' }}>{t('users.fields.password')}</span>
+          <input className="filter-select" type="password" dir="ltr" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} minLength={8} required />
         </label>
         <label className="user-create-field">
-          <span style={{ fontSize: '0.8rem' }}>Role</span>
+          <span style={{ fontSize: '0.8rem' }}>{t('users.fields.role')}</span>
           <select className="filter-select" value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })}>
-            {roles.map((role) => <option key={role.id} value={role.name}>{role.name}</option>)}
+            {roles.map((role) => <option key={role.id} value={role.name}>{roleLabel(role.name)}</option>)}
           </select>
         </label>
         <button type="submit" className="btn-primary" disabled={creating}>
-          <UserPlus size={16} /> {creating ? 'Creating...' : 'Create user'}
+          <UserPlus size={16} /> {creating ? t('users.creating') : t('users.create')}
         </button>
       </form>
 
@@ -171,12 +182,12 @@ export default function UsersPage() {
         <div className="table-scroll">
           <table>
             <thead>
-              <tr style={{ textAlign: 'left', background: 'rgba(0,0,0,0.03)' }}>
-                <th style={{ padding: 12 }}>Username</th>
-                <th className="admin-table-col-optional" style={{ padding: 12 }}>Email</th>
-                <th style={{ padding: 12 }}>Role</th>
-                <th style={{ padding: 12 }}>Status</th>
-                <th style={{ padding: 12 }}>Actions</th>
+              <tr style={{ textAlign: 'start', background: 'rgba(0,0,0,0.03)' }}>
+                <th style={{ padding: 12 }}>{t('users.columns.username')}</th>
+                <th className="admin-table-col-optional" style={{ padding: 12 }}>{t('users.columns.email')}</th>
+                <th style={{ padding: 12 }}>{t('users.columns.role')}</th>
+                <th style={{ padding: 12 }}>{t('users.columns.status')}</th>
+                <th style={{ padding: 12 }}>{t('users.columns.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -184,7 +195,7 @@ export default function UsersPage() {
                 <tr>
                   <td colSpan={5} style={{ padding: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-light)' }}>
-                      <div className="loading-spinner" /> Loading users...
+                      <div className="loading-spinner" /> {t('users.loading')}
                     </div>
                   </td>
                 </tr>
@@ -196,8 +207,8 @@ export default function UsersPage() {
                       <div className="admin-empty-state-icon">
                         <UsersIcon size={18} />
                       </div>
-                      <strong>No users yet</strong>
-                      <span>Create the first dashboard account using the form above.</span>
+                      <strong>{t('users.emptyTitle')}</strong>
+                      <span>{t('users.emptyBody')}</span>
                     </div>
                   </td>
                 </tr>
@@ -206,8 +217,13 @@ export default function UsersPage() {
                 const isSelf = currentUser && Number(currentUser.id) === Number(u.id);
                 return (
                   <tr key={u.id} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                    <td style={{ padding: 12 }}>{u.username}{isSelf && ' (you)'}</td>
-                    <td className="admin-table-col-optional" style={{ padding: 12 }}>{u.email || '-'}</td>
+                    <td style={{ padding: 12 }}>
+                      <bdi>{u.username}</bdi>
+                      {isSelf && <> {t('users.youSuffix')}</>}
+                    </td>
+                    <td className="admin-table-col-optional" style={{ padding: 12 }}>
+                      {u.email ? <span className="ltr-isolate">{u.email}</span> : '-'}
+                    </td>
                     <td style={{ padding: 12 }}>
                       <select
                         className="filter-select"
@@ -215,30 +231,30 @@ export default function UsersPage() {
                         disabled={isSelf}
                         onChange={(e) => setRole(u.id, e.target.value)}
                       >
-                        {roles.map((role) => <option key={role.id} value={role.name}>{role.name}</option>)}
+                        {roles.map((role) => <option key={role.id} value={role.name}>{roleLabel(role.name)}</option>)}
                       </select>
                     </td>
-                    <td style={{ padding: 12 }}>{u.status}</td>
+                    <td style={{ padding: 12 }}>{t(`userStatus.${u.status}`, { defaultValue: u.status })}</td>
                     <td style={{ padding: 12 }}>
                       <div className="admin-row-actions">
                         {u.status === 'active' ? (
                           <button className="btn-secondary" disabled={isSelf} onClick={() => setStatus(u.id, 'disabled')}>
-                            <Ban size={14} /> Disable
+                            <Ban size={14} /> {t('users.disable')}
                           </button>
                         ) : (
                           <button className="btn-secondary" onClick={() => setStatus(u.id, 'active')}>
-                            <CheckCircle2 size={14} /> Enable
+                            <CheckCircle2 size={14} /> {t('users.enable')}
                           </button>
                         )}
                         {canDelete && (
                           <button
                             className="btn-secondary"
                             disabled={isSelf}
-                            title={isSelf ? 'You cannot delete your own account.' : undefined}
+                            title={isSelf ? t('users.cannotDeleteSelf') : undefined}
                             onClick={() => setDeleteTarget(u)}
                             style={{ color: isSelf ? undefined : '#ff4757' }}
                           >
-                            <Trash2 size={14} /> Delete
+                            <Trash2 size={14} /> {t('common:actions.delete')}
                           </button>
                         )}
                       </div>
@@ -253,10 +269,17 @@ export default function UsersPage() {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title={`Delete user "${deleteTarget?.username || ''}"?`}
-        message="This permanently removes the user account and signs them out of any active sessions."
-        confirmLabel={deleting ? 'Deleting...' : 'Delete user'}
-        cancelLabel="Keep user"
+        title={(
+          <Trans
+            t={t}
+            i18nKey="users.deleteTitle"
+            values={{ username: deleteTarget?.username || '' }}
+            components={{ name: <bdi /> }}
+          />
+        )}
+        message={t('users.deleteMessage')}
+        confirmLabel={deleting ? t('common:actions.deleting') : t('users.deleteConfirm')}
+        cancelLabel={t('users.keep')}
         confirmButtonStyle={{
           background: 'linear-gradient(135deg, #ff4757, #e03131)',
           boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',

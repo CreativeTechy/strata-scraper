@@ -1,0 +1,187 @@
+{
+  "header": {
+    "kicker": "Article Library",
+    "title": "Articles",
+    "subtitle": "Server-side search, project, source, date-range, sort, and pagination powered by the API.",
+    "dashboardProject": "Dashboard project: <name>{{name}}</name>.",
+    "allProjects": "Showing all projects.",
+    "projectScope": "Project scope",
+    "projectScopeAria": "Project scope for articles",
+    "allProjectsOption": "All projects",
+    "projectOption": "{{name}} ({{status}})",
+    "deleteAll": "Delete All Articles",
+    "backToDashboard": "Back to Dashboard"
+  },
+  "deleteAll": {
+    "title": "Delete all articles?",
+    "message": "This will remove every row in the articles table and cannot be undone.",
+    "confirm": "Delete all articles",
+    "cancel": "Keep articles",
+    "typeToConfirm": "Type <phrase>{{phrase}}</phrase> to confirm:",
+    "inputAria": "Confirmation phrase"
+  },
+  "exportCompetitors": {
+    "title": "Export competitors?",
+    "message_one": "This will download {{formatted}} tracked competitor for “{{project}}” as JSONL.",
+    "message_other": "This will download {{formatted}} tracked competitors for “{{project}}” as JSONL.",
+    "thisProject": "this project"
+  },
+  "exportArticles": {
+    "title": "Export articles?",
+    "message_one": "This will export {{formatted}} article matching your current filters as a JSONL file.",
+    "message_other": "This will export {{formatted}} articles matching your current filters as a JSONL file."
+  },
+  "exportModal": {
+    "title": "Export data",
+    "closeDialog": "Close dialog",
+    "intro": "Choose what to download as a JSONL file.",
+    "articlesTitle": "Export articles",
+    "articlesDescription_one": "{{formatted}} article matching your current filters.",
+    "articlesDescription_other": "{{formatted}} articles matching your current filters.",
+    "competitorsTitle": "Export competitors",
+    "competitorsDescription": "Every tracked competitor for <name>{{name}}</name>.",
+    "thisProject": "this project"
+  },
+  "importModal": {
+    "title": "Import articles",
+    "closeDialog": "Close dialog",
+    "introWithProject": "Import JSONL exports (.jsonl, .ndjson) into the project currently in scope.",
+    "introWithoutProject": "Import JSONL exports (.jsonl, .ndjson). Articles are not linked to a project - select a project scope above to import into one.",
+    "filesTitle": "Upload file(s)",
+    "filesDescription": "Pick one or more JSONL exports from your computer.",
+    "folderTitle": "Upload a folder",
+    "folderDescription": "Import every JSONL export found inside a folder."
+  },
+  "filters": {
+    "allSources": "All sources",
+    "selectProjectForSources": "Select a project for sources",
+    "sourceAria": "Filter by source",
+    "allPipelineRuns": "All pipeline runs",
+    "selectProjectForPipelineRuns": "Select a project for pipeline runs",
+    "pipelineRunAria": "Filter by pipeline run",
+    "pipelineRunOption": "{{run}} - {{date}}",
+    "pipelineNumber": "Pipeline #{{number}}",
+    "pipelineRun": "Pipeline run",
+    "unknownDate": "unknown date",
+    "scrapedBetween": "Scraped between",
+    "dateRangeSeparator": "to",
+    "scrapedFromTitle": "Only show articles scraped on or after this date",
+    "scrapedFromAria": "Scraped from date",
+    "scrapedToTitle": "Only show articles scraped on or before this date",
+    "scrapedToAria": "Scraped to date",
+    "searchPlaceholder": "Search title, summary, source…",
+    "searchAria": "Search articles",
+    "clearSearch": "Clear search",
+    "sortAria": "Sort articles"
+  },
+  "sort": {
+    "publishedDesc": "Newest first",
+    "publishedAsc": "Oldest first",
+    "fetchedDesc": "Recently scraped",
+    "createdDesc": "Recently saved",
+    "sourceAsc": "Source (A-Z)"
+  },
+  "toolbar": {
+    "loading": "Loading articles…",
+    "summary_one": "{{formatted}} article total, showing {{from}}–{{to}}",
+    "summary_other": "{{formatted}} articles total, showing {{from}}–{{to}}",
+    "selectedProject": "Selected project",
+    "scrapedRange": "Scraped {{from}} to {{to}}",
+    "anyDate": "any",
+    "viewSwitcherAria": "Switch article view",
+    "perPageOption": "{{formatted}} per page",
+    "perPageAria": "Articles per page",
+    "exporting": "Exporting…",
+    "importing": "Importing…"
+  },
+  "viewModes": {
+    "card": "Cards",
+    "list": "List"
+  },
+  "refreshing": {
+    "title": "Refreshing results",
+    "message": "Keeping the current list visible while the new filter set loads."
+  },
+  "card": {
+    "untitled": "Untitled article",
+    "unknownSource": "Unknown source",
+    "unknownDate": "Unknown date",
+    "unknown": "Unknown",
+    "scrapedTitle": "When the pipeline scraped this article",
+    "scraped": "Scraped: {{date}}",
+    "byAuthor": "By <author>{{author}}</author>",
+    "storyTitle": "Syndication group: articles whose bodies are near-identical share one story group",
+    "story": "Story #{{id}}",
+    "verified": "Verified source",
+    "languageTitle": "Detected language",
+    "noText": "No text captured.",
+    "openOriginal": "Open original"
+  },
+  "empty": {
+    "title": "No articles found",
+    "message": "Try adjusting your search, source, date range, or project filters."
+  },
+  "pagination": {
+    "aria": "Articles pagination"
+  },
+  "import": {
+    "batchLabel": "File {{index}} of {{total}}:",
+    "headline": {
+      "queued": "Preparing the import…",
+      "running": "Importing…",
+      "success_one": "Imported {{formatted}} article",
+      "success_other": "Imported {{formatted}} articles",
+      "failed": "Import failed"
+    },
+    "rate_one": "{{formatted}} article/s",
+    "rate_other": "{{formatted}} articles/s",
+    "progressAria": "Import progress",
+    "saved": "{{formatted}} saved",
+    "ofLines_one": "of ~{{formatted}} line",
+    "ofLines_other": "of ~{{formatted}} lines",
+    "skipped": "{{formatted}} skipped",
+    "elapsedIn": "in {{duration}}",
+    "timeLeft": "About {{duration}} left",
+    "timeElapsed": "{{duration}} elapsed",
+    "updatedNote": "Articles matching an existing URL were updated in place.",
+    "lineError": "Line {{line}}: {{message}}",
+    "moreErrors": "and {{formatted}} more…",
+    "dismissAria": "Dismiss import summary"
+  },
+  "errors": {
+    "loadFailed": "Failed to load articles.",
+    "deleteFailed": "Failed to delete articles.",
+    "exportFailed": "Failed to export articles.",
+    "exportCompetitorsFailed": "Failed to export competitors.",
+    "importFailed": "Failed to import articles.",
+    "importStatusLost": "Lost track of the import.",
+    "importJobFailed": "Import failed.",
+    "noJsonlFiles": "No .jsonl/.ndjson files found in the selected folder.",
+    "batchFailed_one": "{{failed}} of {{formatted}} file failed to import: {{details}}",
+    "batchFailed_other": "{{failed}} of {{formatted}} files failed to import: {{details}}",
+    "batchFailureItem": "{{name}} ({{error}})"
+  },
+  "errorContext": {
+    "loadArticles": "load or manage articles",
+    "importArticle": "import this article",
+    "importFile": "import this file"
+  },
+  "sourceView": {
+    "sentimentAria": "Filter by sentiment",
+    "categoryAria": "Filter by category",
+    "allSentiments": "All Sentiments",
+    "allCategories": "All Categories",
+    "sentiments": {
+      "positive": "Positive",
+      "negative": "Negative",
+      "neutral": "Neutral",
+      "mixed": "Mixed"
+    },
+    "defaultCategory": "News",
+    "score": "Score: {{score}}/10",
+    "projectMatch": "Project match: {{score}}",
+    "loadMore": "Load More Articles",
+    "emptyTitle": "No articles found",
+    "emptyMessage": "Try a different sentiment or category filter."
+  }
+}

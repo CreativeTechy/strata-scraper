@@ -27,7 +27,16 @@ Pipeline: Scrapy spider → validate/dedup → Postgres → FastAPI → React da
 - `backend/services/` - business-logic modules grouped by domain: `auth/` (login, sessions, users, RBAC), `projects/`, `sources/`, `competitors/` (competitor study), `articles/` (collect/store/export/import), `pipeline/` (scrape→save execution, run tracking, scheduling). `migrate.py` stays at `backend/` root.
 - `dashboard/` - React 19 + Vite dashboard, calls the backend API. `/dashboard` (`DashboardPage.jsx`) is a per-project collection-health overview, backed by a single `GET /api/dashboard/summary?project_id=` (`backend/api/routers/dashboard.py` / `services/dashboard/dashboard_store.py`): totals (articles, sources, and - competitor mode only - tracked competitors), an articles-per-pipeline-run line chart, an articles-by-source breakdown, and a "needing attention" list built from the latest run's `pipeline_run_sources.fetch_note` (blocked/errored/0-articles) - sources for a sentiment project, competitors (via their linked, valid `competitor_accounts`) for a competitor-mode one. There is no cross-run persistence of source health; "needing attention" is recomputed from the single most recent run with per-source detail each time the endpoint is called.
 
-Tests live in `backend/tests/` (unittest, run with pytest). There is no dashboard test suite.
+Tests live in `backend/tests/` (unittest, run with pytest). The dashboard has a small vitest suite (`npm test`) covering i18n only - see below.
+
+## Localization (English / Arabic)
+
+- The dashboard UI is bilingual via `i18next`/`react-i18next`. `dashboard/src/i18n/config.js` is the language registry (`SUPPORTED_LANGUAGES`, one entry per locale with its `dir` and Intl locale); adding a language means adding it there plus a `locales/<code>/` folder with the same namespace files as `locales/en/`. Every `locales/<lang>/<namespace>.json` is bundled at build time by `resources.js` (`import.meta.glob`) - no registration, and nothing is fetched at runtime, so the app stays offline-capable (fonts are self-hosted via `@fontsource`, see `styles/fonts.js`, for the same reason).
+- The choice is persisted in `localStorage['strata.language']`, defaults to English, and missing keys fall back to English. Switching language only re-renders: it never refetches, resets filters, or touches stored data. `i18n/index.js` sets `<html lang dir>`; CSS uses logical properties (`margin-inline-start`, `text-align: start`, `inset-inline-end`) so it mirrors in RTL without per-rule overrides, plus the helpers in `styles/i18n.css` (`.icon-flip-rtl` for directional icons, `.bidi-auto`/`dir="auto"` for user/article content whose direction comes from its own text, `.ltr-isolate` for URLs/handles/IDs).
+- Dates, numbers, relative times, and language/country names go through `i18n/format.js` (Arabic uses Latin digits, `ar-u-nu-latn`). Plurals use i18next suffixes - Arabic needs all six (`_zero/_one/_two/_few/_many/_other`), which `src/i18n/__tests__/locales.test.js` enforces along with key and placeholder parity across locales.
+- Stored/API codes (statuses, source types, platforms, modes) never change with the language - only their display labels are translated.
+- **API errors**: every error body keeps its English `error` and also carries a stable `code` (+ `params`) from `backend/api/error_codes.py`, which recognizes the fixed set of messages the routes raise (unrecognized ones get `http.<status>`; an `AppError` may name its `code` explicitly). The dashboard translates them from `locales/*/apiErrors.json`, falling back to `error`. Throw `apiError(payload, { status })` (`dashboard/src/errors/apiError.js`) rather than `new Error(data.error)` so the code survives to `ErrorNotice`. `backend/tests/test_error_codes.py` fails if a catalogued code lacks a translation or its placeholders drift. Adding a new error message: add it to `_CATALOG` and to every `apiErrors.json`.
+- There is no AI-output localization: the only LLM use here is discovery (what to collect), and collected articles are stored in their source language untouched. Interface language, article language (`language` column, detected), and any generated output are independent.
 
 ## Handoff: export → import
 
@@ -57,6 +66,7 @@ npm install
 npm run dev       # dev server, expects backend at http://localhost:8000 (override via VITE_API_TARGET)
 npm run build
 npm run lint      # eslint .
+npm test          # vitest (i18n/locale checks)
 ```
 
 Docker (full stack from repo root): `docker compose up --build`

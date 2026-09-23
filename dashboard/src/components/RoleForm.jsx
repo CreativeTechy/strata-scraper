@@ -1,28 +1,29 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import '../styles/AdminUsers.css';
 import ErrorNotice from './ErrorNotice';
 
-const CATEGORY_LABELS = {
-  articles: 'Articles',
-  pipeline: 'Pipeline',
-  projects: 'Projects',
-  roles: 'Roles',
-  sources: 'Sources',
-  users: 'Users',
-};
+// Permission keys ("projects.view") and their resource prefix are stable
+// codes; display labels live in admin:permissionGroups / admin:permissions.
+// Resources listed here come first, in this order; any others follow A-Z.
+const CATEGORY_ORDER = ['articles', 'pipeline', 'projects', 'roles', 'sources', 'users'];
 
-const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
-
-function categoryLabel(resource) {
-  return CATEGORY_LABELS[resource] || resource.charAt(0).toUpperCase() + resource.slice(1);
+function categoryLabel(t, resource) {
+  return t(`permissionGroups.${resource}`, {
+    defaultValue: resource.charAt(0).toUpperCase() + resource.slice(1),
+  });
 }
 
-// Prefer the permission's own description (already human-readable, no
-// category prefix); fall back to deriving one from the key if it's missing.
-function permissionLabel(perm) {
-  if (perm.description) return perm.description;
-  const label = perm.key.split('.').slice(1).join(' ').replace(/_/g, ' ');
-  return label.charAt(0).toUpperCase() + label.slice(1);
+// A translated label for known keys; otherwise the permission's own
+// description (already human-readable, no category prefix, but English from
+// the server), falling back to deriving one from the key if it's missing.
+function permissionLabel(t, perm) {
+  let fallback = perm.description;
+  if (!fallback) {
+    const label = perm.key.split('.').slice(1).join(' ').replace(/_/g, ' ');
+    fallback = label.charAt(0).toUpperCase() + label.slice(1);
+  }
+  return t(`permissions.${perm.key}`, { defaultValue: fallback });
 }
 
 function groupPermissions(permissions) {
@@ -42,6 +43,7 @@ function groupPermissions(permissions) {
 }
 
 function GroupSelectAll({ perms, selected, onToggleGroup }) {
+  const { t } = useTranslation('admin');
   const checkboxRef = useRef(null);
   const checkedCount = perms.filter((perm) => selected.has(perm.key)).length;
   const allChecked = checkedCount === perms.length;
@@ -59,26 +61,27 @@ function GroupSelectAll({ perms, selected, onToggleGroup }) {
         checked={allChecked}
         onChange={() => onToggleGroup(perms, !allChecked)}
       />
-      {allChecked ? 'Deselect all' : 'Select all'}
+      {allChecked ? t('roleForm.deselectAll') : t('common:actions.selectAll')}
     </label>
   );
 }
 
 function PermissionGrid({ permissions, selected, onToggle, onToggleGroup }) {
+  const { t } = useTranslation('admin');
   const groups = useMemo(() => groupPermissions(permissions), [permissions]);
   return (
     <div className="permission-groups">
       {groups.map(({ resource, perms }) => (
         <div key={resource} className="permission-group-card">
           <div className="permission-group-header">
-            <span className="permission-group-title">{categoryLabel(resource)}</span>
+            <span className="permission-group-title">{categoryLabel(t, resource)}</span>
             <GroupSelectAll perms={perms} selected={selected} onToggleGroup={onToggleGroup} />
           </div>
           <div className="permission-group-body">
             {perms.map((perm) => (
               <label key={perm.key} className="permission-row" title={perm.key}>
                 <input type="checkbox" checked={selected.has(perm.key)} onChange={() => onToggle(perm.key)} />
-                {permissionLabel(perm)}
+                {permissionLabel(t, perm)}
               </label>
             ))}
           </div>
@@ -102,6 +105,7 @@ export default function RoleForm({
   onSubmit,
   onCancel,
 }) {
+  const { t } = useTranslation('admin');
   const togglePermission = (key) => {
     const next = new Set(value.permissions);
     if (next.has(key)) next.delete(key);
@@ -122,36 +126,38 @@ export default function RoleForm({
 
   return (
     <form onSubmit={onSubmit} className="glass-card role-form">
-      <ErrorNotice error={error} context="save this role" compact />
+      <ErrorNotice error={error} context={t('errorContext.saveRole')} compact />
 
       <div className="role-fields">
         <label className="role-field">
-          <span className="role-field-label">Role name</span>
+          <span className="role-field-label">{t('roleForm.nameLabel')}</span>
           <input
             className="filter-select"
             value={value.name}
             onChange={(e) => onChange({ ...value, name: e.target.value })}
-            placeholder="e.g. Content Reviewer"
+            placeholder={t('roleForm.namePlaceholder')}
+            dir="auto"
             required
           />
         </label>
         <label className="role-field">
-          <span className="role-field-label">Description</span>
+          <span className="role-field-label">{t('roleForm.descriptionLabel')}</span>
           <textarea
             className="filter-select role-textarea"
             value={value.description}
             onChange={(e) => onChange({ ...value, description: e.target.value })}
-            placeholder="What is this role for?"
+            placeholder={t('roleForm.descriptionPlaceholder')}
+            dir="auto"
             rows={3}
           />
         </label>
       </div>
 
       {fullAccess ? (
-        <p className="subtitle">This role automatically has every permission and can't be restricted.</p>
+        <p className="subtitle">{t('roleForm.fullAccessNote')}</p>
       ) : (
         <div className="role-permissions">
-          <span className="role-field-label">Permissions</span>
+          <span className="role-field-label">{t('roleForm.permissionsLabel')}</span>
           <PermissionGrid
             permissions={permissions}
             selected={new Set(value.permissions)}
@@ -163,10 +169,10 @@ export default function RoleForm({
 
       <div className="role-form-actions">
         <button type="button" className="btn-secondary" onClick={onCancel}>
-          Cancel
+          {t('common:actions.cancel')}
         </button>
         <button type="submit" className="btn-primary" disabled={submitting || !nameValid}>
-          {submitting ? 'Saving...' : submitLabel}
+          {submitting ? t('common:actions.saving') : submitLabel}
         </button>
       </div>
     </form>

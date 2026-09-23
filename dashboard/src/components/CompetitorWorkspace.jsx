@@ -12,8 +12,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import {
-  BarChart3, CalendarClock, Check, ChevronDown, ChevronRight, ChevronUp,
+  BarChart3, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronUp,
   ExternalLink, Layers, Link2, Pencil, Play, Radar, RefreshCw, Search,
   ShieldCheck, Sparkles, Trash2, Users,
 } from 'lucide-react';
@@ -22,6 +23,8 @@ import {
   getStudy, initials, listCompetitors, relativeTime, runCulturalAnalysis,
 } from '../competitorApi.js';
 import { countryLabel } from '../constants/countries.js';
+import { apiError } from '../errors/apiError.js';
+import { formatList, formatNumber, formatPercent } from '../i18n/format.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
@@ -50,10 +53,14 @@ const DISTRIBUTION_PAGE_SIZE = 4;
 // before a study accumulates its 8th or 9th source type.
 const DISTRIBUTION_BAR_COLOR = '#2a78d6';
 
-function sourceTypeLabel(platform) {
+// `t` is passed in (rather than read from i18n directly) so memoized callers
+// list it as a dependency and recompute on a language change.
+function sourceTypeLabel(t, platform) {
   const key = String(platform || '').toLowerCase();
-  if (!key) return 'Unknown';
-  return PLATFORM_LABELS[key] || `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+  if (!key) return t('competitors:platforms.unknown');
+  return t(`competitors:platforms.${key}`, {
+    defaultValue: PLATFORM_LABELS[key] || `${key.charAt(0).toUpperCase()}${key.slice(1)}`,
+  });
 }
 
 function StatTile({ icon: Icon, label, value, tone }) {
@@ -69,11 +76,12 @@ function StatTile({ icon: Icon, label, value, tone }) {
   );
 }
 
+// `key` is the stable validation_status code; `labelKey` is translated at render.
 const SOURCE_STATUS_FILTERS = [
-  { key: '', label: 'All statuses' },
-  { key: 'valid', label: 'Valid' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'rejected', label: 'Rejected' },
+  { key: '', labelKey: 'workspace.sources.allStatuses' },
+  { key: 'valid', labelKey: 'accountStatus.valid' },
+  { key: 'pending', labelKey: 'accountStatus.pending' },
+  { key: 'rejected', labelKey: 'accountStatus.rejected' },
 ];
 
 /** Bar-per-source-type distribution, ranked by count (highest first) and
@@ -81,13 +89,14 @@ const SOURCE_STATUS_FILTERS = [
  *  Reddit/etc. all in play can easily have more distinct types than fit in
  *  one screenful. */
 function SourceDistributionChart({ rows, page, totalPages, onPageChange }) {
+  const { t } = useTranslation('competitors');
   const max = Math.max(1, ...rows.map((row) => row.count));
   const paged = rows.slice((page - 1) * DISTRIBUTION_PAGE_SIZE, page * DISTRIBUTION_PAGE_SIZE);
 
   return (
     <div className="cs-panel" style={{ marginBottom: 20 }}>
-      <h2 className="cs-panel-title"><BarChart3 size={16} /> Sources distribution</h2>
-      <p className="cs-panel-hint">Every discovered or manually-added source across all competitors, by source type.</p>
+      <h2 className="cs-panel-title"><BarChart3 size={16} /> {t('workspace.distribution.title')}</h2>
+      <p className="cs-panel-hint">{t('workspace.distribution.hint')}</p>
 
       {rows.length ? (
         <>
@@ -109,8 +118,8 @@ function SourceDistributionChart({ rows, page, totalPages, onPageChange }) {
                     }}
                   />
                 </div>
-                <span style={{ width: 28, flexShrink: 0, textAlign: 'right', fontSize: '0.82rem', fontWeight: 650, color: 'var(--text-dark)' }}>
-                  {row.count}
+                <span style={{ width: 28, flexShrink: 0, textAlign: 'end', fontSize: '0.82rem', fontWeight: 650, color: 'var(--text-dark)' }}>
+                  {formatNumber(row.count)}
                 </span>
               </div>
             ))}
@@ -118,7 +127,7 @@ function SourceDistributionChart({ rows, page, totalPages, onPageChange }) {
 
           <div className="cs-pagination" style={{ marginTop: 14 }}>
             <div className="cs-pagination-info">
-              {rows.length} source type{rows.length === 1 ? '' : 's'}
+              {t('workspace.distribution.typeCount', { count: rows.length })}
             </div>
             <div className="cs-pagination-controls">
               <button
@@ -127,23 +136,25 @@ function SourceDistributionChart({ rows, page, totalPages, onPageChange }) {
                 onClick={() => onPageChange(Math.max(1, page - 1))}
                 disabled={page <= 1}
               >
-                Previous
+                {t('common:actions.previous')}
               </button>
-              <span className="cs-pill cs-pill-signal">Page {page} of {totalPages}</span>
+              <span className="cs-pill cs-pill-signal">
+                {t('common:pagination.page', { page: formatNumber(page), total: formatNumber(totalPages) })}
+              </span>
               <button
                 type="button"
                 className="cs-btn cs-btn-sm"
                 onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
               >
-                Next
+                {t('common:actions.next')}
               </button>
             </div>
           </div>
         </>
       ) : (
         <p className="cs-panel-hint" style={{ marginTop: 12, marginBottom: 0 }}>
-          No sources yet.
+          {t('workspace.distribution.empty')}
         </p>
       )}
     </div>
@@ -159,6 +170,7 @@ function SourcesPanel({
   competitorFilter, onCompetitorFilter, competitorOptions,
   statusFilter, onStatusFilter, onChooseCompetitors, page, totalPages, onPageChange,
 }) {
+  const { t } = useTranslation('competitors');
   return (
     <>
       <SourceDistributionChart
@@ -169,9 +181,9 @@ function SourcesPanel({
       />
 
       <div className="cs-panel">
-        <h2 className="cs-panel-title"><Link2 size={16} /> All sources</h2>
+        <h2 className="cs-panel-title"><Link2 size={16} /> {t('workspace.sources.title')}</h2>
         <p className="cs-panel-hint">
-          {total} source{total === 1 ? '' : 's'} across every tracked and suggested competitor.
+          {t('workspace.sources.summary', { count: total })}
         </p>
 
         {total ? (
@@ -181,32 +193,33 @@ function SourcesPanel({
                 <Search size={16} />
                 <input
                   type="text"
+                  dir="auto"
                   value={search}
                   onChange={(event) => onSearch(event.target.value)}
-                  placeholder="Search competitor, handle, or URL..."
+                  placeholder={t('workspace.sources.searchPlaceholder')}
                 />
               </label>
 
               <select className="cs-select" value={competitorFilter} onChange={(event) => onCompetitorFilter(event.target.value)}
-                aria-label="Filter by competitor">
-                <option value="">All competitors</option>
+                aria-label={t('workspace.sources.filterByCompetitor')}>
+                <option value="">{t('workspace.sources.allCompetitors')}</option>
                 {competitorOptions.map((competitor) => (
                   <option key={competitor.id} value={competitor.id}>{competitor.name}</option>
                 ))}
               </select>
 
               <select className="cs-select" value={typeFilter} onChange={(event) => onTypeFilter(event.target.value)}
-                aria-label="Filter by source type">
-                <option value="">All source types</option>
+                aria-label={t('workspace.sources.filterByType')}>
+                <option value="">{t('workspace.sources.allTypes')}</option>
                 {typeOptions.map((option) => (
                   <option key={option.platform} value={option.platform}>{option.label}</option>
                 ))}
               </select>
 
               <select className="cs-select" value={statusFilter} onChange={(event) => onStatusFilter(event.target.value)}
-                aria-label="Filter by validation status">
+                aria-label={t('workspace.sources.filterByStatus')}>
                 {SOURCE_STATUS_FILTERS.map((option) => (
-                  <option key={option.key} value={option.key}>{option.label}</option>
+                  <option key={option.key} value={option.key}>{t(option.labelKey)}</option>
                 ))}
               </select>
             </div>
@@ -224,24 +237,28 @@ function SourcesPanel({
                     </div>
                     <div className="cs-row-main">
                       <div className="cs-row-name">
-                        {source.competitor_name}
+                        <bdi>{source.competitor_name}</bdi>
                         <span style={{ fontWeight: 400, color: 'var(--text-light)' }}>
-                          {' '}· {sourceTypeLabel(source.platform)}
-                          {source.handle ? ` @${source.handle}` : ''}
+                          {' '}· {sourceTypeLabel(t, source.platform)}
+                          {source.handle ? <>{' '}<span className="ltr-isolate">@{source.handle}</span></> : null}
                         </span>
                       </div>
                       <div className="cs-row-desc">
                         <a href={source.url} target="_blank" rel="noopener noreferrer"
                           style={{ color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          {source.url} <ExternalLink size={11} />
+                          <span className="ltr-isolate">{source.url}</span> <ExternalLink size={11} />
                         </a>
                       </div>
                     </div>
                     <div className="cs-row-side">
                       {typeof source.confidence === 'number' ? (
-                        <span className="cs-pill cs-pill-signal">{Math.round(source.confidence * 100)}% confidence</span>
+                        <span className="cs-pill cs-pill-signal">
+                          {t('workspace.sources.confidence', { percent: formatPercent(source.confidence) })}
+                        </span>
                       ) : null}
-                      <span className={`cs-pill cs-pill-${source.validation_status}`}>{source.validation_status}</span>
+                      <span className={`cs-pill cs-pill-${source.validation_status}`}>
+                        {t(`accountStatus.${source.validation_status}`, { defaultValue: source.validation_status })}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -249,15 +266,19 @@ function SourcesPanel({
             ) : (
               <div className="cs-empty">
                 <div className="cs-empty-icon"><Search size={20} /></div>
-                <h3>No matching sources</h3>
-                <p>Try a different search term or clear the filters.</p>
+                <h3>{t('workspace.sources.noMatchesTitle')}</h3>
+                <p>{t('workspace.sources.noMatchesHint')}</p>
               </div>
             )}
 
             {filteredTotal ? (
               <div className="cs-pagination">
                 <div className="cs-pagination-info">
-                  Showing {(page - 1) * SOURCES_PAGE_SIZE + 1}-{Math.min(page * SOURCES_PAGE_SIZE, filteredTotal)} of {filteredTotal}
+                  {t('common:pagination.showing', {
+                    from: formatNumber((page - 1) * SOURCES_PAGE_SIZE + 1),
+                    to: formatNumber(Math.min(page * SOURCES_PAGE_SIZE, filteredTotal)),
+                    total: formatNumber(filteredTotal),
+                  })}
                 </div>
                 <div className="cs-pagination-controls">
                   <button
@@ -266,16 +287,18 @@ function SourcesPanel({
                     onClick={() => onPageChange(Math.max(1, page - 1))}
                     disabled={page <= 1}
                   >
-                    Previous
+                    {t('common:actions.previous')}
                   </button>
-                  <span className="cs-pill cs-pill-signal">Page {page} of {totalPages}</span>
+                  <span className="cs-pill cs-pill-signal">
+                    {t('common:pagination.page', { page: formatNumber(page), total: formatNumber(totalPages) })}
+                  </span>
                   <button
                     type="button"
                     className="cs-btn cs-btn-sm"
                     onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                     disabled={page >= totalPages}
                   >
-                    Next
+                    {t('common:actions.next')}
                   </button>
                 </div>
               </div>
@@ -284,10 +307,10 @@ function SourcesPanel({
         ) : (
           <div className="cs-empty">
             <div className="cs-empty-icon"><Link2 size={20} /></div>
-            <h3>No sources yet</h3>
-            <p>Track a competitor and confirm or discover its channels to see them here.</p>
+            <h3>{t('workspace.sources.emptyTitle')}</h3>
+            <p>{t('workspace.sources.emptyHint')}</p>
             <button type="button" className="cs-btn cs-btn-primary" onClick={onChooseCompetitors}>
-              <Layers size={15} /> Choose competitors
+              <Layers size={15} /> {t('workspace.sources.chooseCompetitors')}
             </button>
           </div>
         )}
@@ -305,6 +328,7 @@ function SourcesPanel({
  *  automatically right after a fresh run completes so the new result is
  *  immediately visible instead of hidden behind a click. */
 function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
+  const { t } = useTranslation('competitors');
   const hasResult = analysis && analysis.status === 'success';
   const [collapsed, setCollapsed] = useState(true);
   const wasRunning = useRef(running);
@@ -318,10 +342,10 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 className="cs-panel-title" style={{ marginBottom: 4 }}>
-            <Users size={16} /> Cultural fit
+            <Users size={16} /> {t('workspace.cultural.title')}
           </h2>
           <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-            Targeting {targetCountries.map(countryLabel).join(', ')}.
+            {t('workspace.cultural.targeting', { countries: formatList(targetCountries.map(countryLabel)) })}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -333,12 +357,14 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
               aria-expanded={!collapsed}
             >
               {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-              {collapsed ? 'Show details' : 'Hide details'}
+              {collapsed ? t('workspace.cultural.showDetails') : t('workspace.cultural.hideDetails')}
             </button>
           ) : null}
           <button type="button" className="cs-btn" onClick={onRun} disabled={running}>
             {running ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-            {running ? 'Analyzing...' : hasResult ? 'Re-run analysis' : 'Run analysis'}
+            {running
+              ? t('workspace.cultural.analyzing')
+              : hasResult ? t('workspace.cultural.rerun') : t('workspace.cultural.run')}
           </button>
         </div>
       </div>
@@ -346,20 +372,20 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
       {!running && hasResult && !collapsed ? (
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="cs-field" style={{ marginBottom: 0 }}>
-            <label className="cs-label">Summary</label>
-            <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{analysis.summary}</p>
+            <label className="cs-label">{t('workspace.cultural.summary')}</label>
+            <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }} dir="auto">{analysis.summary}</p>
           </div>
           {[
-            ['Success factors', analysis.success_factors],
-            ['Benefits', analysis.benefits],
-            ['Challenges', analysis.challenges],
-            ['Other insights', analysis.insights],
-          ].map(([label, items]) => (
+            ['successFactors', analysis.success_factors],
+            ['benefits', analysis.benefits],
+            ['challenges', analysis.challenges],
+            ['insights', analysis.insights],
+          ].map(([labelKey, items]) => (
             Array.isArray(items) && items.length ? (
-              <div key={label} className="cs-field" style={{ marginBottom: 0 }}>
-                <label className="cs-label">{label}</label>
-                <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
-                  {items.map((item, index) => <li key={index}>{item}</li>)}
+              <div key={labelKey} className="cs-field" style={{ marginBottom: 0 }}>
+                <label className="cs-label">{t(`workspace.cultural.${labelKey}`)}</label>
+                <ul style={{ margin: 0, paddingInlineStart: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
+                  {items.map((item, index) => <li key={index} dir="auto">{item}</li>)}
                 </ul>
               </div>
             ) : null
@@ -368,12 +394,16 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
       ) : null}
 
       {!running && analysis && analysis.status !== 'success' ? (
-        <ErrorNotice error={analysis.error || 'The analysis could not be generated.'} context="generate this analysis" compact />
+        <ErrorNotice
+          error={analysis.error || t('workspace.cultural.failed')}
+          context={t('errorContext.generateAnalysis')}
+          compact
+        />
       ) : null}
 
       {!running && !analysis ? (
         <p className="cs-panel-hint" style={{ marginTop: 12, marginBottom: 0 }}>
-          Not yet analyzed — run it here, or from the study wizard.
+          {t('workspace.cultural.notYet')}
         </p>
       ) : null}
     </div>
@@ -381,6 +411,7 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
 }
 
 export default function CompetitorWorkspace() {
+  const { t } = useTranslation('competitors');
   const { studyId } = useParams();
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
@@ -395,6 +426,8 @@ export default function CompetitorWorkspace() {
   const [culturalAnalysis, setCulturalAnalysis] = useState(null);
   const [runningCultural, setRunningCultural] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Holds the caught Error itself (not just .message) so its API error code
+  // reaches ErrorNotice for translation; '' means no error.
   const [error, setError] = useState('');
   const [triggeringScrape, setTriggeringScrape] = useState(false);
   const [scrapeNotice, setScrapeNotice] = useState(null);
@@ -423,7 +456,7 @@ export default function CompetitorWorkspace() {
         setCulturalAnalysis(detail.cultural_analysis || null);
         setCompetitors(competitorList.competitors || []);
       } catch (caught) {
-        if (!cancelled) setError(caught.message);
+        if (!cancelled) setError(caught);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -439,7 +472,7 @@ export default function CompetitorWorkspace() {
       await deleteStudy(studyId);
       navigate('/competitors');
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
       setDeleting(false);
       setDeleteOpen(false);
     }
@@ -462,14 +495,20 @@ export default function CompetitorWorkspace() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.detail || data?.error || `Scrape request failed (${response.status})`);
+        const failure = apiError(data, {
+          status: response.status,
+          fallback: t('workspace.scrapeFailed', { status: response.status }),
+        });
+        // Kept: this call has always preferred `detail` over `error` as the message.
+        if (data?.detail) failure.message = data.detail;
+        throw failure;
       }
       setScrapeNotice({
         runId: data?.run_id ? String(data.run_id) : null,
         alreadyActive: /already active/i.test(data?.message || ''),
       });
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setTriggeringScrape(false);
     }
@@ -482,7 +521,7 @@ export default function CompetitorWorkspace() {
       const result = await runCulturalAnalysis(studyId);
       setCulturalAnalysis(result.cultural_analysis);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setRunningCultural(false);
     }
@@ -516,9 +555,9 @@ export default function CompetitorWorkspace() {
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return Array.from(counts.entries())
-      .map(([platform, count]) => ({ platform, label: sourceTypeLabel(platform), count }))
+      .map(([platform, count]) => ({ platform, label: sourceTypeLabel(t, platform), count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [allSources]);
+  }, [allSources, t]);
 
   const competitorOptions = useMemo(
     () => competitors
@@ -587,18 +626,19 @@ export default function CompetitorWorkspace() {
       <div className="cs-head">
         <div>
           <Link to="/competitors" className="cs-link-back">
-            <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /> All studies
+            <ChevronLeft size={14} className="icon-flip-rtl" /> {t('workspace.allStudies')}
           </Link>
-          <h1>{study?.name || 'Competitor study'}</h1>
+          <h1 dir="auto">{study?.name || t('workspace.untitledStudy')}</h1>
           <p>
             {profile?.name ? (
-              <>
-                Tracked against <strong>{profile.name}</strong>
-                {profile.market ? ` in ${profile.market}` : ''}. Confirm each competitor's channels
-                and they are collected on every run of this study.
-              </>
+              <Trans
+                t={t}
+                i18nKey={profile.market ? 'workspace.trackedAgainstInMarket' : 'workspace.trackedAgainst'}
+                values={{ name: profile.name, market: profile.market }}
+                components={{ strong: <strong dir="auto" /> }}
+              />
             ) : (
-              'Add your business profile so competitor discovery has something to compare against.'
+              t('workspace.noProfile')
             )}
           </p>
         </div>
@@ -606,16 +646,16 @@ export default function CompetitorWorkspace() {
           {canRunScrape && (
             <button type="button" className="cs-btn cs-btn-primary" onClick={runScrapeNow} disabled={triggeringScrape}>
               {triggeringScrape ? <span className="cs-spinner" /> : <Play size={15} />}
-              {triggeringScrape ? 'Starting...' : 'Run scrape'}
+              {triggeringScrape ? t('workspace.starting') : t('workspace.runScrape')}
             </button>
           )}
           <Link to={`/competitors/${studyId}/competitors`} className="cs-btn">
-            <Layers size={15} /> {competitors.length} competitor{competitors.length === 1 ? '' : 's'}
+            <Layers size={15} /> {t('workspace.competitorCount', { count: competitors.length })}
           </Link>
           {canManage && (
             <>
               <Link to={`/competitors/${studyId}/edit`} className="cs-btn">
-                <Pencil size={15} /> Edit
+                <Pencil size={15} /> {t('common:actions.edit')}
               </Link>
               <button
                 type="button"
@@ -623,25 +663,25 @@ export default function CompetitorWorkspace() {
                 onClick={() => setDeleteOpen(true)}
                 style={{ color: '#ff4757' }}
               >
-                <Trash2 size={15} /> Delete study
+                <Trash2 size={15} /> {t('workspace.deleteStudy')}
               </button>
             </>
           )}
         </div>
       </div>
 
-      <ErrorNotice error={error} context="load or update this competitor study" onDismiss={() => setError('')} />
+      <ErrorNotice error={error} context={t('errorContext.loadOrUpdateStudy')} onDismiss={() => setError('')} />
 
       {scrapeNotice ? (
         <div className="cs-alert cs-alert-info">
           <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            {scrapeNotice.alreadyActive ? 'A scrape is already running for this study.' : 'Scrape started.'}
+            {scrapeNotice.alreadyActive ? t('workspace.scrapeAlreadyRunning') : t('workspace.scrapeStarted')}
             {scrapeNotice.runId ? (
               <>
                 {' '}
                 <Link to={`/pipeline-runs/${scrapeNotice.runId}`} style={{ fontWeight: 700 }}>
-                  View progress
+                  {t('workspace.viewProgress')}
                 </Link>
               </>
             ) : null}
@@ -653,24 +693,22 @@ export default function CompetitorWorkspace() {
         <div className="cs-alert cs-alert-warn">
           <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            {stats.pendingChannels} channel{stats.pendingChannels === 1 ? '' : 's'} still awaiting
-            confirmation. Unconfirmed channels are not scraped, so nothing from them is
-            collected.{' '}
+            {t('workspace.pendingChannels', { count: stats.pendingChannels })}{' '}
             <Link to={`/competitors/${studyId}/competitors`} style={{ fontWeight: 700 }}>
-              Review them
+              {t('workspace.reviewThem')}
             </Link>
           </span>
         </div>
       ) : null}
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
-        <StatTile icon={Radar} label="Tracked" value={stats.tracked} />
-        <StatTile icon={Link2} label="Total sources" value={sourceStats.total} />
-        <StatTile icon={ShieldCheck} label="Valid" value={sourceStats.valid} />
-        <StatTile icon={RefreshCw} label="Pending" value={sourceStats.pending}
+        <StatTile icon={Radar} label={t('workspace.stats.tracked')} value={formatNumber(stats.tracked)} />
+        <StatTile icon={Link2} label={t('workspace.stats.totalSources')} value={formatNumber(sourceStats.total)} />
+        <StatTile icon={ShieldCheck} label={t('workspace.stats.valid')} value={formatNumber(sourceStats.valid)} />
+        <StatTile icon={RefreshCw} label={t('workspace.stats.pending')} value={formatNumber(sourceStats.pending)}
           tone={sourceStats.pending ? '#a16207' : undefined} />
-        <StatTile icon={CalendarClock} label="Last Scrape"
-          value={study?.last_run_at ? relativeTime(study.last_run_at) : 'Never'} />
+        <StatTile icon={CalendarClock} label={t('workspace.stats.lastScrape')}
+          value={study?.last_run_at ? relativeTime(study.last_run_at) : t('common:time.never')} />
       </div>
 
       {Array.isArray(profile?.target_countries) && profile.target_countries.length ? (
@@ -708,10 +746,10 @@ export default function CompetitorWorkspace() {
 
       <ConfirmModal
         open={deleteOpen}
-        title={`Delete study "${study?.name || ''}"?`}
-        message="This will permanently remove the study, its business profile, tracked competitors, and findings."
-        confirmLabel={deleting ? 'Deleting...' : 'Delete study'}
-        cancelLabel="Keep study"
+        title={t('workspace.deleteConfirm.title', { name: study?.name || '' })}
+        message={t('workspace.deleteConfirm.message')}
+        confirmLabel={deleting ? t('common:actions.deleting') : t('workspace.deleteConfirm.confirm')}
+        cancelLabel={t('workspace.deleteConfirm.cancel')}
         confirmButtonStyle={{
           background: 'linear-gradient(135deg, #ff4757, #e03131)',
           boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',

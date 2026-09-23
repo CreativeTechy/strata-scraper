@@ -1,0 +1,227 @@
+{
+  "app": {
+    "name": "Scraper",
+    "fullName": "تطبيق Scraper",
+    "tagline": "منصة الرصد الإعلامي",
+    "taglineShort": "الرصد الإعلامي",
+    "brandMark": "S"
+  },
+  "language": {
+    "label": "اللغة",
+    "switchTo": "تغيير اللغة إلى {{language}}"
+  },
+  "actions": {
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ…",
+    "saveChanges": "حفظ التغييرات",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "delete": "حذف",
+    "deleting": "جارٍ الحذف…",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "add": "إضافة",
+    "remove": "إزالة",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "retry": "إعادة المحاولة",
+    "refresh": "تحديث",
+    "search": "بحث",
+    "clear": "مسح",
+    "clearFilters": "مسح عوامل التصفية",
+    "view": "عرض",
+    "open": "فتح",
+    "export": "تصدير",
+    "import": "استيراد",
+    "dismiss": "تجاهل",
+    "continue": "متابعة",
+    "done": "تم",
+    "apply": "تطبيق",
+    "reset": "إعادة تعيين",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "showMore": "عرض المزيد",
+    "showLess": "عرض أقل",
+    "selectAll": "تحديد الكل"
+  },
+  "status": {
+    "loading": "جارٍ التحميل…",
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "disabled": "معطّل",
+    "draft": "مسودة",
+    "pending": "قيد الانتظار",
+    "running": "قيد التشغيل",
+    "queued": "في قائمة الانتظار",
+    "success": "ناجح",
+    "failed": "فشل",
+    "cancelled": "ملغى",
+    "unknown": "غير معروف",
+    "yes": "نعم",
+    "no": "لا",
+    "none": "لا يوجد",
+    "all": "الكل",
+    "notAvailable": "غير متاح"
+  },
+  "search": {
+    "placeholder": "بحث…",
+    "noMatches": "لا توجد نتائج مطابقة"
+  },
+  "pagination": {
+    "page": "الصفحة {{page}} من {{total}}",
+    "showing": "عرض {{from}}–{{to}} من {{total}}",
+    "previousPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية",
+    "perPage": "لكل صفحة"
+  },
+  "nav": {
+    "sections": {
+      "collection": "الجمع",
+      "monitoring": "الرصد",
+      "setup": "الإعداد",
+      "admin": "الإدارة"
+    },
+    "dashboard": "لوحة المعلومات",
+    "articles": "المقالات",
+    "opinionMonitor": "رصد الرأي",
+    "competitorAnalysis": "تحليل المنافسين",
+    "sources": "المصادر",
+    "manualRun": "تشغيل يدوي",
+    "pipelineRuns": "عمليات التشغيل",
+    "users": "المستخدمون",
+    "roles": "الأدوار",
+    "projectAccess": "صلاحيات المشاريع",
+    "openNavigation": "فتح القائمة",
+    "closeNavigation": "إغلاق القائمة",
+    "expandNavigation": "توسيع القائمة",
+    "collapseNavigation": "طي القائمة",
+    "logOut": "تسجيل الخروج",
+    "profileTitle": "{{username}} ({{role}})"
+  },
+  "access": {
+    "loading": "جارٍ التحميل…",
+    "deniedTitle": "الوصول مرفوض",
+    "deniedMessage": "ليست لديك صلاحية لعرض هذه الصفحة."
+  },
+  "login": {
+    "welcome": "مرحبًا بعودتك",
+    "intro": "سجّل الدخول للوصول إلى مساحة عملك",
+    "username": "اسم المستخدم أو البريد الإلكتروني",
+    "usernamePlaceholder": "you@company.com",
+    "password": "كلمة المرور",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
+    "submit": "تسجيل الدخول",
+    "submitting": "جارٍ تسجيل الدخول…",
+    "failed": "فشل تسجيل الدخول.",
+    "footnote": "مساحة عمل محمية · تواصل مع المسؤول للحصول على صلاحية الوصول",
+    "errorContext": "تسجيل الدخول"
+  },
+  "errors": {
+    "defaultContext": "إتمام هذا الإجراء",
+    "technicalDetails": "التفاصيل التقنية",
+    "dismiss": "إغلاق رسالة الخطأ",
+    "generic": {
+      "title": "حدث خطأ ما",
+      "message": "تعذّر {{context}}.",
+      "action": "حاول مرة أخرى. إذا استمرت المشكلة، تواصل مع المسؤول."
+    },
+    "signIn": {
+      "title": "فشل تسجيل الدخول",
+      "message": "اسم المستخدم أو كلمة المرور غير صحيحة.",
+      "action": "تحقق من بياناتك وحاول مرة أخرى."
+    },
+    "session": {
+      "title": "انتهت الجلسة",
+      "message": "جلستك لم تعد نشطة.",
+      "action": "سجّل الدخول مرة أخرى، ثم أعد تنفيذ الإجراء."
+    },
+    "permission": {
+      "title": "الصلاحية مطلوبة",
+      "message": "ليست لديك صلاحية {{context}}.",
+      "action": "اطلب الصلاحية اللازمة من المسؤول."
+    },
+    "notFound": {
+      "title": "غير موجود",
+      "message": "تعذّر العثور على العنصر المطلوب.",
+      "action": "حدّث الصفحة وتحقق مما إذا كان العنصر قد حُذف أو أُعيدت تسميته."
+    },
+    "conflict": {
+      "title": "موجود مسبقًا",
+      "message": "هذا يتعارض مع عنصر موجود.",
+      "action": "استخدم اسمًا مختلفًا أو راجع العنصر الموجود."
+    },
+    "rateLimit": {
+      "title": "طلبات كثيرة جدًا",
+      "message": "الخدمة تقيّد الطلبات مؤقتًا.",
+      "action": "انتظر قليلًا، ثم حاول مرة أخرى."
+    },
+    "timeout": {
+      "title": "انتهت مهلة الطلب",
+      "message": "استغرق {{context}} وقتًا أطول من اللازم.",
+      "action": "تحقق من الاتصال وحاول مرة أخرى."
+    },
+    "network": {
+      "title": "مشكلة في الاتصال",
+      "message": "تعذّر الوصول إلى الخدمة.",
+      "action": "تحقق من اتصالك وتأكد من أن الخدمة تعمل، ثم أعد المحاولة."
+    },
+    "setup": {
+      "title": "الإعداد مطلوب",
+      "message": "لم تُهيّأ خدمة مطلوبة بعد.",
+      "action": "اطلب من المسؤول مراجعة إعدادات الخدمة."
+    },
+    "validation": {
+      "title": "تحقق من المعلومات المُدخلة",
+      "action": "صحّح المعلومات المحددة وحاول مرة أخرى."
+    },
+    "unavailable": {
+      "title": "الخدمة غير متاحة",
+      "message": "الخدمة غير متاحة مؤقتًا.",
+      "action": "حاول مرة أخرى بعد قليل. إذا استمرت المشكلة، تواصل مع المسؤول."
+    },
+    "requestFailed": "فشل الطلب ({{status}})"
+  },
+  "run": {
+    "completeWithIssues_zero": "اكتمل التشغيل. لا توجد مصادر تحتاج إلى متابعة.",
+    "completeWithIssues_one": "اكتمل التشغيل. مصدر واحد يحتاج إلى متابعة.",
+    "completeWithIssues_two": "اكتمل التشغيل. مصدران يحتاجان إلى متابعة.",
+    "completeWithIssues_few": "اكتمل التشغيل. {{count}} مصادر تحتاج إلى متابعة.",
+    "completeWithIssues_many": "اكتمل التشغيل. {{count}} مصدرًا تحتاج إلى متابعة.",
+    "completeWithIssues_other": "اكتمل التشغيل. {{count}} مصدر تحتاج إلى متابعة.",
+    "failed": "لم يكتمل التشغيل. افتح عملية التشغيل لمراجعة المشكلة والإجراء المقترح.",
+    "cancelled": "أُوقف التشغيل قبل اكتماله.",
+    "success": "اكتمل التشغيل بنجاح.",
+    "running": "التشغيل قيد التنفيذ حاليًا.",
+    "waiting": "التشغيل بانتظار البدء."
+  },
+  "confirm": {
+    "title": "هل أنت متأكد؟"
+  },
+  "time": {
+    "justNow": "الآن",
+    "never": "أبدًا"
+  },
+  "translation": {
+    "sourceLanguage": "اللغة الأصلية: {{language}}"
+  },
+  "roleNames": {
+    "admin": "مسؤول",
+    "editor": "محرر",
+    "operator": "مشغّل",
+    "viewer": "مُطّلع"
+  },
+  "scheduleUnits": {
+    "minutes": "دقائق",
+    "hours": "ساعات",
+    "days": "أيام"
+  },
+  "competitorStages": {
+    "fetchWebsite": "جلب موقعك الإلكتروني",
+    "extractText": "استخراج نص الصفحات",
+    "readPositioning": "قراءة كيفية تقديمك لنفسك",
+    "writeContext": "كتابة سياق السوق"
+  }
+}

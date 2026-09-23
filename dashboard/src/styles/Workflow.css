@@ -74,6 +74,12 @@
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
 }
 
+/* The blocks flow right-to-left in RTL, so the arrow between them points left.
+   (Same flip as .icon-flip-rtl, so it doesn't matter if the icon has both.) */
+[dir='rtl'] .workflow-arrow svg {
+  transform: scaleX(-1);
+}
+
 /* Block Base */
 .workflow-block {
   flex: 1;
@@ -373,7 +379,7 @@
   gap: 10px;
   flex: 1;
   overflow-y: auto;
-  padding-right: 5px;
+  padding-inline-end: 5px;
 }
 
 .workflow-project-picker {
@@ -489,7 +495,7 @@
   gap: 8px;
   max-height: 220px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-inline-end: 4px;
 }
 
 .workflow-project-item {
@@ -534,7 +540,7 @@
   flex: 1;
   max-height: 260px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-inline-end: 4px;
 }
 
 .workflow-source-item {
@@ -835,13 +841,13 @@
 
 .miro-badge.top-right {
   top: -15px;
-  right: 20px;
+  inset-inline-end: 20px;
   color: #ff4757;
 }
 
 .miro-badge.bottom-left {
   bottom: -15px;
-  left: 20px;
+  inset-inline-start: 20px;
   color: var(--secondary-color);
 }
 
@@ -873,14 +879,20 @@
     transform: rotate(90deg);
   }
 
+  /* The svg is already mirrored (pointing left) in RTL; turn it the other way
+     so it still points down between the stacked blocks. */
+  [dir='rtl'] .workflow-arrow {
+    transform: rotate(-90deg);
+  }
+
   .miro-badge.top-right {
     top: -12px;
-    right: 16px;
+    inset-inline-end: 16px;
   }
 
   .miro-badge.bottom-left {
     bottom: -12px;
-    left: 16px;
+    inset-inline-start: 16px;
   }
 }
 
@@ -900,12 +912,12 @@
 
   .miro-badge.top-right {
     top: -10px;
-    right: 12px;
+    inset-inline-end: 12px;
   }
 
   .miro-badge.bottom-left {
     bottom: -10px;
-    left: 12px;
+    inset-inline-start: 12px;
   }
 
   .workflow-hero {

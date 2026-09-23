@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AuthContext, permissionsSatisfy } from './authContext.js';
+import { apiError } from '../errors/apiError.js';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -44,7 +45,7 @@ export function AuthProvider({ children }) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data?.error || data?.detail || 'Login failed.');
+      throw apiError(data, { status: res.status });
     }
     setUser(data?.user ?? null);
     return data?.user ?? null;

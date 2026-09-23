@@ -6,12 +6,19 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   SOURCE_KIND_OPTIONS, TERM_SOURCE_TYPES, TERM_SOURCE_PLACEHOLDERS,
   KIND_SOURCE_TYPES, SOURCE_KIND_SUB_OPTIONS, SOURCE_KIND_DEFAULTS,
   URL_FIELD_PLACEHOLDERS, PLATFORM_LABELS, isPlausibleUrl,
 } from '../competitorApi.js';
+
+// competitorApi.js's option lists carry English labels; the stable `value`
+// codes key the translated labels here, falling back to that English label.
+function platformLabel(t, platform) {
+  return t(`competitors:platforms.${platform}`, { defaultValue: PLATFORM_LABELS[platform] || platform });
+}
 
 function emptySource() {
   return { platform: 'web', url: '', handle: '', kind: '' };
@@ -31,8 +38,9 @@ function isUsableSourceValue(row) {
  *  (SourcesPage.jsx / ProjectsPage.jsx's SOURCE_TYPE_FORM_TABS) so picking a
  *  source's platform looks and behaves the same everywhere in the app. */
 function SourceTypeTabs({ value, onChange }) {
+  const { t } = useTranslation('competitors');
   return (
-    <div className="source-type-tabs cs-source-type-tabs" role="tablist" aria-label="Choose source type">
+    <div className="source-type-tabs cs-source-type-tabs" role="tablist" aria-label={t('sourceEditor.chooseType')}>
       {SOURCE_KIND_OPTIONS.map((option) => {
         const isActive = value === option.value;
         return (
@@ -44,7 +52,7 @@ function SourceTypeTabs({ value, onChange }) {
             className={`source-type-tab ${isActive ? 'active' : ''}`}
             onClick={() => onChange(option.value)}
           >
-            {option.label}
+            {platformLabel(t, option.value)}
           </button>
         );
       })}
@@ -61,6 +69,7 @@ function SourceTypeTabs({ value, onChange }) {
  *  explicit full URL also makes it moot, but it stays visible even then
  *  since it's ignored rather than wrong in that case. */
 function SourceKindSelect({ platform, kind, onChange }) {
+  const { t } = useTranslation('competitors');
   const options = SOURCE_KIND_SUB_OPTIONS[platform];
   if (!options) return null;
   return (
@@ -69,10 +78,12 @@ function SourceKindSelect({ platform, kind, onChange }) {
       style={{ flex: '0 1 180px' }}
       value={kind || SOURCE_KIND_DEFAULTS[platform]}
       onChange={(event) => onChange(event.target.value)}
-      aria-label={`${PLATFORM_LABELS[platform] || platform} source kind`}
+      aria-label={t('sourceEditor.kindLabel', { platform: platformLabel(t, platform) })}
     >
       {options.map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
+        <option key={option.value} value={option.value}>
+          {t(`sourceKinds.${platform}.${option.value}`, { defaultValue: option.label })}
+        </option>
       ))}
     </select>
   );
@@ -82,6 +93,7 @@ function SourceKindSelect({ platform, kind, onChange }) {
  *  Bros, قهوة يونس" - articles naming any of these count as evidence for
  *  that competitor. Shared by the workspace and the study edit page. */
 export function AliasEditor({ competitor, onSave }) {
+  const { t } = useTranslation('competitors');
   const stored = Array.isArray(competitor.aliases) ? competitor.aliases : [];
   const [value, setValue] = useState(stored.join(', '));
   const [busy, setBusy] = useState(false);
@@ -103,21 +115,22 @@ export function AliasEditor({ competitor, onSave }) {
 
   return (
     <div className="cs-alias-editor">
-      <label className="cs-label" htmlFor={`cs-aliases-${competitor.id}`}>Other names</label>
+      <label className="cs-label" htmlFor={`cs-aliases-${competitor.id}`}>{t('sourceEditor.aliases.label')}</label>
       <div className="cs-alias-editor-row">
         <input
           id={`cs-aliases-${competitor.id}`}
           className="cs-input"
+          dir="auto"
           value={value}
-          placeholder="e.g. Younes Bros, قهوة يونس"
+          placeholder={t('sourceEditor.aliases.placeholder')}
           onChange={(event) => { setValue(event.target.value); setSaved(false); }}
         />
         <button type="button" className="cs-btn cs-btn-sm" onClick={save} disabled={busy || !dirty}>
-          {busy ? <span className="cs-spinner" /> : null} {saved && !dirty ? 'Saved' : 'Save'}
+          {busy ? <span className="cs-spinner" /> : null} {saved && !dirty ? t('sourceEditor.aliases.saved') : t('common:actions.save')}
         </button>
       </div>
       <small className="cs-row-desc">
-        Comma separated. Articles naming any of these count as evidence for this competitor.
+        {t('sourceEditor.aliases.hint')}
       </small>
     </div>
   );
@@ -127,12 +140,18 @@ export function AliasEditor({ competitor, onSave }) {
  *  bare name instead of a URL — the real URL is derived server-side — so they get a
  *  single input bound to `handle` instead of the usual URL + optional-handle pair. */
 function SourceRowFields({ row, onChange }) {
+  const { t } = useTranslation('competitors');
   if (TERM_SOURCE_TYPES.has(row.platform)) {
     return (
       <input
         className="cs-input"
+        dir="auto"
         style={{ flex: '1 1 220px' }}
-        placeholder={TERM_SOURCE_PLACEHOLDERS[row.platform] || 'Value'}
+        placeholder={
+          TERM_SOURCE_PLACEHOLDERS[row.platform]
+            ? t(`placeholders.term.${row.platform}`, { defaultValue: TERM_SOURCE_PLACEHOLDERS[row.platform] })
+            : t('placeholders.value')
+        }
         value={row.handle}
         onChange={(event) => onChange({ handle: event.target.value })}
       />
@@ -140,17 +159,25 @@ function SourceRowFields({ row, onChange }) {
   }
   return (
     <>
+      {/* A kind-disambiguated platform's field also takes a bare search
+          phrase (possibly Arabic); every other one is a URL. */}
       <input
         className="cs-input"
+        dir={KIND_SOURCE_TYPES.has(row.platform) ? 'auto' : 'ltr'}
         style={{ flex: '1 1 220px' }}
-        placeholder={URL_FIELD_PLACEHOLDERS[row.platform] || 'https://...'}
+        placeholder={
+          URL_FIELD_PLACEHOLDERS[row.platform]
+            ? t(`placeholders.url.${row.platform}`, { defaultValue: URL_FIELD_PLACEHOLDERS[row.platform] })
+            : 'https://...'
+        }
         value={row.url}
         onChange={(event) => onChange({ url: event.target.value })}
       />
       <input
         className="cs-input"
+        dir="auto"
         style={{ flex: '0 1 140px' }}
-        placeholder="display name (optional)"
+        placeholder={t('sourceEditor.displayNamePlaceholder')}
         value={row.handle}
         onChange={(event) => onChange({ handle: event.target.value })}
       />
@@ -161,11 +188,13 @@ function SourceRowFields({ row, onChange }) {
 /** Name/website/description + a dynamic list of source rows, for creating a
  *  competitor and its sources on one screen. Sources are optional — a
  *  competitor can be added with none and get sources added later. */
-export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competitor' }) {
+export function AddCompetitorForm({ onSubmit, busy, submitLabel }) {
+  const { t } = useTranslation('competitors');
   const [name, setName] = useState('');
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
   const [sources, setSources] = useState([emptySource()]);
+  // Values are i18n keys, translated at render so they follow the UI language.
   const [errors, setErrors] = useState({});
 
   const updateSource = (index, patch) => {
@@ -180,14 +209,14 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
 
   const submit = async () => {
     const nextErrors = {};
-    if (!name.trim()) nextErrors.name = 'A competitor name is required.';
+    if (!name.trim()) nextErrors.name = 'sourceEditor.errors.nameRequired';
 
     const usable = sources.filter((row) => row.url.trim() || row.handle.trim());
     usable.forEach((row, index) => {
       if (TERM_SOURCE_TYPES.has(row.platform)) {
-        if (!row.handle.trim()) nextErrors[`source-${index}`] = 'Enter a value.';
+        if (!row.handle.trim()) nextErrors[`source-${index}`] = 'sourceEditor.errors.valueRequired';
       } else if (!isUsableSourceValue(row)) {
-        nextErrors[`source-${index}`] = 'Enter a valid URL.';
+        nextErrors[`source-${index}`] = 'sourceEditor.errors.invalidUrl';
       }
     });
 
@@ -221,23 +250,25 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
     <div>
       <div className="cs-grid-2">
         <div className="cs-field">
-          <label className="cs-label" htmlFor="cs-manual-name">Competitor name</label>
+          <label className="cs-label" htmlFor="cs-manual-name">{t('sourceEditor.competitorName')}</label>
           <input
             id="cs-manual-name"
             className="cs-input"
+            dir="auto"
             value={name}
-            placeholder="Acme Inc."
+            placeholder={t('sourceEditor.competitorNamePlaceholder')}
             onChange={(event) => setName(event.target.value)}
           />
-          {errors.name ? <div className="cs-source-error">{errors.name}</div> : null}
+          {errors.name ? <div className="cs-source-error">{t(errors.name)}</div> : null}
         </div>
         <div className="cs-field">
           <label className="cs-label" htmlFor="cs-manual-website">
-            Website<span className="cs-label-hint">optional</span>
+            {t('sourceEditor.website')}<span className="cs-label-hint">{t('optional')}</span>
           </label>
           <input
             id="cs-manual-website"
             className="cs-input"
+            dir="ltr"
             value={website}
             placeholder="acme.com"
             onChange={(event) => setWebsite(event.target.value)}
@@ -247,18 +278,19 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
 
       <div className="cs-field">
         <label className="cs-label" htmlFor="cs-manual-desc">
-          Description<span className="cs-label-hint">optional</span>
+          {t('sourceEditor.description')}<span className="cs-label-hint">{t('optional')}</span>
         </label>
         <input
           id="cs-manual-desc"
           className="cs-input"
+          dir="auto"
           value={description}
-          placeholder="What they do, briefly"
+          placeholder={t('sourceEditor.descriptionPlaceholder')}
           onChange={(event) => setDescription(event.target.value)}
         />
       </div>
 
-      <label className="cs-label">Sources<span className="cs-label-hint">optional — add now or later</span></label>
+      <label className="cs-label">{t('sourceEditor.sources')}<span className="cs-label-hint">{t('sourceEditor.sourcesHint')}</span></label>
       {sources.map((row, index) => (
         <div key={index} className="cs-source-row">
           <SourceTypeTabs
@@ -268,26 +300,26 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
           <SourceKindSelect platform={row.platform} kind={row.kind} onChange={(kind) => updateSource(index, { kind })} />
           <SourceRowFields row={row} onChange={(patch) => updateSource(index, patch)} />
           {sources.length > 1 ? (
-            <button type="button" className="cs-btn cs-btn-sm cs-btn-danger" onClick={() => removeSource(index)} aria-label="Remove source">
+            <button type="button" className="cs-btn cs-btn-sm cs-btn-danger" onClick={() => removeSource(index)} aria-label={t('sourceEditor.removeSource')}>
               <Trash2 size={13} />
             </button>
           ) : null}
           {errors[`source-${index}`] ? (
             <div className="cs-source-error" style={{ width: '100%' }}>
-              <AlertTriangle size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
-              {errors[`source-${index}`]}
+              <AlertTriangle size={12} style={{ marginInlineEnd: 4, verticalAlign: -1 }} />
+              {t(errors[`source-${index}`])}
             </div>
           ) : null}
         </div>
       ))}
       <button type="button" className="cs-btn cs-btn-sm" onClick={addSourceRow} style={{ marginBottom: 16 }}>
-        <Plus size={13} /> Add another source
+        <Plus size={13} /> {t('sourceEditor.addAnotherSource')}
       </button>
 
       <div>
         <button type="button" className="cs-btn cs-btn-primary" onClick={submit} disabled={busy || !name.trim()}>
           {busy ? <Loader2 size={15} className="cs-spin" /> : <Plus size={15} />}
-          {submitLabel}
+          {submitLabel || t('sourceEditor.addCompetitor')}
         </button>
       </div>
     </div>
@@ -297,7 +329,9 @@ export function AddCompetitorForm({ onSubmit, busy, submitLabel = 'Add competito
 /** Single-row variant for adding one more source to an already-existing
  *  competitor — inline on that competitor's card/row. */
 export function AddSourceRow({ onSubmit, busy }) {
+  const { t } = useTranslation('competitors');
   const [row, setRow] = useState(emptySource());
+  // An i18n key (translated at render), or '' for no error.
   const [error, setError] = useState('');
 
   const isTermType = TERM_SOURCE_TYPES.has(row.platform);
@@ -305,11 +339,11 @@ export function AddSourceRow({ onSubmit, busy }) {
   const submit = async () => {
     if (isTermType) {
       if (!row.handle.trim()) {
-        setError('Enter a value.');
+        setError('sourceEditor.errors.valueRequired');
         return;
       }
     } else if (!isUsableSourceValue(row)) {
-      setError('Enter a valid URL.');
+      setError('sourceEditor.errors.invalidUrl');
       return;
     }
     setError('');
@@ -341,13 +375,13 @@ export function AddSourceRow({ onSubmit, busy }) {
           onClick={submit}
           disabled={busy || (isTermType ? !row.handle.trim() : !row.url.trim())}
         >
-          {busy ? <Loader2 size={13} className="cs-spin" /> : <Plus size={13} />} Add
+          {busy ? <Loader2 size={13} className="cs-spin" /> : <Plus size={13} />} {t('common:actions.add')}
         </button>
       </div>
       {error ? (
         <div className="cs-source-error">
-          <AlertTriangle size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
-          {error}
+          <AlertTriangle size={12} style={{ marginInlineEnd: 4, verticalAlign: -1 }} />
+          {t(error)}
         </div>
       ) : null}
     </div>

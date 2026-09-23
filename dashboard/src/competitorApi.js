@@ -7,6 +7,9 @@
  * Components then only handle `try/catch`, never response plumbing.
  */
 
+import { apiError } from './errors/apiError.js';
+import { formatDate as formatLocalizedDate, formatRelativeTime } from './i18n/format.js';
+
 const BASE = '/api/competitor';
 
 async function request(path, { method = 'GET', body, signal } = {}) {
@@ -26,10 +29,10 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   }
 
   if (!response.ok) {
-    const message =
-      payload?.detail || payload?.error || `Request failed (${response.status})`;
-    const error = new Error(message);
-    error.status = response.status;
+    // Kept: this client has always preferred the more specific `detail`
+    // over `error` as the message; the code/params ride along for translation.
+    const error = apiError(payload, { status: response.status });
+    if (payload?.detail) error.message = payload.detail;
     throw error;
   }
   return payload ?? {};
@@ -259,19 +262,11 @@ export function relativeTime(value) {
   if (!value) return null;
   const diff = Date.now() - new Date(value).getTime();
   if (!Number.isFinite(diff)) return null;
-  if (diff < 60_000) return 'just now';
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(value).toLocaleDateString();
+  if (diff < 30 * 24 * 3600 * 1000) return formatRelativeTime(value);
+  return formatLocalizedDate(value);
 }
 
 export function formatDate(value) {
   if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatLocalizedDate(value) || null;
 }

@@ -1,12 +1,13 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function ConfirmModal({
   open = false,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   confirmButtonStyle,
   confirmDisabled = false,
   onConfirm,
@@ -14,6 +15,7 @@ export default function ConfirmModal({
   hideCancel = false,
   children,
 }) {
+  const { t } = useTranslation();
   if (!open) return null;
 
   return (
@@ -32,7 +34,7 @@ export default function ConfirmModal({
               {title}
             </h2>
           </div>
-          <button type="button" className="confirm-modal-close" onClick={onClose} aria-label="Close dialog">
+          <button type="button" className="confirm-modal-close" onClick={onClose} aria-label={t('actions.close')}>
             <X size={18} />
           </button>
         </div>
@@ -48,7 +50,7 @@ export default function ConfirmModal({
         <div className="confirm-modal-actions">
           {!hideCancel && (
             <button type="button" className="btn-secondary" onClick={onClose}>
-              {cancelLabel}
+              {cancelLabel ?? t('actions.cancel')}
             </button>
           )}
           <button
@@ -58,7 +60,7 @@ export default function ConfirmModal({
             style={confirmButtonStyle}
             disabled={confirmDisabled}
           >
-            {confirmLabel}
+            {confirmLabel ?? t('actions.confirm')}
           </button>
         </div>
       </div>

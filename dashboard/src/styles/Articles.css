@@ -121,7 +121,7 @@
   }
 }
 
-/* --- Summary row (left side of the toolbar-row) --- */
+/* --- Summary row (inline-start side of the toolbar-row) --- */
 .articles-page-shell .articles-toolbar-summary {
   display: flex;
   align-items: center;
@@ -217,7 +217,7 @@
   align-items: center;
   gap: 10px;
   color: #b42318;
-  border-left: 4px solid #ff4757;
+  border-inline-start: 4px solid #ff4757;
   margin-bottom: 18px;
 }
 
@@ -226,7 +226,7 @@
   align-items: flex-start;
   gap: 10px;
   color: #1f5f3f;
-  border-left: 4px solid #2fbf71;
+  border-inline-start: 4px solid #2fbf71;
   margin-bottom: 18px;
 }
 
@@ -237,7 +237,7 @@
 
 .articles-page-shell .articles-import-banner.is-failed {
   color: #b42318;
-  border-left-color: #ff4757;
+  border-inline-start-color: #ff4757;
 }
 
 .articles-page-shell .articles-import-batch-label {
@@ -267,7 +267,7 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   transition: border-color 0.2s, background 0.2s;
 }
 
@@ -348,6 +348,20 @@
   100% { transform: translateX(285%); }
 }
 
+/* The fill sits at the inline-start edge, so in RTL it slides right-to-left.
+   Scoped to no-preference so it can't re-enable the animation that the
+   reduced-motion block below turns off. */
+@media (prefers-reduced-motion: no-preference) {
+  [dir='rtl'] .articles-page-shell .articles-import-progress-fill.is-indeterminate {
+    animation-name: articles-import-slide-rtl;
+  }
+}
+
+@keyframes articles-import-slide-rtl {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-285%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .articles-page-shell .articles-import-progress-fill.is-indeterminate {
     animation: none;
@@ -378,7 +392,7 @@
 
 .articles-page-shell .articles-import-errors {
   margin: 8px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   font-size: 0.85rem;
   opacity: 0.85;
 }

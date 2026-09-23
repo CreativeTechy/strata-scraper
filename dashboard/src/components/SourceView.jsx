@@ -1,9 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ExternalLink, Calendar, CarFront, Tag, Search } from 'lucide-react';
+import { formatDate, formatNumber } from '../i18n/format.js';
 import '../styles/Sources.css';
 
+// Filter option values are the sentiment strings the articles carry
+// (compared case-insensitively below); only their labels are translated.
+const SENTIMENT_OPTIONS = ['Positive', 'Negative', 'Neutral', 'Mixed'];
+
 export default function SourceView({ articles, isScraping }) {
+  const { t } = useTranslation('articles');
   const [filterSentiment, setFilterSentiment] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
   const [visibleCount, setVisibleCount] = useState(9);
@@ -13,8 +20,11 @@ export default function SourceView({ articles, isScraping }) {
   const formatMatchScore = (value) => {
     const score = Number(value);
     if (!Number.isFinite(score)) return '';
-    return score.toFixed(2);
+    return formatNumber(score, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
+
+  // Known sentiments get a translated label; anything else shows as stored.
+  const sentimentLabel = (value) => t(`sourceView.sentiments.${String(value).toLowerCase()}`, { defaultValue: value });
 
   const filteredArticles = useMemo(() => {
     return articles.filter(article => {
@@ -43,21 +53,22 @@ export default function SourceView({ articles, isScraping }) {
           className="filter-select"
           value={filterSentiment}
           onChange={(e) => setFilterSentiment(e.target.value)}
+          aria-label={t('sourceView.sentimentAria')}
         >
-          <option value="All">All Sentiments</option>
-          <option value="Positive">Positive</option>
-          <option value="Negative">Negative</option>
-          <option value="Neutral">Neutral</option>
-          <option value="Mixed">Mixed</option>
+          <option value="All">{t('sourceView.allSentiments')}</option>
+          {SENTIMENT_OPTIONS.map((value) => (
+            <option key={value} value={value}>{sentimentLabel(value)}</option>
+          ))}
         </select>
 
         <select
           className="filter-select"
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
+          aria-label={t('sourceView.categoryAria')}
         >
           {categories.map(c => (
-            <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>
+            <option key={c} value={c}>{c === 'All' ? t('sourceView.allCategories') : c}</option>
           ))}
         </select>
       </div>
@@ -77,38 +88,38 @@ export default function SourceView({ articles, isScraping }) {
               <div className="article-header">
                 <div className="article-meta">
                   <span className={`badge ${article.sentiment?.toLowerCase() || 'neutral'}`}>
-                    {article.sentiment || 'Neutral'}
+                    {article.sentiment ? sentimentLabel(article.sentiment) : t('sourceView.sentiments.neutral')}
                   </span>
-                  <span className="badge category">
-                    {article.category || 'News'}
+                  <span className="badge category" dir={article.category ? 'auto' : undefined}>
+                    {article.category || t('sourceView.defaultCategory')}
                   </span>
                   {article.relevance_score > 0 && (
-                    <span className="badge score">Score: {article.relevance_score}/10</span>
+                    <span className="badge score">{t('sourceView.score', { score: formatNumber(article.relevance_score) })}</span>
                   )}
                   {article.project_similarity_score != null && (
-                    <span className="badge score">Project match: {formatMatchScore(article.project_similarity_score)}</span>
+                    <span className="badge score">{t('sourceView.projectMatch', { score: formatMatchScore(article.project_similarity_score) })}</span>
                   )}
                 </div>
               </div>
 
-              <h3 className="article-title">
+              <h3 className="article-title" dir="auto">
                 <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
                   {article.title} <ExternalLink size={14} style={{ opacity: 0.5 }} />
                 </a>
               </h3>
 
-              <p className="article-summary">{article.summary || (article.text ? article.text.substring(0, 120) + '...' : '')}</p>
+              <p className="article-summary" dir="auto">{article.summary || (article.text ? article.text.substring(0, 120) + '...' : '')}</p>
 
               {(article.brands?.length > 0 || article.car_models?.length > 0) && (
                 <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '5px' }}>
                   {article.brands?.slice(0, 2).map(b => (
                     <span key={b} style={{ fontSize: '0.75rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                      <Tag size={12} /> {b}
+                      <Tag size={12} /> <bdi>{b}</bdi>
                     </span>
                   ))}
                   {article.car_models?.slice(0, 2).map(m => (
                     <span key={m} style={{ fontSize: '0.75rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                      <CarFront size={12} /> {m}
+                      <CarFront size={12} /> <bdi>{m}</bdi>
                     </span>
                   ))}
                 </div>
@@ -116,9 +127,9 @@ export default function SourceView({ articles, isScraping }) {
 
               <div className="article-footer source-article-footer">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Calendar size={14} /> {new Date(article.published).toLocaleDateString()}
+                  <Calendar size={14} /> {formatDate(article.published)}
                 </span>
-                <span className="source-article-source">{article.source}</span>
+                <span className="source-article-source" dir="auto">{article.source}</span>
               </div>
             </motion.div>
           ))}
@@ -132,7 +143,7 @@ export default function SourceView({ articles, isScraping }) {
             onClick={() => setVisibleCount(prev => prev + 9)}
             style={{ padding: '12px 30px', fontSize: '1rem' }}
           >
-            Load More Articles
+            {t('sourceView.loadMore')}
           </button>
         </div>
       )}
@@ -142,8 +153,8 @@ export default function SourceView({ articles, isScraping }) {
           <div className="admin-empty-state-icon">
             <Search size={18} />
           </div>
-          <strong>No articles found</strong>
-          <span>Try a different sentiment or category filter.</span>
+          <strong>{t('sourceView.emptyTitle')}</strong>
+          <span>{t('sourceView.emptyMessage')}</span>
         </div>
       )}
     </div>

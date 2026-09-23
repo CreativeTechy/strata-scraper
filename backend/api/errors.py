@@ -23,10 +23,15 @@ class AppError(Exception):
 
     status_code = 500
 
-    def __init__(self, message: str, *, detail: str | None = None):
+    def __init__(self, message: str, *, detail: str | None = None,
+                 code: str | None = None, params: dict | None = None):
         super().__init__(message)
         self.message = message
         self.detail = detail
+        # Optional stable code for the dashboard to translate (see
+        # api/error_codes.py); inferred from `message` when omitted.
+        self.code = code
+        self.params = params
 
 
 class ValidationError(AppError):

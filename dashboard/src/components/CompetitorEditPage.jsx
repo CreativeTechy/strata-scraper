@@ -11,8 +11,9 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, Building2, Calendar, CheckCircle2, ChevronRight,
+  ArrowLeft, Building2, Calendar, CheckCircle2, ChevronLeft,
   Layers, Loader2, Save, Sparkles,
 } from 'lucide-react';
 import {
@@ -25,13 +26,17 @@ import ErrorNotice from './ErrorNotice';
 import { WeekdayPicker } from './ProjectsPage.jsx';
 import '../styles/Competitors.css';
 
+// Stable status codes sent to the API; labels come from competitors:studyStatus.*.
 const STUDY_STATUS_OPTIONS = ['draft', 'active', 'archived'];
 
 export default function CompetitorEditPage() {
+  const { t } = useTranslation('competitors');
   const { studyId } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  // Holds the caught Error itself (not just .message) so its API error code
+  // reaches ErrorNotice for translation; '' means no error.
   const [loadError, setLoadError] = useState('');
   const [study, setStudy] = useState(null);
 
@@ -93,7 +98,7 @@ export default function CompetitorEditPage() {
           end_date: loadedSchedule.end_date || '',
         });
       } catch (caught) {
-        if (!cancelled) setLoadError(caught.message);
+        if (!cancelled) setLoadError(caught);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -124,7 +129,7 @@ export default function CompetitorEditPage() {
       setProfileDraft((prev) => ({ ...prev, ...(profileResult.profile || {}) }));
       setSaved(true);
     } catch (caught) {
-      setSaveError(caught.message);
+      setSaveError(caught);
     } finally {
       setSaving(false);
     }
@@ -148,7 +153,7 @@ export default function CompetitorEditPage() {
       });
       setProfileDraft((prev) => ({ ...prev, ...(result.profile || {}) }));
     } catch (caught) {
-      setSaveError(caught.message);
+      setSaveError(caught);
     } finally {
       setContextBusy(false);
     }
@@ -168,9 +173,9 @@ export default function CompetitorEditPage() {
   if (loadError || !study) {
     return (
       <div className="cs-page">
-        <ErrorNotice error={loadError || 'Study not found.'} context="load this competitor study" />
+        <ErrorNotice error={loadError || t('studyNotFound')} context={t('errorContext.loadStudy')} />
         <Link to="/competitors" className="cs-btn" style={{ marginTop: 14 }}>
-          <ArrowLeft size={15} /> Back to studies
+          <ArrowLeft size={15} className="icon-flip-rtl" /> {t('backToStudies')}
         </Link>
       </div>
     );
@@ -181,50 +186,50 @@ export default function CompetitorEditPage() {
       <div className="cs-head">
         <div>
           <Link to={`/competitors/${studyId}`} className="cs-link-back">
-            <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /> {study.name}
+            <ChevronLeft size={14} className="icon-flip-rtl" /> <bdi>{study.name}</bdi>
           </Link>
-          <h1>Edit study</h1>
-          <p>Update the study, its business context, tracking schedule, and data window.</p>
+          <h1>{t('edit.title')}</h1>
+          <p>{t('edit.intro')}</p>
         </div>
         <div className="cs-head-actions">
           <button type="button" className="cs-btn cs-btn-ghost" onClick={() => navigate(`/competitors/${studyId}`)}>
-            Cancel
+            {t('common:actions.cancel')}
           </button>
           <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving || contextBusy}>
             {saving ? <span className="cs-spinner" /> : <Save size={15} />}
-            {saving ? 'Saving...' : 'Save changes'}
+            {saving ? t('common:actions.saving') : t('common:actions.saveChanges')}
           </button>
         </div>
       </div>
 
-      <ErrorNotice error={saveError} context="save this competitor study" onDismiss={() => setSaveError('')} />
+      <ErrorNotice error={saveError} context={t('errorContext.saveStudy')} onDismiss={() => setSaveError('')} />
       {saved && !saveError ? (
         <div className="cs-alert cs-alert-info">
           <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>Saved. Study details, business context, and schedule are up to date.</span>
+          <span>{t('edit.saved')}</span>
         </div>
       ) : null}
 
       {/* ---------------- Study ---------------- */}
       <div className="cs-panel" style={{ marginBottom: 20 }}>
-        <h2 className="cs-panel-title"><Layers size={16} /> Study</h2>
+        <h2 className="cs-panel-title"><Layers size={16} /> {t('edit.study.title')}</h2>
         <div className="cs-field">
-          <label className="cs-label" htmlFor="cs-study-name">Name</label>
-          <input id="cs-study-name" className="cs-input" value={studyDraft.name}
+          <label className="cs-label" htmlFor="cs-study-name">{t('edit.study.name')}</label>
+          <input id="cs-study-name" className="cs-input" dir="auto" value={studyDraft.name}
             onChange={(event) => setStudyDraft({ ...studyDraft, name: event.target.value })} />
         </div>
         <div className="cs-field">
-          <label className="cs-label" htmlFor="cs-study-description">Description</label>
-          <textarea id="cs-study-description" className="cs-textarea" style={{ minHeight: 80 }}
+          <label className="cs-label" htmlFor="cs-study-description">{t('edit.study.description')}</label>
+          <textarea id="cs-study-description" className="cs-textarea" dir="auto" style={{ minHeight: 80 }}
             value={studyDraft.description}
             onChange={(event) => setStudyDraft({ ...studyDraft, description: event.target.value })} />
         </div>
         <div className="cs-field">
-          <label className="cs-label" htmlFor="cs-study-status">Status</label>
+          <label className="cs-label" htmlFor="cs-study-status">{t('edit.study.status')}</label>
           <select id="cs-study-status" className="cs-input" style={{ maxWidth: 220 }} value={studyDraft.status}
             onChange={(event) => setStudyDraft({ ...studyDraft, status: event.target.value })}>
             {STUDY_STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>{status}</option>
+              <option key={status} value={status}>{t(`studyStatus.${status}`)}</option>
             ))}
           </select>
         </div>
@@ -234,10 +239,9 @@ export default function CompetitorEditPage() {
       <div className="cs-panel" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Building2 size={16} /> Business context</h2>
+            <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Building2 size={16} /> {t('edit.context.title')}</h2>
             <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-              This is the description competitors get matched against, and what every &ldquo;how does this
-              affect us&rdquo; judgement is measured by.
+              {t('edit.context.hint')}
             </p>
           </div>
           <button
@@ -247,7 +251,7 @@ export default function CompetitorEditPage() {
             disabled={!profileDraft?.website?.trim() || contextBusy || saving}
           >
             {contextBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-            {contextBusy ? 'Reading your site...' : 'Re-run analysis'}
+            {contextBusy ? t('edit.context.readingSite') : t('edit.context.rerun')}
           </button>
         </div>
 
@@ -261,65 +265,65 @@ export default function CompetitorEditPage() {
           <>
             <div className="cs-grid-2">
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-p-name">Business name</label>
-                <input id="cs-p-name" className="cs-input" value={profileDraft.name}
+                <label className="cs-label" htmlFor="cs-p-name">{t('edit.context.businessName')}</label>
+                <input id="cs-p-name" className="cs-input" dir="auto" value={profileDraft.name}
                   onChange={(event) => setProfileDraft({ ...profileDraft, name: event.target.value })} />
               </div>
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-p-website">Website</label>
-                <input id="cs-p-website" className="cs-input" value={profileDraft.website}
+                <label className="cs-label" htmlFor="cs-p-website">{t('edit.context.website')}</label>
+                <input id="cs-p-website" className="cs-input" dir="ltr" value={profileDraft.website}
                   onChange={(event) => setProfileDraft({ ...profileDraft, website: event.target.value })} />
               </div>
             </div>
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="cs-p-description">
-                Description<span className="cs-label-hint">optional</span>
+                {t('edit.context.description')}<span className="cs-label-hint">{t('optional')}</span>
               </label>
-              <textarea id="cs-p-description" className="cs-textarea" style={{ minHeight: 70 }}
+              <textarea id="cs-p-description" className="cs-textarea" dir="auto" style={{ minHeight: 70 }}
                 value={profileDraft.description}
                 onChange={(event) => setProfileDraft({ ...profileDraft, description: event.target.value })} />
             </div>
 
             <div className="cs-grid-2">
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-p-industry">Industry</label>
-                <input id="cs-p-industry" className="cs-input" value={profileDraft.industry}
+                <label className="cs-label" htmlFor="cs-p-industry">{t('edit.context.industry')}</label>
+                <input id="cs-p-industry" className="cs-input" dir="auto" value={profileDraft.industry}
                   onChange={(event) => setProfileDraft({ ...profileDraft, industry: event.target.value })} />
               </div>
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-p-market">Market you compete in</label>
-                <input id="cs-p-market" className="cs-input" value={profileDraft.market}
+                <label className="cs-label" htmlFor="cs-p-market">{t('edit.context.market')}</label>
+                <input id="cs-p-market" className="cs-input" dir="auto" value={profileDraft.market}
                   onChange={(event) => setProfileDraft({ ...profileDraft, market: event.target.value })} />
               </div>
             </div>
 
             <CountryPicker
-              label="Target countries"
-              hint="optional — leave blank to search globally"
+              label={t('edit.context.targetCountries')}
+              hint={t('edit.context.targetCountriesHint')}
               values={profileDraft.target_countries}
               onChange={(target_countries) => setProfileDraft({ ...profileDraft, target_countries })}
             />
 
             <div className="cs-field">
-              <label className="cs-label" htmlFor="cs-p-positioning">Positioning</label>
-              <input id="cs-p-positioning" className="cs-input" value={profileDraft.positioning}
+              <label className="cs-label" htmlFor="cs-p-positioning">{t('edit.context.positioning')}</label>
+              <input id="cs-p-positioning" className="cs-input" dir="auto" value={profileDraft.positioning}
                 onChange={(event) => setProfileDraft({ ...profileDraft, positioning: event.target.value })} />
             </div>
 
-            <ListEditor label="What you offer" values={profileDraft.offerings}
-              placeholder="demand forecasting"
+            <ListEditor label={t('edit.context.offerings')} values={profileDraft.offerings}
+              placeholder={t('edit.context.offeringsPlaceholder')}
               onChange={(offerings) => setProfileDraft({ ...profileDraft, offerings })} />
-            <ListEditor label="Who buys it" values={profileDraft.audience}
-              placeholder="operations directors"
+            <ListEditor label={t('edit.context.audience')} values={profileDraft.audience}
+              placeholder={t('edit.context.audiencePlaceholder')}
               onChange={(audience) => setProfileDraft({ ...profileDraft, audience })} />
-            <ListEditor label="What sets you apart" hint="used to judge competitor moves"
-              values={profileDraft.differentiators} placeholder="implementation in under 30 days"
+            <ListEditor label={t('edit.context.differentiators')} hint={t('edit.context.differentiatorsHint')}
+              values={profileDraft.differentiators} placeholder={t('edit.context.differentiatorsPlaceholder')}
               onChange={(differentiators) => setProfileDraft({ ...profileDraft, differentiators })} />
 
             <div className="cs-field">
-              <label className="cs-label" htmlFor="cs-p-context">Market context</label>
-              <textarea id="cs-p-context" className="cs-textarea" style={{ minHeight: 110 }}
+              <label className="cs-label" htmlFor="cs-p-context">{t('edit.context.marketContext')}</label>
+              <textarea id="cs-p-context" className="cs-textarea" dir="auto" style={{ minHeight: 110 }}
                 value={profileDraft.context_summary}
                 onChange={(event) => setProfileDraft({ ...profileDraft, context_summary: event.target.value })} />
             </div>
@@ -329,25 +333,27 @@ export default function CompetitorEditPage() {
 
       {/* ---------------- Tracking schedule ---------------- */}
       <div className="cs-panel" style={{ marginBottom: 20 }}>
-        <h2 className="cs-panel-title"><Calendar size={16} /> Tracking schedule</h2>
+        <h2 className="cs-panel-title"><Calendar size={16} /> {t('edit.schedule.title')}</h2>
         <p className="cs-panel-hint">
-          Automatically re-scrape this study&rsquo;s confirmed competitor channels on a recurring interval.
+          {t('edit.schedule.hint')}
         </p>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', marginBottom: 14 }}>
           <input type="checkbox" checked={scheduleDraft.repeat_enabled}
             onChange={(event) => setScheduleDraft({ ...scheduleDraft, repeat_enabled: event.target.checked })} />
-          Scrape automatically
+          {t('edit.schedule.enabled')}
         </label>
 
         {scheduleDraft.repeat_enabled ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '0.88rem', flexWrap: 'wrap' }}>
-              <span>Every</span>
+              <span>{t('edit.schedule.every')}</span>
               <input className="cs-input" type="number" min="1" style={{ width: 78 }}
+                aria-label={t('edit.schedule.intervalValue')}
                 value={scheduleDraft.repeat_interval_value}
                 onChange={(event) => setScheduleDraft({ ...scheduleDraft, repeat_interval_value: event.target.value })} />
               <select className="cs-input" style={{ width: 130 }} value={scheduleDraft.repeat_interval_unit}
+                aria-label={t('edit.schedule.intervalUnit')}
                 onChange={(event) => setScheduleDraft({ ...scheduleDraft, repeat_interval_unit: event.target.value })}>
                 {REPEAT_UNIT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -368,23 +374,25 @@ export default function CompetitorEditPage() {
 
       {/* ---------------- Data retrieval window ---------------- */}
       <div className="cs-panel" style={{ marginBottom: 20 }}>
-        <h2 className="cs-panel-title"><Calendar size={16} /> Data retrieval window</h2>
+        <h2 className="cs-panel-title"><Calendar size={16} /> {t('edit.window.title')}</h2>
         <p className="cs-panel-hint">
-          Scopes which article publish dates get pulled in. Leave blank to pull in articles from any date.
+          {t('edit.window.hint')}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
           <input
             className="cs-input"
             type="date"
             style={{ width: 160 }}
+            aria-label={t('edit.window.startDate')}
             value={scheduleDraft.start_date || ''}
             onChange={(event) => setScheduleDraft({ ...scheduleDraft, start_date: event.target.value })}
           />
-          <span style={{ color: 'var(--text-light)' }}>to</span>
+          <span style={{ color: 'var(--text-light)' }}>{t('dateRangeSeparator')}</span>
           <input
             className="cs-input"
             type="date"
             style={{ width: 160 }}
+            aria-label={t('edit.window.endDate')}
             value={scheduleDraft.end_date || ''}
             min={scheduleDraft.start_date || undefined}
             onChange={(event) => setScheduleDraft({ ...scheduleDraft, end_date: event.target.value })}
@@ -394,11 +402,11 @@ export default function CompetitorEditPage() {
 
       <div className="cs-wizard-foot">
         <button type="button" className="cs-btn cs-btn-ghost" onClick={() => navigate(`/competitors/${studyId}`)}>
-          Cancel
+          {t('common:actions.cancel')}
         </button>
         <button type="button" className="cs-btn cs-btn-primary" onClick={handleSave} disabled={saving || contextBusy}>
           {saving ? <Loader2 size={15} className="cs-spin" /> : <Save size={15} />}
-          {saving ? 'Saving...' : 'Save changes'}
+          {saving ? t('common:actions.saving') : t('common:actions.saveChanges')}
         </button>
       </div>
     </div>

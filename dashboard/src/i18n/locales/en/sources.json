@@ -1,0 +1,166 @@
+{
+  "types": {
+    "rss": "RSS",
+    "web": "Web",
+    "hashtag": "Hashtag",
+    "keyword": "Keyword",
+    "username": "X Account",
+    "tweet": "Single Post",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "twitter": "Twitter/X"
+  },
+  "kinds": {
+    "reddit": {
+      "subreddit": "Subreddit",
+      "user": "User / profile",
+      "search": "Keyword / search (all of Reddit)",
+      "subreddit_search": "Keyword within a subreddit"
+    },
+    "linkedin": {
+      "company": "Company page",
+      "profile": "Personal profile",
+      "search": "Keyword / hashtag search"
+    },
+    "threads": {
+      "profile": "Profile",
+      "search": "Keyword / search"
+    },
+    "facebook": {
+      "page": "Page",
+      "group": "Group",
+      "profile": "Personal profile",
+      "search": "Keyword / search"
+    },
+    "instagram": {
+      "profile": "Profile",
+      "hashtag": "Hashtag",
+      "search": "Keyword / search"
+    }
+  },
+  "kicker": "Source library",
+  "sourceStatus": {
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+  "reach": {
+    "limited": "Limited",
+    "global": "Global"
+  },
+  "form": {
+    "editTitle": "Edit Source",
+    "createTitle": "Create Source",
+    "saveButton": "Save Source",
+    "createButton": "Create Source",
+    "editSubtitle": "Update a tracked source and keep its project assignments in sync.",
+    "createSubtitle": "Add a new source, classify it, and assign it to the projects it should power.",
+    "mode": "Mode",
+    "modeEditing": "Editing",
+    "modeCreating": "Creating",
+    "projects": "Projects",
+    "chipEditing": "Updating existing source",
+    "chipCreating": "Create a new source",
+    "sourceType": "Source type",
+    "chooseSourceType": "Choose source type",
+    "twitterKind": "Twitter/X source kind",
+    "redditKind": "Reddit source kind",
+    "linkedinKind": "LinkedIn source kind",
+    "threadsKind": "Threads source kind",
+    "facebookKind": "Facebook source kind",
+    "instagramKind": "Instagram source kind",
+    "redditKindHelp": "Only used to interpret a bare word below (e.g. \"ev\" as a subreddit vs. a search term). Prefixed input (r/..., u/...) and full reddit.com URLs are unambiguous either way.",
+    "facebookKindHelp": "Only used to interpret a bare slug below (page vs. personal profile) - Facebook uses the same URL shape for both. Groups, search, and full profile.php/people/... URLs are unambiguous either way. Requires APIFY API TOKEN.",
+    "requiresApify": "Requires APIFY API TOKEN",
+    "sourceUrl": "Source URL",
+    "urlPlaceholders": {
+      "default": "Source URL",
+      "reddit": "r/subreddit, u/username, a search term, or a reddit.com URL",
+      "telegram": "@channelname, channelname, or https://t.me/channelname",
+      "linkedin": "Company/profile slug, a search phrase, or a linkedin.com URL",
+      "tweet": "Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)",
+      "threads": "Handle (without @), a search phrase, or a threads.com URL",
+      "facebook": "Page/group/profile slug, a search phrase, or a facebook.com URL",
+      "instagram": "Handle (without @), a hashtag, a search phrase, or an instagram.com URL",
+      "redditSubredditSearch": "Subreddit and keyword (e.g. lebanon protest)"
+    },
+    "displayName": "Display name",
+    "optional": " (optional)",
+    "termPlaceholders": {
+      "default": "Display name",
+      "hashtag": "Hashtag, without # (e.g. EVSummit)",
+      "username": "X account, without @ (e.g. elonmusk)",
+      "keyword": "Keyword or phrase (e.g. electric vehicles)"
+    },
+    "statusTitle": "Source status",
+    "statusHelp": "Disable this source to keep it in the library without using it in pipelines.",
+    "reachTitle": "Source reach",
+    "reachHelp": "Limited sources stay out of the assignable list on project create/edit pages unless already attached to that project.",
+    "assignKicker": "Assign projects",
+    "assignTitle": "Choose the projects this source should power",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "filterProjects": "Filter projects by name",
+    "noProjectsTitle": "No projects yet",
+    "noProjectsHint": "Create a project first, then come back to assign this source.",
+    "noMatchingProjectsTitle": "No matching projects",
+    "noMatchingProjectsHint": "Try a different search term in this assignment box.",
+    "discardTitle": "Discard changes?",
+    "discardMessage": "You have unsaved changes on this source. If you cancel now, all edits on this page will be lost.",
+    "discardConfirm": "Discard changes",
+    "keepEditing": "Keep editing",
+    "saveFailed": "Failed to save source.",
+    "redditSubredditSearchHelp": "Enter the subreddit and the keyword below, e.g. \"lebanon protest\" or \"r/lebanon protest\"."
+  },
+  "list": {
+    "title": "Source Manager",
+    "subtitle": "Curate the source pool, assign sources to one or more projects, and keep enabled sources easy to scan.",
+    "dataSource": "Source",
+    "search": "Search",
+    "matches_one": "{{formatted}} match",
+    "matches_other": "{{formatted}} matches",
+    "addSource": "Add Source",
+    "stats": {
+      "total": "Total sources",
+      "enabled": "Enabled",
+      "assigned": "Assigned",
+      "rss": "RSS sources"
+    },
+    "filterByType": "Filter sources by type",
+    "searchPlaceholder": "Search sources, URLs, or project names",
+    "statusFilter": {
+      "all": "All sources",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "assigned": "Assigned",
+      "unassigned": "Unassigned"
+    },
+    "reachFilter": {
+      "all": "Global & limited",
+      "global": "Global",
+      "limited": "Limited"
+    },
+    "trackedSources": "Tracked Sources",
+    "visibleCount_one": "{{formatted}} visible",
+    "visibleCount_other": "{{formatted}} visible",
+    "emptyTitle": "No sources yet",
+    "emptyHint": "Add your first source, then attach it to one or more projects.",
+    "projectCount_one": "{{count}} project",
+    "projectCount_other": "{{count}} projects",
+    "unassigned": "Unassigned",
+    "noMatchesTitle": "No matching sources",
+    "noMatchesHint": "Try a different search term or status filter.",
+    "deleteTitle": "Delete source \"{{name}}\"?",
+    "deleteMessage": "This will permanently remove the source and detach it from any linked projects.",
+    "deleteConfirm": "Delete source",
+    "keepSource": "Keep source",
+    "deleteFailed": "Failed to delete source."
+  },
+  "errorContext": {
+    "save": "save this source",
+    "manage": "manage sources"
+  }
+}

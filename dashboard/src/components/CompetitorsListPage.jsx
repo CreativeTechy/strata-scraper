@@ -8,8 +8,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, Check, ChevronRight, Download, Link2, Plus, Radar,
+  ArrowLeft, Check, ChevronLeft, Download, Link2, Plus, Radar,
   Search, Sparkles, Trash2,
 } from 'lucide-react';
 import {
@@ -19,6 +20,8 @@ import {
   pollDiscoveryRun, setCompetitorStatus, updateCompetitor, validateAccount,
 } from '../competitorApi.js';
 import { countryLabel } from '../constants/countries.js';
+import { apiError } from '../errors/apiError.js';
+import { formatList, formatNumber, formatPercent } from '../i18n/format.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
@@ -29,6 +32,7 @@ import '../styles/Competitors.css';
 const PAGE_SIZE = 10;
 
 export default function CompetitorsListPage() {
+  const { t } = useTranslation('competitors');
   const { studyId } = useParams();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('competitors.manage');
@@ -36,6 +40,8 @@ export default function CompetitorsListPage() {
   const [study, setStudy] = useState(null);
   const [competitors, setCompetitors] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Holds the caught Error itself (not just .message) so its API error code
+  // reaches ErrorNotice for translation; '' means no error.
   const [loadError, setLoadError] = useState('');
 
   const [search, setSearch] = useState('');
@@ -73,7 +79,7 @@ export default function CompetitorsListPage() {
         setStudy(studyDetail.study);
         setCompetitors(competitorList.competitors || []);
       } catch (caught) {
-        if (!cancelled) setLoadError(caught.message);
+        if (!cancelled) setLoadError(caught);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -88,7 +94,7 @@ export default function CompetitorsListPage() {
       const result = await listCompetitors(studyId);
       setCompetitors(result.competitors || []);
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     }
   };
 
@@ -97,7 +103,7 @@ export default function CompetitorsListPage() {
       await updateCompetitor(competitorId, { aliases });
       await refreshCompetitors();
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     }
   };
 
@@ -114,7 +120,7 @@ export default function CompetitorsListPage() {
       }
       await refreshCompetitors();
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setTrackingBusy((current) => ({ ...current, [competitor.id]: false }));
     }
@@ -132,7 +138,7 @@ export default function CompetitorsListPage() {
       const result = await listAccounts(competitorId);
       setAccountsByCompetitor((current) => ({ ...current, [competitorId]: result.accounts || [] }));
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     }
   };
 
@@ -147,7 +153,7 @@ export default function CompetitorsListPage() {
       }));
       await refreshCompetitors();
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     }
   };
 
@@ -158,7 +164,7 @@ export default function CompetitorsListPage() {
       setAccountsByCompetitor((current) => ({ ...current, [competitorId]: result.accounts || [] }));
       await refreshCompetitors();
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setChannelBusy((current) => ({ ...current, [competitorId]: false }));
     }
@@ -174,7 +180,7 @@ export default function CompetitorsListPage() {
       }));
       await refreshCompetitors();
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setChannelBusy((current) => ({ ...current, [competitorId]: false }));
     }
@@ -188,7 +194,7 @@ export default function CompetitorsListPage() {
       await refreshCompetitors();
       setShowAddCompetitor(false);
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setAddingManual(false);
     }
@@ -202,7 +208,7 @@ export default function CompetitorsListPage() {
       await refreshCompetitors();
       setDeleteTarget(null);
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setDeletingCompetitor(false);
     }
@@ -221,14 +227,17 @@ export default function CompetitorsListPage() {
       const res = await fetch(`/api/competitors/export?project_id=${encodeURIComponent(studyId)}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.detail || data?.error || `Failed to export competitors (${res.status})`);
+        const failure = apiError(data, { status: res.status, fallback: t('list.exportFailed', { status: res.status }) });
+        // Kept: this page has always preferred `detail` over `error` as the message.
+        if (data?.detail) failure.message = data.detail;
+        throw failure;
       }
       const blob = await res.blob();
       const text = await blob.text();
       const count = text.split('\n').filter((line) => line.trim()).length;
       setCompetitorsExportPreview({ blob, count });
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setExportingCompetitors(false);
     }
@@ -257,12 +266,12 @@ export default function CompetitorsListPage() {
       const queued = await discoverCompetitors(studyId, { limit: 12, with_accounts: false });
       const run = await pollDiscoveryRun(studyId, queued.run_id, (r) => setDiscoveryLogs(r.logs || []));
       if (run.status === 'failed') {
-        throw new Error(run.error || run.message || 'Competitor discovery failed.');
+        throw new Error(run.error || run.message || t('list.discoveryFailed'));
       }
       await refreshCompetitors();
       setDiscoveryNotice({ discovered: run.discovered || 0, rejected: run.rejected || [] });
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setDiscoveringCompetitors(false);
     }
@@ -277,7 +286,7 @@ export default function CompetitorsListPage() {
       if (queued.run_id) {
         const run = await pollDiscoveryRun(studyId, queued.run_id, (r) => setDiscoveryLogs(r.logs || []));
         if (run.status === 'failed') {
-          throw new Error(run.error || run.message || 'Channel discovery failed.');
+          throw new Error(run.error || run.message || t('list.channelDiscoveryFailed'));
         }
         // Cached per-competitor account lists are now stale for whichever
         // competitors just got new channels - drop the cache so re-expanding
@@ -286,7 +295,7 @@ export default function CompetitorsListPage() {
         await refreshCompetitors();
       }
     } catch (caught) {
-      setActionError(caught.message);
+      setActionError(caught);
     } finally {
       setDiscoveringChannels(false);
     }
@@ -340,9 +349,9 @@ export default function CompetitorsListPage() {
   if (loadError || !study) {
     return (
       <div className="cs-page">
-        <ErrorNotice error={loadError || 'Study not found.'} context="load this competitor study" />
+        <ErrorNotice error={loadError || t('studyNotFound')} context={t('errorContext.loadStudy')} />
         <Link to="/competitors" className="cs-btn" style={{ marginTop: 14 }}>
-          <ArrowLeft size={15} /> Back to studies
+          <ArrowLeft size={15} className="icon-flip-rtl" /> {t('backToStudies')}
         </Link>
       </div>
     );
@@ -353,23 +362,25 @@ export default function CompetitorsListPage() {
       <div className="cs-head">
         <div>
           <Link to={`/competitors/${studyId}`} className="cs-link-back">
-            <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /> {study.name}
+            <ChevronLeft size={14} className="icon-flip-rtl" /> <bdi>{study.name}</bdi>
           </Link>
-          <h1>Competitors</h1>
+          <h1>{t('list.title')}</h1>
           <p>
-            {competitors.length} competitor{competitors.length === 1 ? '' : 's'}, {stats.tracked} tracked.
-            Only tracked competitors are scraped, and only their confirmed channels are collected.
+            {t('list.summary', { count: competitors.length, tracked: formatNumber(stats.tracked) })}{' '}
+            {t('list.summaryHint')}
           </p>
         </div>
         <div className="cs-head-actions">
           <button type="button" className="cs-btn" onClick={runDiscovery} disabled={discoveringCompetitors}>
             {discoveringCompetitors ? <span className="cs-spinner" /> : <Radar size={15} />}
-            {discoveringCompetitors ? 'Discovering...' : 'Discover with AI'}
+            {discoveringCompetitors ? t('list.discovering') : t('list.discover')}
           </button>
           {stats.channellessTracked > 0 && (
             <button type="button" className="cs-btn" onClick={runChannelDiscovery} disabled={discoveringChannels}>
               {discoveringChannels ? <span className="cs-spinner" /> : <Search size={15} />}
-              {discoveringChannels ? 'Finding channels...' : `Find channels (${stats.channellessTracked})`}
+              {discoveringChannels
+                ? t('list.findingChannels')
+                : t('list.findChannelsCount', { formatted: formatNumber(stats.channellessTracked) })}
             </button>
           )}
           <button
@@ -377,10 +388,10 @@ export default function CompetitorsListPage() {
             className="cs-btn"
             onClick={prepareCompetitorsExport}
             disabled={exportingCompetitors}
-            title="Export this study's tracked competitors as JSONL, alongside its articles."
+            title={t('list.exportTitle')}
           >
             {exportingCompetitors ? <span className="cs-spinner" /> : <Download size={15} />}
-            {exportingCompetitors ? 'Preparing...' : 'Export competitors'}
+            {exportingCompetitors ? t('list.preparing') : t('list.exportCompetitors')}
           </button>
         </div>
       </div>
@@ -389,15 +400,15 @@ export default function CompetitorsListPage() {
         <DiscoveryLog logs={discoveryLogs} active={discoveringCompetitors || discoveringChannels} />
       ) : null}
 
-      <ErrorNotice error={actionError} context="update competitors" onDismiss={() => setActionError('')} />
+      <ErrorNotice error={actionError} context={t('errorContext.updateCompetitors')} onDismiss={() => setActionError('')} />
 
       {discoveryNotice ? (
         <div className="cs-alert cs-alert-info">
           <Sparkles size={16} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            Discovered {discoveryNotice.discovered} competitor{discoveryNotice.discovered === 1 ? '' : 's'}.
+            {t('list.discovered', { count: discoveryNotice.discovered })}
             {discoveryNotice.rejected.length
-              ? ` ${discoveryNotice.rejected.length} suggestion${discoveryNotice.rejected.length === 1 ? '' : 's'} dropped during checking.`
+              ? ` ${t('list.dropped', { count: discoveryNotice.rejected.length })}`
               : ''}
           </span>
         </div>
@@ -409,9 +420,10 @@ export default function CompetitorsListPage() {
             <Search size={16} />
             <input
               type="text"
+              dir="auto"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, website, or alias..."
+              placeholder={t('list.searchPlaceholder')}
             />
           </label>
         </div>
@@ -422,7 +434,7 @@ export default function CompetitorsListPage() {
               <AddCompetitorForm onSubmit={handleAddManualCompetitor} busy={addingManual} />
             ) : (
               <button type="button" className="cs-btn cs-btn-sm" onClick={() => setShowAddCompetitor(true)}>
-                <Plus size={13} /> Add competitor manually
+                <Plus size={13} /> {t('list.addManually')}
               </button>
             )}
           </div>
@@ -431,14 +443,14 @@ export default function CompetitorsListPage() {
         {!competitors.length ? (
           <div className="cs-empty">
             <div className="cs-empty-icon"><Search size={20} /></div>
-            <h3>No competitors yet</h3>
-            <p>Add one above, or discover some with AI.</p>
+            <h3>{t('list.emptyTitle')}</h3>
+            <p>{t('list.emptyHint')}</p>
           </div>
         ) : !filteredCompetitors.length ? (
           <div className="cs-empty">
             <div className="cs-empty-icon"><Search size={20} /></div>
-            <h3>No matching competitors</h3>
-            <p>Try a different search term.</p>
+            <h3>{t('list.noMatchesTitle')}</h3>
+            <p>{t('list.noMatchesHint')}</p>
           </div>
         ) : (
           <>
@@ -449,45 +461,56 @@ export default function CompetitorsListPage() {
                 return (
                   <div key={competitor.id}>
                     <div className="cs-row">
-                      <span className="cs-row-rank">{competitor.size_rank ?? '-'}</span>
+                      <span className="cs-row-rank">{competitor.size_rank != null ? formatNumber(competitor.size_rank) : t('list.noRank')}</span>
                       <div className="cs-avatar" style={{ background: avatarGradient(competitor.name), width: 30, height: 30, fontSize: '0.72rem' }} aria-hidden="true">
                         {initials(competitor.name)}
                       </div>
                       <div className="cs-row-main">
-                        <div className="cs-row-name">{competitor.name}</div>
+                        <div className="cs-row-name" dir="auto">{competitor.name}</div>
                         <div className="cs-row-desc">
-                          {competitor.valid_account_count}/{competitor.account_count} channels confirmed
-                          {competitor.pending_account_count ? ` · ${competitor.pending_account_count} pending` : ''}
-                          {competitor.finding_count ? ` · ${competitor.finding_count} report(s)` : ''}
+                          {[
+                            t('list.channelsConfirmed', {
+                              valid: formatNumber(competitor.valid_account_count || 0),
+                              total: formatNumber(competitor.account_count || 0),
+                            }),
+                            competitor.pending_account_count
+                              ? t('list.pendingCount', { count: competitor.pending_account_count })
+                              : null,
+                            competitor.finding_count
+                              ? t('list.reportCount', { count: competitor.finding_count })
+                              : null,
+                          ].filter(Boolean).join(' · ')}
                         </div>
                       </div>
                       <div className="cs-row-side">
                         {competitor.country ? (
-                          <span className="cs-pill cs-pill-signal" title="Where this company is headquartered">
-                            Based in {countryLabel(competitor.country)}
+                          <span className="cs-pill cs-pill-signal" title={t('list.headquarteredTitle')}>
+                            {t('list.basedIn', { country: countryLabel(competitor.country) })}
                           </span>
                         ) : null}
                         {Array.isArray(competitor.operates_in_countries) && competitor.operates_in_countries.length ? (
                           <span
                             className="cs-pill cs-pill-signal"
-                            title="Where this competitor actually competes with your business"
+                            title={t('list.competesInTitle')}
                           >
-                            Competes in {competitor.operates_in_countries.map(countryLabel).join(', ')}
+                            {t('list.competesIn', { countries: formatList(competitor.operates_in_countries.map(countryLabel)) })}
                           </span>
                         ) : null}
                         <span className={`cs-pill cs-pill-${competitor.size_tier}`}>
-                          {SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier}
+                          {t(`sizeTiers.${competitor.size_tier}`, {
+                            defaultValue: SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier,
+                          })}
                         </span>
                         {competitor.status === 'tracked' && unverified[competitor.id] ? (
                           <span
                             className="cs-pill cs-pill-signal"
-                            title="Tracked, but a live web check couldn't confirm this company exists — worth a manual look."
+                            title={t('list.unverifiedTitle')}
                           >
-                            Couldn’t verify
+                            {t('list.unverified')}
                           </span>
                         ) : null}
                         <button type="button" className="cs-btn cs-btn-sm" onClick={() => toggleChannels(competitor.id)}>
-                          <Link2 size={13} /> {channelsOpen ? 'Hide channels' : 'Channels'}
+                          <Link2 size={13} /> {channelsOpen ? t('list.hideChannels') : t('list.channels')}
                         </button>
                         {canManage ? (
                           <>
@@ -500,16 +523,16 @@ export default function CompetitorsListPage() {
                               {trackingBusy[competitor.id] ? (
                                 <span className="cs-spinner" />
                               ) : competitor.status === 'tracked' ? (
-                                <><Check size={13} /> Tracking</>
+                                <><Check size={13} /> {t('list.tracking')}</>
                               ) : (
-                                'Track'
+                                t('list.track')
                               )}
                             </button>
                             <button
                               type="button"
                               className="cs-btn cs-btn-sm cs-btn-danger"
                               onClick={() => setDeleteTarget(competitor)}
-                              aria-label={`Delete ${competitor.name}`}
+                              aria-label={t('list.deleteCompetitor', { name: competitor.name })}
                             >
                               <Trash2 size={13} />
                             </button>
@@ -519,7 +542,7 @@ export default function CompetitorsListPage() {
                     </div>
 
                     {channelsOpen ? (
-                      <div className="cs-rows" style={{ marginLeft: 30, marginBottom: 14 }}>
+                      <div className="cs-rows" style={{ marginInlineStart: 30, marginBottom: 14 }}>
                         {canManage ? (
                           <AliasEditor
                             key={(competitor.aliases || []).join('|')}
@@ -528,14 +551,14 @@ export default function CompetitorsListPage() {
                           />
                         ) : null}
                         {!accounts ? (
-                          <div className="cs-row-desc" style={{ padding: '8px 0' }}>Loading channels...</div>
+                          <div className="cs-row-desc" style={{ padding: '8px 0' }}>{t('list.loadingChannels')}</div>
                         ) : !accounts.length ? (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-                            <span className="cs-row-desc">No channels found yet.</span>
+                            <span className="cs-row-desc">{t('list.noChannels')}</span>
                             {canManage ? (
                               <button type="button" className="cs-btn cs-btn-sm"
                                 onClick={() => findChannelsForOne(competitor.id)} disabled={channelBusy[competitor.id]}>
-                                {channelBusy[competitor.id] ? <span className="cs-spinner" /> : <Search size={13} />} Find channels
+                                {channelBusy[competitor.id] ? <span className="cs-spinner" /> : <Search size={13} />} {t('list.findChannels')}
                               </button>
                             ) : null}
                           </div>
@@ -545,24 +568,31 @@ export default function CompetitorsListPage() {
                             <div key={account.id} className="cs-row">
                               <div className="cs-row-main">
                                 <div className="cs-row-name">
-                                  {PLATFORM_LABELS[account.platform] || account.platform}
-                                  {account.handle ? <span style={{ fontWeight: 400, color: 'var(--text-light)' }}> @{account.handle}</span> : null}
+                                  {t(`platforms.${account.platform}`, {
+                                    defaultValue: PLATFORM_LABELS[account.platform] || account.platform,
+                                  })}
+                                  {account.handle ? (
+                                    <>
+                                      {' '}
+                                      <span className="ltr-isolate" style={{ fontWeight: 400, color: 'var(--text-light)' }}>@{account.handle}</span>
+                                    </>
+                                  ) : null}
                                 </div>
-                                <div className="cs-row-desc">{account.url}</div>
+                                <div className="cs-row-desc"><span className="ltr-isolate">{account.url}</span></div>
                               </div>
                               <div className="cs-row-side">
                                 {account.confidence != null ? (
                                   <span className="cs-pill cs-pill-signal">
-                                    {Math.round(Number(account.confidence) * 100)}% sure
+                                    {t('list.sure', { percent: formatPercent(Number(account.confidence)) })}
                                   </span>
                                 ) : null}
                                 <span className={`cs-pill cs-pill-${account.validation_status}`}>
-                                  {account.validation_status}
+                                  {t(`accountStatus.${account.validation_status}`, { defaultValue: account.validation_status })}
                                 </span>
                                 {canManage && account.validation_status !== 'rejected' ? (
                                   <button type="button" className="cs-btn cs-btn-sm cs-btn-danger"
                                     onClick={() => decideAccount(competitor.id, account.id, 'rejected')}>
-                                    <Trash2 size={13} /> Not theirs
+                                    <Trash2 size={13} /> {t('list.notTheirs')}
                                   </button>
                                 ) : null}
                               </div>
@@ -584,7 +614,11 @@ export default function CompetitorsListPage() {
 
             <div className="cs-pagination">
               <div className="cs-pagination-info">
-                Showing {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filteredCompetitors.length)} of {filteredCompetitors.length}
+                {t('common:pagination.showing', {
+                  from: formatNumber((safePage - 1) * PAGE_SIZE + 1),
+                  to: formatNumber(Math.min(safePage * PAGE_SIZE, filteredCompetitors.length)),
+                  total: formatNumber(filteredCompetitors.length),
+                })}
               </div>
               <div className="cs-pagination-controls">
                 <button
@@ -593,16 +627,18 @@ export default function CompetitorsListPage() {
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
                   disabled={safePage <= 1}
                 >
-                  Previous
+                  {t('common:actions.previous')}
                 </button>
-                <span className="cs-pill cs-pill-signal">Page {safePage} of {totalPages}</span>
+                <span className="cs-pill cs-pill-signal">
+                  {t('common:pagination.page', { page: formatNumber(safePage), total: formatNumber(totalPages) })}
+                </span>
                 <button
                   type="button"
                   className="cs-btn cs-btn-sm"
                   onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
                   disabled={safePage >= totalPages}
                 >
-                  Next
+                  {t('common:actions.next')}
                 </button>
               </div>
             </div>
@@ -612,10 +648,10 @@ export default function CompetitorsListPage() {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title={`Remove "${deleteTarget?.name || ''}" from this study?`}
-        message="This permanently removes the competitor and its channels. Any past findings about it are kept."
-        confirmLabel={deletingCompetitor ? 'Removing...' : 'Remove competitor'}
-        cancelLabel="Keep competitor"
+        title={t('list.removeConfirm.title', { name: deleteTarget?.name || '' })}
+        message={t('list.removeConfirm.message')}
+        confirmLabel={deletingCompetitor ? t('list.removeConfirm.confirming') : t('list.removeConfirm.confirm')}
+        cancelLabel={t('list.removeConfirm.cancel')}
         confirmButtonStyle={{
           background: 'linear-gradient(135deg, #ff4757, #e03131)',
           boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',
@@ -626,16 +662,16 @@ export default function CompetitorsListPage() {
 
       <ConfirmModal
         open={Boolean(competitorsExportPreview)}
-        title="Export competitors?"
+        title={t('list.exportConfirm.title')}
         message={
           competitorsExportPreview
-            ? `This will download ${competitorsExportPreview.count} tracked competitor${
-                competitorsExportPreview.count === 1 ? '' : 's'
-              } for "${study?.name || 'this study'}" as JSONL.`
+            ? study?.name
+              ? t('list.exportConfirm.message', { count: competitorsExportPreview.count, name: study.name })
+              : t('list.exportConfirm.messageUnnamed', { count: competitorsExportPreview.count })
             : ''
         }
-        confirmLabel="Export"
-        cancelLabel="Cancel"
+        confirmLabel={t('common:actions.export')}
+        cancelLabel={t('common:actions.cancel')}
         onClose={() => setCompetitorsExportPreview(null)}
         onConfirm={confirmCompetitorsExport}
       />

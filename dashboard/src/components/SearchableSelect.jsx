@@ -1,16 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 // Single-select combobox: type to filter, click/enter to choose. Always keeps
 // an "All ..." option pinned at the top so callers can offer an aggregate view
 // alongside a searchable list (sources, keywords, etc.) without a separate control.
-export default function SearchableSelect({ label, icon, value, options, onChange, allLabel = 'All', placeholder = 'Search…', disabled = false }) {
+export default function SearchableSelect({ label, icon, value, options, onChange, allLabel, placeholder, disabled = false }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef(null);
   const inputId = useId();
 
-  const allOption = { value: 'all', label: allLabel };
+  const allOption = { value: 'all', label: allLabel ?? t('status.all') };
   const allOptions = [allOption, ...options];
   const selected = allOptions.find((option) => String(option.value) === String(value)) || allOption;
 
@@ -55,7 +57,7 @@ export default function SearchableSelect({ label, icon, value, options, onChange
           autoComplete="off"
           disabled={disabled}
           value={open ? query : selected.label}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('search.placeholder')}
           onFocus={() => setOpen(true)}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -77,12 +79,12 @@ export default function SearchableSelect({ label, icon, value, options, onChange
             filtered.map((option) => (
               <li key={option.value} role="option" aria-selected={String(option.value) === String(value)}>
                 <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)}>
-                  {option.label}
+                  <bdi>{option.label}</bdi>
                 </button>
               </li>
             ))
           ) : (
-            <li className="searchable-select-empty">No matches</li>
+            <li className="searchable-select-empty">{t('search.noMatches')}</li>
           )}
         </ul>
       )}

@@ -24,9 +24,13 @@ import {
   ChevronUp,
   Square,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import '../styles/Workflow.css';
 import ErrorNotice from './ErrorNotice';
 import { friendlyRunMessage } from '../errors/userFacingError.js';
+import { apiError } from '../errors/apiError.js';
+import { formatDateTime, formatNumber, isRtl } from '../i18n/format.js';
+import i18n from '../i18n/index.js';
 
 const SourceTypeIcon = ({ sourceType }) => {
   if (sourceType === 'x' || sourceType === 'username' || sourceType === 'hashtag' || sourceType === 'tweet') return <AtSign size={16} />;
@@ -34,11 +38,19 @@ const SourceTypeIcon = ({ sourceType }) => {
   return <Globe size={16} />;
 };
 
+// Stage/status codes come from the backend (pipeline_runs.stage/status) and
+// stay as-is for comparisons; only their display label is translated.
 function prettyStage(stage) {
-  if (!stage) return 'queued';
-  if (stage === 'done') return 'completed';
-  return stage;
+  const code = stage || 'queued';
+  return i18n.t(`pipeline:stages.${code}`, { defaultValue: code });
 }
+
+function statusLabel(status) {
+  if (!status) return i18n.t('common:status.queued');
+  return i18n.t(`common:status.${status}`, { defaultValue: status });
+}
+
+const CLEANUP_STEP_KEYS = ['parsing', 'validatingJson', 'extractingInsights'];
 
 function statusTone(status) {
   if (status === 'success') return 'success';
@@ -59,6 +71,7 @@ export default function WorkflowPage({
   activeRun = null,
   onStopRun = () => {},
 }) {
+  const { t } = useTranslation('pipeline');
   const { hasPermission } = useAuth();
   const canRunScraper = hasPermission('pipeline.run');
   const canStopScraper = hasPermission('pipeline.stop');
@@ -145,12 +158,12 @@ export default function WorkflowPage({
       try {
         const res = await fetch('/api/pipeline-runs?limit=6');
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || `Failed to load pipeline runs (${res.status})`);
+        if (!res.ok) throw apiError(data, { status: res.status, fallback: i18n.t('pipeline:errors.loadRunsFailed') });
         if (alive) setRuns(Array.isArray(data?.runs) ? data.runs : []);
       } catch (error) {
         if (alive) {
           setRuns([]);
-          setRunsError(error?.message || 'Failed to load pipeline runs.');
+          setRunsError(error?.message ? error : i18n.t('pipeline:errors.loadRunsFailed'));
         }
       } finally {
         if (alive) setRunsLoading(false);
@@ -168,9 +181,9 @@ export default function WorkflowPage({
   const workflowState = isScraping ? 'cleaning' : (hasData ? 'ready' : 'idle');
   const selectedProjectCount = selectedProjectIds.length;
   const projectLabel = useMemo(() => {
-    if (selectedProjects.length === 0) return projects.length ? 'select a project' : 'no projects available';
-    return selectedProjects[0].name || '1 project';
-  }, [projects.length, selectedProjects]);
+    if (selectedProjects.length === 0) return projects.length ? t('stopwatch.scopeSelect') : t('stopwatch.scopeNone');
+    return selectedProjects[0].name || t('stopwatch.scopeOne');
+  }, [projects.length, selectedProjects, t]);
 
   const stats = useMemo(() => {
     const total = articles.length;
@@ -205,12 +218,8 @@ export default function WorkflowPage({
   }), [currentRun]);
 
   const formatWhen = (value) => {
-    if (!value) return 'just now';
-    try {
-      return new Date(value).toLocaleString();
-    } catch {
-      return String(value);
-    }
+    if (!value) return t('common:time.justNow');
+    return formatDateTime(value, undefined, String(value));
   };
 
   const formatElapsed = (seconds) => {
@@ -230,24 +239,35 @@ export default function WorkflowPage({
     const cleaned = Math.max(0, Number(currentRun?.articles_cleaned) || 0);
     const saved = Math.max(0, Number(currentRun?.articles_saved) || 0);
     if (!currentRun) return '';
+    // currentRun.message is English free text from the backend, so the
+    // fallbacks go through friendlyRunMessage (translated) instead.
     if ((currentRun.status || '').toLowerCase() !== 'running') {
       if ((currentRun.stage || '').toLowerCase() === 'done') {
-        return scraped > 0 ? `Kept ${Math.min(cleaned || scraped, scraped)}/${scraped} articles` : 'Pipeline complete';
+        return scraped > 0
+          ? t('cleanup.kept', { count: scraped, kept: formatNumber(Math.min(cleaned || scraped, scraped)), total: formatNumber(scraped) })
+          : t('cleanup.complete');
       }
-      return currentRun.message || '';
+      return currentRun.message ? friendlyRunMessage(currentRun) : '';
     }
     if ((currentRun.stage || '').toLowerCase() === 'clean') {
-      if (scraped > 0) return `Validating articles ${Math.min(Math.max(cleaned, 0), scraped)}/${scraped}`;
-      return currentRun.message || 'Validating articles...';
+      if (scraped > 0) {
+        return t('cleanup.validatingProgress', { done: formatNumber(Math.min(Math.max(cleaned, 0), scraped)), total: formatNumber(scraped) });
+      }
+      return t('cleanup.validating');
     }
     if ((currentRun.stage || '').toLowerCase() === 'scrape') {
-      return scraped > 0 ? `Scraping sources ${Math.max(1, currentRun.crawl_pages || 0)} pages / ${scraped} articles` : 'Scraping sources...';
+      if (scraped <= 0) return t('cleanup.scraping');
+      const pages = Math.max(1, currentRun.crawl_pages || 0);
+      return t('cleanup.scrapingProgress', {
+        pages: t('cleanup.pages', { count: pages, formatted: formatNumber(pages) }),
+        articles: t('cleanup.articles', { count: scraped, formatted: formatNumber(scraped) }),
+      });
     }
     if ((currentRun.stage || '').toLowerCase() === 'done') {
-      return saved > 0 ? `Saved ${saved} articles` : 'Pipeline complete';
+      return saved > 0 ? t('cleanup.saved', { count: saved, formatted: formatNumber(saved) }) : t('cleanup.complete');
     }
-    return currentRun.message || '';
-  }, [currentRun]);
+    return currentRun.message ? friendlyRunMessage(currentRun) : '';
+  }, [currentRun, t]);
 
   const selectProject = (projectId) => {
     const id = Number(projectId);
@@ -256,10 +276,11 @@ export default function WorkflowPage({
   };
 
   const runLabel = selectedProjectCount === 0
-    ? 'Select a Project to Run'
+    ? t('getData.runSelectProject')
     : checkedSourceIds.size === 0
-      ? 'Select at Least One Source'
-      : 'Run Extractor for Project';
+      ? t('getData.runSelectSource')
+      : t('getData.run');
+  const slideFrom = isRtl() ? 20 : -20;
 
   return (
     <div className="workflow-layout">
@@ -274,26 +295,26 @@ export default function WorkflowPage({
         >
           <div className="panel-header" style={{ marginBottom: 0 }}>
             <div>
-              <div className="panel-kicker"><Clock3 size={14} /> Live stopwatch</div>
-              <h2>Workflow elapsed time</h2>
+              <div className="panel-kicker"><Clock3 size={14} /> {t('stopwatch.kicker')}</div>
+              <h2>{t('stopwatch.title')}</h2>
               <div style={{ color: 'var(--text-light)', fontSize: '0.85rem', marginTop: 6 }}>
-                Running scope: {projectLabel}
+                {t('stopwatch.scope', { scope: projectLabel })}
               </div>
             </div>
             <span className={`panel-pill ${isScraping ? 'warning' : workflowStartedAt ? 'success' : 'neutral'}`}>
-              {isScraping ? 'running' : workflowStartedAt ? 'stopped' : 'idle'}
+              {isScraping ? t('common:status.running') : workflowStartedAt ? t('pills.stopped') : t('pills.idle')}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '2.4rem', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text-dark)' }}>
+            <div dir="ltr" style={{ fontSize: '2.4rem', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text-dark)' }}>
               {workflowStartedAt ? formatElapsed(workflowElapsed) : '00:00'}
             </div>
             <div style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
               {isScraping
-                ? 'Timer is counting while the extractor runs.'
+                ? t('stopwatch.counting')
                 : workflowStartedAt
-                  ? `Last run started at ${formatWhen(workflowStartedAt)}.`
-                  : 'Start the extractor to begin timing the workflow.'}
+                  ? t('stopwatch.lastStarted', { time: formatWhen(workflowStartedAt) })
+                  : t('stopwatch.notStarted')}
             </div>
           </div>
         </motion.div>
@@ -306,35 +327,35 @@ export default function WorkflowPage({
               animate={{ opacity: 1, y: 0 }}
             >
               <div className="miro-badge top-right">
-                <Sparkles size={14} /> Sources
+                <Sparkles size={14} /> {t('getData.badge')}
               </div>
 
               <div className="block-header">
                 <div className="block-icon get">
                   <DownloadCloud size={20} />
                 </div>
-                <div className="block-title">Get Data</div>
+                <div className="block-title">{t('getData.title')}</div>
               </div>
 
               <div className="workflow-project-picker">
                 <div className="workflow-project-picker-header">
                   <div>
-                    <div className="workflow-project-picker-kicker">Scope</div>
-                    <strong>Choose a project to extract</strong>
+                    <div className="workflow-project-picker-kicker">{t('picker.kicker')}</div>
+                    <strong>{t('picker.title')}</strong>
                   </div>
                   <div className="workflow-project-picker-summary">
-                    <span className="panel-chip muted">{projects.length} total</span>
+                    <span className="panel-chip muted">
+                      {t('picker.total', { count: projects.length, formatted: formatNumber(projects.length) })}
+                    </span>
                   </div>
                 </div>
 
-                <div className="workflow-project-picker-note">
-                  The extractor runs for the selected project, then the results below reflect its latest articles.
-                </div>
+                <div className="workflow-project-picker-note">{t('picker.note')}</div>
 
                 {projects.length === 0 ? (
                   <div className="panel-empty" style={{ marginTop: 8 }}>
                     <ShieldCheck size={16} />
-                    <span>No projects yet. Create a project first, then come back to run the workflow.</span>
+                    <span>{t('picker.empty')}</span>
                   </div>
                 ) : (
                   <div className="workflow-project-list">
@@ -351,15 +372,20 @@ export default function WorkflowPage({
                           />
                           <div className="workflow-project-copy">
                             <div className="workflow-project-topline">
-                              <strong>{project.name}</strong>
+                              <strong dir="auto">{project.name}</strong>
                               <span className={`panel-chip ${isSelected ? 'success' : 'muted'}`}>
-                                {isSelected ? 'Selected' : 'Unselected'}
+                                {isSelected ? t('picker.selected') : t('picker.unselected')}
                               </span>
                             </div>
                             <div className="workflow-project-meta">
-                              <span>{project.status || 'draft'}</span>
-                              {project.location ? <span>{project.location}</span> : null}
-                              {(project.source_ids || []).length ? <span>{project.source_ids.length} source{project.source_ids.length === 1 ? '' : 's'}</span> : <span>No sources</span>}
+                              <span>{t(`common:status.${project.status || 'draft'}`, { defaultValue: project.status || 'draft' })}</span>
+                              {project.location ? <span dir="auto">{project.location}</span> : null}
+                              <span>
+                                {t('picker.sourceCount', {
+                                  count: (project.source_ids || []).length,
+                                  formatted: formatNumber((project.source_ids || []).length),
+                                })}
+                              </span>
                             </div>
                           </div>
                         </label>
@@ -371,11 +397,11 @@ export default function WorkflowPage({
 
               <div className="get-rows-header">
                 <div className="get-rows-header-copy">
-                  <strong>Sources</strong>
+                  <strong>{t('sources.title')}</strong>
                   <span>
                     {sources.length
-                      ? `${checkedSourceIds.size} of ${sources.length} selected - scraping only runs for checked sources`
-                      : 'No sources assigned to this project yet'}
+                      ? t('sources.selectedSummary', { checked: formatNumber(checkedSourceIds.size), total: formatNumber(sources.length) })
+                      : t('sources.noneAssigned')}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -385,7 +411,7 @@ export default function WorkflowPage({
                     onClick={allSourcesChecked ? deselectAllSources : selectAllSources}
                     disabled={isScraping || sources.length === 0}
                   >
-                    {allSourcesChecked ? 'Deselect all' : 'Select all'}
+                    {allSourcesChecked ? t('sources.deselectAll') : t('common:actions.selectAll')}
                   </button>
                   <button
                     type="button"
@@ -396,11 +422,11 @@ export default function WorkflowPage({
                   >
                     {isSourceListCollapsed ? (
                       <>
-                        Expand sources <ChevronDown size={14} />
+                        {t('sources.expand')} <ChevronDown size={14} />
                       </>
                     ) : (
                       <>
-                        Collapse sources <ChevronUp size={14} />
+                        {t('sources.collapse')} <ChevronUp size={14} />
                       </>
                     )}
                   </button>
@@ -421,7 +447,7 @@ export default function WorkflowPage({
                     {sources.length === 0 ? (
                       <div className="panel-empty" style={{ marginTop: 0 }}>
                         <ShieldCheck size={16} />
-                        <span>No sources assigned to this project yet. Add one to start scraping.</span>
+                        <span>{t('sources.emptyList')}</span>
                       </div>
                     ) : (
                       sources.map((source) => {
@@ -439,8 +465,10 @@ export default function WorkflowPage({
                               <SourceTypeIcon sourceType={source.source_type} />
                             </div>
                             <div className="workflow-source-copy">
-                              <strong>{source.name || source.url}</strong>
-                              {source.name ? <span>{source.url}</span> : null}
+                              {source.name
+                                ? <strong dir="auto">{source.name}</strong>
+                                : <strong className="ltr-isolate">{source.url}</strong>}
+                              {source.name ? <span className="ltr-isolate">{source.url}</span> : null}
                             </div>
                           </label>
                         );
@@ -456,8 +484,12 @@ export default function WorkflowPage({
                     exit={{ opacity: 0 }}
                   >
                     {sources.length
-                      ? `${checkedSourceIds.size} of ${sources.length} sources selected. Expand to review or change the selection.`
-                      : 'No sources to show. Expand to add one.'}
+                      ? t('sources.collapsedSummary', {
+                        count: sources.length,
+                        checked: formatNumber(checkedSourceIds.size),
+                        formatted: formatNumber(sources.length),
+                      })
+                      : t('sources.collapsedEmpty')}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -467,7 +499,7 @@ export default function WorkflowPage({
                 className="add-row-btn"
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
               >
-                <Plus size={18} /> Add Source
+                <Plus size={18} /> {t('sources.add')}
               </Link>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
@@ -478,14 +510,14 @@ export default function WorkflowPage({
                   disabled={isScraping || selectedProjectCount === 0 || checkedSourceIds.size === 0 || !canRunScraper}
                   title={
                     !canRunScraper
-                      ? 'Requires the pipeline.run permission.'
+                      ? t('getData.requiresPermission', { permission: 'pipeline.run' })
                       : selectedProjectCount > 0 && checkedSourceIds.size === 0
-                        ? 'Select at least one source to run.'
+                        ? t('getData.selectSourceHint')
                         : undefined
                   }
                 >
                   {isScraping ? (
-                    <><RefreshCw size={16} className="spin" /> Running...</>
+                    <><RefreshCw size={16} className="spin" /> {t('getData.running')}</>
                   ) : (
                     runLabel
                   )}
@@ -497,12 +529,12 @@ export default function WorkflowPage({
                     className="btn-secondary"
                     onClick={handleStopRun}
                     disabled={isStopping || !canStopScraper}
-                    title={canStopScraper ? undefined : 'Requires the pipeline.stop permission.'}
+                    title={canStopScraper ? undefined : t('getData.requiresPermission', { permission: 'pipeline.stop' })}
                   >
                     {isStopping ? (
-                      <><RefreshCw size={16} className="spin" /> Stopping...</>
+                      <><RefreshCw size={16} className="spin" /> {t('runs.stopping')}</>
                     ) : (
-                      <><Square size={16} /> Stop</>
+                      <><Square size={16} /> {t('runs.stop')}</>
                     )}
                   </button>
                 ) : null}
@@ -510,7 +542,7 @@ export default function WorkflowPage({
             </motion.div>
 
             <div className="workflow-arrow">
-              <ArrowRight size={32} />
+              <ArrowRight size={32} className="icon-flip-rtl" />
             </div>
 
             <motion.div
@@ -521,14 +553,14 @@ export default function WorkflowPage({
               style={{ opacity: workflowState === 'idle' ? 0.5 : 1 }}
             >
               <div className="miro-badge bottom-left" style={{ color: 'var(--primary-color)' }}>
-                <RefreshCw size={14} /> {isScraping ? 'Pipeline Running' : 'Pipeline Active'}
+                <RefreshCw size={14} /> {isScraping ? t('validate.badgeRunning') : t('validate.badgeActive')}
               </div>
 
               <div className="block-header">
                 <div className="block-icon clean">
                   <Sparkles size={20} />
                 </div>
-                <div className="block-title">Validate & Dedup</div>
+                <div className="block-title">{t('validate.title')}</div>
               </div>
 
               <div className="cleanup-status">
@@ -540,17 +572,17 @@ export default function WorkflowPage({
 
                 {workflowState === 'idle' && (
                   <div style={{ textAlign: 'center', color: 'var(--text-light)' }}>
-                    Waiting for extraction...
+                    {t('validate.waiting')}
                   </div>
                 )}
 
                 {(workflowState === 'cleaning' || workflowState === 'ready') && (
                   <>
-                    {['Parsing raw content', 'Validating AI JSON output', 'Extracting structured article insights'].map((label, i) => (
+                    {CLEANUP_STEP_KEYS.map((stepKey, i) => (
                       <motion.div
-                        key={label}
+                        key={stepKey}
                         className="status-item"
-                        initial={{ opacity: 0, x: -20 }}
+                        initial={{ opacity: 0, x: slideFrom }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.35 }}
                       >
@@ -559,12 +591,12 @@ export default function WorkflowPage({
                             ? <RefreshCw size={18} className="spin" />
                             : <CheckCircle2 size={18} color="#2ed573" />}
                         </div>
-                        <div className="status-text">{label}</div>
+                        <div className="status-text">{t(`validate.steps.${stepKey}`)}</div>
                       </motion.div>
                     ))}
                     {isScraping && (
                       <p style={{ fontSize: '0.72rem', color: 'var(--text-light)', marginTop: '10px', textAlign: 'center' }}>
-                        Running on GitHub Actions - new rows land in about 3 minutes.
+                        {t('validate.githubNote')}
                       </p>
                     )}
                   </>
@@ -573,7 +605,7 @@ export default function WorkflowPage({
             </motion.div>
 
             <div className="workflow-arrow">
-              <ArrowRight size={32} />
+              <ArrowRight size={32} className="icon-flip-rtl" />
             </div>
 
             <motion.div
@@ -587,31 +619,35 @@ export default function WorkflowPage({
                 <div className="block-icon save">
                   <Database size={20} />
                 </div>
-                <div className="block-title">Save & Store</div>
+                <div className="block-title">{t('save.title')}</div>
               </div>
 
               <div className="save-summary">
                 {!hasData ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-light)' }}>
-                    Awaiting collected data...
+                    {t('save.waiting')}
                   </div>
                 ) : (
                   <>
                     <div className="summary-stat">
-                      <span className="summary-label">Total Rows Stored</span>
-                      <span className="summary-value">{stats.total} Rows</span>
+                      <span className="summary-label">{t('save.totalRows')}</span>
+                      <span className="summary-value">{t('save.rows', { count: stats.total, formatted: formatNumber(stats.total) })}</span>
                     </div>
                     <div className="summary-stat">
-                      <span className="summary-label">Unique Sources</span>
-                      <span className="summary-value" style={{ color: 'var(--secondary-color)' }}>{stats.sources} Found</span>
+                      <span className="summary-label">{t('save.uniqueSources')}</span>
+                      <span className="summary-value" style={{ color: 'var(--secondary-color)' }}>
+                        {t('save.found', { count: stats.sources, formatted: formatNumber(stats.sources) })}
+                      </span>
                     </div>
                     <div className="summary-stat">
-                      <span className="summary-label">Story Groups</span>
-                      <span className="summary-value" style={{ color: 'var(--primary-color)' }}>{stats.grouped} Grouped</span>
+                      <span className="summary-label">{t('save.storyGroups')}</span>
+                      <span className="summary-value" style={{ color: 'var(--primary-color)' }}>
+                        {t('save.grouped', { count: stats.grouped, formatted: formatNumber(stats.grouped) })}
+                      </span>
                     </div>
 
                     <div className="save-btn" style={{ cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <CheckCircle2 size={18} /> Synced to Database
+                      <CheckCircle2 size={18} /> {t('save.synced')}
                     </div>
                   </>
                 )}
@@ -629,15 +665,15 @@ export default function WorkflowPage({
           >
               <div className="panel-header">
                 <div>
-                  <div className="panel-kicker"><Clock3 size={14} /> Run log</div>
-                  <h2>Latest pipeline activity</h2>
+                  <div className="panel-kicker"><Clock3 size={14} /> {t('log.kicker')}</div>
+                  <h2>{t('log.title')}</h2>
                 </div>
                 <span className={`panel-pill ${statusTone(currentRun?.status)}`}>
-                  {currentRun ? currentRun.status : 'idle'}
+                  {currentRun ? statusLabel(currentRun.status) : t('pills.idle')}
                 </span>
               </div>
 
-              <ErrorNotice error={runsError} context="load pipeline activity" compact />
+              <ErrorNotice error={runsError} context={t('errorContext.loadActivity')} compact />
 
               <div className="log-list">
                 {runsLoading ? (
@@ -655,11 +691,11 @@ export default function WorkflowPage({
                     <div className="log-item active">
                       <div className="log-dot"></div>
                       <div className="log-copy">
-                        <div className="log-title">Current run</div>
+                        <div className="log-title">{t('log.currentRun')}</div>
                         <div className="log-body">{friendlyRunMessage(currentRun)}</div>
                         <div className="log-meta">
                           <span>{prettyStage(currentRun.stage)}</span>
-                          <span>{currentRun.status}</span>
+                          <span>{statusLabel(currentRun.status)}</span>
                           <span>{formatWhen(currentRun.created_at)}</span>
                         </div>
                       </div>
@@ -672,7 +708,7 @@ export default function WorkflowPage({
                           <div className="log-title">{prettyStage(run.stage)}</div>
                           <div className="log-body">{friendlyRunMessage(run)}</div>
                           <div className="log-meta">
-                            <span>{run.status || 'queued'}</span>
+                            <span>{statusLabel(run.status)}</span>
                             <span>{formatWhen(run.finished_at || run.created_at)}</span>
                           </div>
                         </div>
@@ -682,7 +718,7 @@ export default function WorkflowPage({
                 ) : (
                   <div className="panel-empty">
                     <ShieldCheck size={16} />
-                    <span>No pipeline runs yet. Launch the extractor to generate activity.</span>
+                    <span>{t('log.empty')}</span>
                   </div>
                 )}
               </div>
@@ -696,80 +732,82 @@ export default function WorkflowPage({
           >
               <div className="panel-header">
                 <div>
-                  <div className="panel-kicker"><TrendingUp size={14} /> Results</div>
-                  <h2>Current output snapshot</h2>
+                  <div className="panel-kicker"><TrendingUp size={14} /> {t('results.kicker')}</div>
+                  <h2>{t('results.title')}</h2>
                 </div>
                 <span className={`panel-pill ${statusTone(currentRun?.status || (isScraping ? 'running' : 'success'))}`}>
-                  {currentRun ? currentRun.status : (isScraping ? 'running' : 'live')}
+                  {currentRun ? statusLabel(currentRun.status) : (isScraping ? t('common:status.running') : t('pills.live'))}
                 </span>
               </div>
 
               <div className="result-grid">
                 <div className="result-card">
                   <FileText size={16} />
-                  <span className="result-label">Pages Crawled</span>
-                  <strong>{pipelineStats.pages.toLocaleString()}</strong>
+                  <span className="result-label">{t('results.pagesCrawled')}</span>
+                  <strong>{formatNumber(pipelineStats.pages)}</strong>
                 </div>
                 <div className="result-card">
                   <Layers3 size={16} />
-                  <span className="result-label">Articles Scraped</span>
-                  <strong>{pipelineStats.scraped.toLocaleString()}</strong>
+                  <span className="result-label">{t('results.articlesScraped')}</span>
+                  <strong>{formatNumber(pipelineStats.scraped)}</strong>
                 </div>
                 <div className="result-card">
                   <BadgeCheck size={16} />
-                  <span className="result-label">Cleaned</span>
-                  <strong>{pipelineStats.cleaned.toLocaleString()}</strong>
+                  <span className="result-label">{t('results.cleaned')}</span>
+                  <strong>{formatNumber(pipelineStats.cleaned)}</strong>
                 </div>
                 <div className="result-card">
                   <Flag size={16} />
-                  <span className="result-label">Saved</span>
-                  <strong>{pipelineStats.saved.toLocaleString()}</strong>
+                  <span className="result-label">{t('results.saved')}</span>
+                  <strong>{formatNumber(pipelineStats.saved)}</strong>
                 </div>
               </div>
 
               <div className="source-mini-list" style={{ marginTop: '16px' }}>
-                <div className="mini-list-title">Collection snapshot</div>
+                <div className="mini-list-title">{t('results.snapshot')}</div>
                 <div className="mini-list-row">
-                  <span>Articles Stored</span>
-                  <strong style={{ color: 'var(--primary-color)' }}>{stats.total.toLocaleString()}</strong>
+                  <span>{t('results.articlesStored')}</span>
+                  <strong style={{ color: 'var(--primary-color)' }}>{formatNumber(stats.total)}</strong>
                 </div>
                 <div className="mini-list-row">
-                  <span>Unique Sources</span>
-                  <strong style={{ color: 'var(--secondary-color)' }}>{stats.sources.toLocaleString()}</strong>
+                  <span>{t('save.uniqueSources')}</span>
+                  <strong style={{ color: 'var(--secondary-color)' }}>{formatNumber(stats.sources)}</strong>
                 </div>
                 <div className="mini-list-row">
-                  <span>Story Groups</span>
-                  <strong>{stats.grouped.toLocaleString()}</strong>
+                  <span>{t('save.storyGroups')}</span>
+                  <strong>{formatNumber(stats.grouped)}</strong>
                 </div>
               </div>
 
               <div className="source-mini-list">
-                <div className="mini-list-title">Top sources</div>
+                <div className="mini-list-title">{t('results.topSources')}</div>
                 {stats.topSources.length ? (
                   stats.topSources.map((item) => (
                     <div key={item.source} className="mini-list-row">
-                      <span>{item.source}</span>
-                      <strong>{item.count}</strong>
+                      <span dir="auto">{item.source}</span>
+                      <strong>{formatNumber(item.count)}</strong>
                     </div>
                   ))
                 ) : (
-                  <div className="mini-empty">No sources yet.</div>
+                  <div className="mini-empty">{t('results.noSources')}</div>
                 )}
               </div>
 
               <div className="article-preview-list">
-                <div className="mini-list-title">Recent articles</div>
+                <div className="mini-list-title">{t('results.recentArticles')}</div>
                 {latestArticles.length ? (
                   latestArticles.map((article) => (
                     <div key={article.url} className="article-preview-row">
                     <div className="article-preview-top">
-                      <span className="article-preview-source">{article.source || 'Unknown source'}</span>
+                      <span className="article-preview-source" dir="auto">{article.source || t('results.unknownSource')}</span>
                     </div>
-                      <div className="article-preview-title">{article.title || article.url}</div>
+                      {article.title
+                        ? <div className="article-preview-title" dir="auto">{article.title}</div>
+                        : <div className="article-preview-title ltr-isolate">{article.url}</div>}
                     </div>
                   ))
                 ) : (
-                  <div className="mini-empty">No recent articles to preview.</div>
+                  <div className="mini-empty">{t('results.noArticles')}</div>
                 )}
               </div>
           </motion.div>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+/* Fonts are bundled locally (see src/styles/fonts.js) so the app works offline. */
 
 :root {
   --primary-color: #f97316;
@@ -91,14 +91,14 @@ body::after {
 .sidebar {
   position: fixed;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   bottom: 0;
   width: 280px;
   padding: 30px 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  border-right: 1px solid rgba(0,0,0,0.05);
+  border-inline-end: 1px solid rgba(0,0,0,0.05);
   background: linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 100%);
   backdrop-filter: blur(10px);
   overflow-y: auto;
@@ -108,8 +108,7 @@ body::after {
 
 .sidebar.sidebar-collapsed {
   width: 84px;
-  padding-left: 14px;
-  padding-right: 14px;
+  padding-inline: 14px;
 }
 
 .sidebar-header {
@@ -230,10 +229,14 @@ body::after {
   transform: rotate(-90deg);
 }
 
+/* A closed group's chevron points along the reading direction. */
+[dir='rtl'] .sidebar-nav-chevron-closed {
+  transform: rotate(90deg);
+}
+
 .sidebar.sidebar-collapsed .sidebar-nav-link,
 .sidebar.sidebar-collapsed .sidebar-logout {
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
 }
 
 .sidebar.sidebar-collapsed .sidebar-profile-row {
@@ -252,7 +255,7 @@ body::after {
   display: none;
   position: fixed;
   top: 16px;
-  left: 16px;
+  inset-inline-start: 16px;
   z-index: 960;
   width: 42px;
   height: 42px;
@@ -267,18 +270,18 @@ body::after {
 }
 
 .main-content {
-  margin-left: 280px;
+  margin-inline-start: 280px;
   padding: 28px 28px 36px;
   display: flex;
   flex-direction: column;
   gap: 18px;
   min-height: 100vh;
   min-width: 0;
-  transition: margin-left 0.25s ease;
+  transition: margin-inline-start 0.25s ease;
 }
 
 .app-shell.app-shell-collapsed .main-content {
-  margin-left: 84px;
+  margin-inline-start: 84px;
 }
 
 @media (max-width: 960px) {
@@ -287,14 +290,20 @@ body::after {
     box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
   }
 
-  .sidebar.sidebar-mobile-open {
+  /* The drawer hides off the inline-start edge, which is the right in RTL. */
+  [dir='rtl'] .sidebar {
+    transform: translateX(100%);
+  }
+
+  .sidebar.sidebar-mobile-open,
+  [dir='rtl'] .sidebar.sidebar-mobile-open {
     transform: translateX(0);
     max-width: 85vw;
   }
 
   .main-content,
   .app-shell.app-shell-collapsed .main-content {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 
   .mobile-nav-toggle {
@@ -640,7 +649,7 @@ h1, h2, h3 {
   border: none;
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   font-family: inherit;
 }
 
@@ -819,14 +828,14 @@ h1, h2, h3 {
 
 .report-project-select-wrap > svg {
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   color: var(--secondary-color);
   pointer-events: none;
 }
 
 .report-project-select {
   min-width: 240px;
-  padding-left: 42px;
+  padding-inline-start: 42px;
   font-weight: 600;
 }
 
@@ -1092,17 +1101,17 @@ h1, h2, h3 {
   gap: 14px;
   padding: 22px 24px;
   border-radius: 18px;
-  border-left-width: 4px;
-  border-left-style: solid;
+  border-inline-start-width: 4px;
+  border-inline-start-style: solid;
   background: rgba(255, 255, 255, 0.7);
   border-color: var(--border-soft);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.04);
 }
 
-.report-insight-card.tone-positive { border-left-color: #16a34a; }
-.report-insight-card.tone-negative { border-left-color: #e11d48; }
-.report-insight-card.tone-requested { border-left-color: #f59e0b; }
-.report-insight-card.tone-neutral { border-left-color: #64748b; }
+.report-insight-card.tone-positive { border-inline-start-color: #16a34a; }
+.report-insight-card.tone-negative { border-inline-start-color: #e11d48; }
+.report-insight-card.tone-requested { border-inline-start-color: #f59e0b; }
+.report-insight-card.tone-neutral { border-inline-start-color: #64748b; }
 
 .report-insight-card-top {
   display: flex;
@@ -1155,7 +1164,7 @@ h1, h2, h3 {
   flex-direction: column;
   align-items: flex-end;
   flex-shrink: 0;
-  text-align: right;
+  text-align: end;
 }
 
 .report-insight-card-count strong {
@@ -1458,7 +1467,7 @@ h1, h2, h3 {
 .admin-stat-action-card .admin-stat-action-arrow {
   position: absolute;
   top: 14px;
-  right: 14px;
+  inset-inline-end: 14px;
   color: var(--primary-color);
   opacity: 0.55;
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1467,6 +1476,17 @@ h1, h2, h3 {
 .admin-stat-action-card:hover:not(:disabled) .admin-stat-action-arrow {
   opacity: 1;
   transform: translateX(2px);
+}
+
+/* The arrow is a ChevronRight ("go to"): point it and nudge it along the
+   reading direction. Done here rather than with .icon-flip-rtl because the
+   hover transform above would otherwise replace the flip. */
+[dir='rtl'] .admin-stat-action-card .admin-stat-action-arrow {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .admin-stat-action-card:hover:not(:disabled) .admin-stat-action-arrow {
+  transform: translateX(-2px) scaleX(-1);
 }
 
 .admin-stat-action-card .admin-stat-action-hint {
@@ -1674,6 +1694,12 @@ h1, h2, h3 {
   color: var(--text-light);
   word-break: break-all;
   margin-bottom: 8px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[dir='rtl'] .admin-item-url {
+  text-align: end;
 }
 
 .admin-item-meta {
@@ -1773,7 +1799,7 @@ h1, h2, h3 {
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(46, 134, 222, 0.06);
-  border-left: 3px solid rgba(46, 134, 222, 0.24);
+  border-inline-start: 3px solid rgba(46, 134, 222, 0.24);
 }
 
 .assign-sources-panel {
@@ -1978,7 +2004,7 @@ h1, h2, h3 {
   gap: 10px;
   max-height: 320px;
   overflow: auto;
-  padding-right: 2px;
+  padding-inline-end: 2px;
 }
 
 .assign-source-item {
@@ -2034,6 +2060,12 @@ h1, h2, h3 {
   font-size: 0.8rem;
   color: var(--text-light);
   word-break: break-all;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[dir='rtl'] .assign-source-url {
+  text-align: end;
 }
 
 .assign-source-meta {
@@ -2195,6 +2227,8 @@ h1, h2, h3 {
   word-break: break-word;
   max-height: 320px;
   overflow-y: auto;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .run-detail-section-title {
@@ -2457,7 +2491,7 @@ h1, h2, h3 {
 .sentiment-chip strong {
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-weight: 800;
-  margin-left: 2px;
+  margin-inline-start: 2px;
 }
 
 .sentiment-chart-bars {
@@ -3149,13 +3183,13 @@ h1, h2, h3 {
 }
 
 .login-password-wrap .login-input {
-  padding-right: 44px;
+  padding-inline-end: 44px;
 }
 
 .login-password-toggle {
   position: absolute;
   top: 50%;
-  right: 6px;
+  inset-inline-end: 6px;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
@@ -3229,7 +3263,7 @@ h1, h2, h3 {
   padding: 14px 16px;
   margin-bottom: 16px;
   border: 1px solid rgba(220, 38, 38, 0.18);
-  border-left: 4px solid #ef4444;
+  border-inline-start: 4px solid #ef4444;
   border-radius: 14px;
   background: rgba(254, 242, 242, 0.92);
   color: #7f1d1d;
@@ -3250,6 +3284,6 @@ h1, h2, h3 {
 .error-notice-dismiss { width: 30px; height: 30px; padding: 0; }
 .error-notice-details { margin-top: 5px; font-size: .76rem; color: var(--text-light); }
 .error-notice-details summary { cursor: pointer; font-weight: 700; }
-.error-notice-details pre { max-height: 130px; overflow: auto; margin: 7px 0 0; padding: 9px; border-radius: 8px; background: rgba(255,255,255,.7); white-space: pre-wrap; overflow-wrap: anywhere; }
+.error-notice-details pre { max-height: 130px; overflow: auto; margin: 7px 0 0; padding: 9px; border-radius: 8px; background: rgba(255,255,255,.7); white-space: pre-wrap; overflow-wrap: anywhere; direction: ltr; unicode-bidi: isolate; }
 .error-notice-compact { padding: 10px 12px; margin-bottom: 10px; }
-@media (max-width: 640px) { .error-notice { flex-wrap: wrap; } .error-notice-buttons { margin-left: 30px; } }
+@media (max-width: 640px) { .error-notice { flex-wrap: wrap; } .error-notice-buttons { margin-inline-start: 30px; } }
