@@ -40,7 +40,10 @@ def add_source(payload: dict, user: dict = Depends(require_permission("sources.c
     try:
         source = create_source(payload or {})
     except UnsafeUrlError as exc:
-        raise ValidationError(str(exc), code="sources.unsafe_url") from exc
+        # No explicit code: classify() matches the specific ssrf_guard reason
+        # (scheme/no-host/unresolvable/private-address) so the dashboard can
+        # show *why* the URL was rejected, not just that it was.
+        raise ValidationError(str(exc)) from exc
     if not source:
         detail = diagnose_source_setup()
         raise ConflictError(
@@ -56,7 +59,8 @@ def edit_source(source_id: int, payload: dict, user: dict = Depends(require_perm
     try:
         source = update_source(source_id, payload or {})
     except UnsafeUrlError as exc:
-        raise ValidationError(str(exc), code="sources.unsafe_url") from exc
+        # See add_source above.
+        raise ValidationError(str(exc)) from exc
     if not source:
         detail = diagnose_source_setup()
         raise ConflictError(

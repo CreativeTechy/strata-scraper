@@ -62,6 +62,13 @@ _CATALOG: list[tuple[str, str]] = [
     ("sources.create_failed", r"Unable to create source\..*"),
     ("sources.update_failed", r"Unable to update source\..*"),
     ("sources.delete_failed", r"Unable to delete source\..*"),
+    # sources - unsafe URL rejection (ssrf_guard.check_url_is_safe); cataloged
+    # with params instead of the generic "sources.unsafe_url" explicit code so
+    # the specific reason (scheme/host/address) survives translation.
+    ("sources.unsafe_scheme", r"URL scheme ['\"](?P<scheme>[^'\"]*)['\"] is not allowed - only http/https are\."),
+    ("sources.unsafe_no_host", r"URL has no host\."),
+    ("sources.unsafe_unresolvable_host", r"Could not resolve host ['\"](?P<host>[^'\"]*)['\"]: (?P<reason>.+)"),
+    ("sources.unsafe_private_address", r"['\"](?P<host>[^'\"]*)['\"] resolves to a non-public address \((?P<ip>[^)]*)\) - refusing to fetch\."),
     # pipeline
     ("pipeline.run_not_found", r"Pipeline run not found\."),
     ("pipeline.no_projects", r"Create a project before running the scraper\."),

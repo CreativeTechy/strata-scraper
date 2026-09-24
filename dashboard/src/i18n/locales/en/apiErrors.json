@@ -45,6 +45,10 @@
   },
   "sources": {
     "unsafe_url": "This URL can't be used as a source.",
+    "unsafe_scheme": "The URL scheme '{{scheme}}' isn't allowed. Only http and https URLs can be used as sources.",
+    "unsafe_no_host": "This URL doesn't have a host to fetch from.",
+    "unsafe_unresolvable_host": "The host '{{host}}' could not be resolved ({{reason}}).",
+    "unsafe_private_address": "The host '{{host}}' resolves to a non-public address ({{ip}}) and can't be used as a source.",
     "create_failed": "Unable to create source. Check database connection settings.",
     "update_failed": "Unable to update source. Check database connection settings.",
     "delete_failed": "Unable to delete source. Check database connection settings."

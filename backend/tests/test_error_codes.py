@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 
 from api import error_codes
 from api.errors import ValidationError
+from services.auth import auth
+from ssrf_guard import UnsafeUrlError
 import main
 
 LOCALES = Path(__file__).resolve().parents[2] / "dashboard" / "src" / "i18n" / "locales"
@@ -51,6 +53,34 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(
             error_codes.classify("File is larger than the 512MB import limit. Split it and import in parts.", 413),
             ("articles.import_too_large", {"limit_mb": 512}),
+        )
+
+    def test_unsafe_url_reasons_keep_their_specifics(self):
+        # These are ssrf_guard.check_url_is_safe's exact messages (see
+        # backend/ssrf_guard.py) - classify() must recognize each one so the
+        # dashboard can show *why* the URL was rejected, not just that it was.
+        self.assertEqual(
+            error_codes.classify("URL scheme 'ftp' is not allowed - only http/https are.", 400),
+            ("sources.unsafe_scheme", {"scheme": "ftp"}),
+        )
+        self.assertEqual(
+            error_codes.classify("URL has no host.", 400),
+            ("sources.unsafe_no_host", {}),
+        )
+        self.assertEqual(
+            error_codes.classify(
+                "Could not resolve host 'nonexistent.invalid': [Errno -2] Name or service not known", 400,
+            ),
+            ("sources.unsafe_unresolvable_host", {
+                "host": "nonexistent.invalid",
+                "reason": "[Errno -2] Name or service not known",
+            }),
+        )
+        self.assertEqual(
+            error_codes.classify(
+                "'internal.example.com' resolves to a non-public address (10.0.0.1) - refusing to fetch.", 400,
+            ),
+            ("sources.unsafe_private_address", {"host": "internal.example.com", "ip": "10.0.0.1"}),
         )
 
     def test_unknown_messages_fall_back_to_a_status_code(self):
@@ -132,6 +162,55 @@ class ResponseShapeTests(unittest.TestCase):
             ))
         self.assertEqual(res.status_code, 500)
         self.assertEqual(json.loads(res.body), {"error": "Internal server error.", "code": "internal_error"})
+
+
+def _fake_get_current_user():
+    return {"id": 1, "username": "admin", "role_id": 1, "status": "active"}
+
+
+class UnsafeUrlRouteTests(unittest.TestCase):
+    """POST /api/sources with a URL ssrf_guard rejects must carry the specific
+    reason's code, not the generic "sources.unsafe_url" one - see F001 on
+    PR #28."""
+
+    @classmethod
+    def setUpClass(cls):
+        main.app.dependency_overrides[auth.get_current_user] = _fake_get_current_user
+        cls._patchers = [
+            patch("services.auth.auth._enforce_csrf"),
+            patch("services.auth.permissions_store.user_permission_keys", return_value={"sources.create"}),
+            patch("services.auth.permissions_store.user_is_full_access", return_value=True),
+        ]
+        for patcher in cls._patchers:
+            patcher.start()
+        cls.client = TestClient(main.app)
+
+    @classmethod
+    def tearDownClass(cls):
+        main.app.dependency_overrides.clear()
+        for patcher in cls._patchers:
+            patcher.stop()
+
+    def test_disallowed_scheme_carries_the_scheme_specific_code(self):
+        with patch("api.routers.sources.create_source", side_effect=UnsafeUrlError(
+            "URL scheme 'ftp' is not allowed - only http/https are.",
+        )):
+            res = self.client.post("/api/sources", json={"url": "ftp://example.com", "type": "web"})
+        self.assertEqual(res.status_code, 400)
+        body = res.json()
+        self.assertEqual(body["code"], "sources.unsafe_scheme")
+        self.assertEqual(body["params"], {"scheme": "ftp"})
+        self.assertEqual(body["error"], "URL scheme 'ftp' is not allowed - only http/https are.")
+
+    def test_private_address_carries_the_address_specific_code(self):
+        with patch("api.routers.sources.create_source", side_effect=UnsafeUrlError(
+            "'internal.example.com' resolves to a non-public address (10.0.0.1) - refusing to fetch.",
+        )):
+            res = self.client.post("/api/sources", json={"url": "http://internal.example.com", "type": "web"})
+        self.assertEqual(res.status_code, 400)
+        body = res.json()
+        self.assertEqual(body["code"], "sources.unsafe_private_address")
+        self.assertEqual(body["params"], {"host": "internal.example.com", "ip": "10.0.0.1"})
 
 
 if __name__ == "__main__":
