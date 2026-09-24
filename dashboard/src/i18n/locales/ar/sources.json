@@ -92,7 +92,7 @@
     "termPlaceholders": {
       "default": "الاسم المعروض",
       "hashtag": "الوسم بدون # (مثل EVSummit)",
-      "username": "حساب X بدون @ (مثل elonmusk)",
+      "username": "حساب إكس بدون @ (مثل elonmusk)",
       "keyword": "كلمة مفتاحية أو عبارة (مثل السيارات الكهربائية)"
     },
     "statusTitle": "حالة المصدر",

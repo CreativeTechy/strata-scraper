@@ -13,6 +13,19 @@ export function isRtl(code = i18n.language) {
   return (findLanguage(code) || findLanguage(DEFAULT_LANGUAGE)).dir === 'rtl';
 }
 
+export function generatedTextDirection(code) {
+  const language = findLanguage(code);
+  return language ? language.dir : 'auto';
+}
+
+export function generatedLanguageNeedsRefresh(record, currentLanguage = i18n.language) {
+  if (!record) return false;
+  const generated = findLanguage(record.generated_language)?.code;
+  const current = findLanguage(currentLanguage)?.code || DEFAULT_LANGUAGE;
+  const knownGeneratedContent = Boolean(record.analysis_model || record.discovery_source === 'ai');
+  return knownGeneratedContent && (!generated || generated !== current);
+}
+
 function toDate(value) {
   if (value === null || value === undefined || value === '') return null;
   const date = value instanceof Date ? value : new Date(value);

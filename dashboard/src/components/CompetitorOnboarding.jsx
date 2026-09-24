@@ -61,7 +61,11 @@ import { AddCompetitorForm, AddSourceRow } from './CompetitorSourceEditor.jsx';
 import { WeekdayPicker } from './ProjectsPage.jsx';
 import ErrorNotice from './ErrorNotice';
 import { apiError } from '../errors/apiError.js';
-import { formatDuration, formatList, formatNumber } from '../i18n/format.js';
+import {
+  formatDuration, formatList, formatNumber, generatedLanguageNeedsRefresh,
+  generatedTextDirection,
+} from '../i18n/format.js';
+import { translateDiscoveryLog, translateRejectionReason } from '../i18n/competitorText.js';
 import '../styles/Competitors.css';
 
 // `labelKey` is translated at render time (competitorOnboarding namespace).
@@ -143,15 +147,15 @@ export function DiscoveryLog({ logs, active }) {
       <div className="cs-progress" ref={boxRef}>
         {logs.map((entry, index) => {
           const isCurrent = active && index === logs.length - 1;
+          const display = translateDiscoveryLog(entry, t);
           return (
             <div
               key={index}
               className={`cs-progress-row${isCurrent ? ' cs-progress-row-active' : ' cs-progress-row-done'}`}
             >
               {isCurrent ? <span className="cs-spinner" /> : <CheckCircle2 size={15} />}
-              {/* Log lines are written by the backend (English only). */}
-              <span dir="auto">
-                {entry.message}
+              <span dir={display.translated ? undefined : 'auto'}>
+                {display.text}
                 {isCurrent && elapsed >= 4 ? t('discoveryLog.stillWorking', { duration: formatDuration(elapsed) }) : ''}
               </span>
             </div>
@@ -1170,8 +1174,7 @@ export default function CompetitorOnboarding() {
               </div>
             ) : null}
 
-            {!contextBusy && profile.generated_language
-              && profile.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+            {!contextBusy && generatedLanguageNeedsRefresh(profile, i18n.resolvedLanguage || i18n.language) ? (
                 <div className="cs-alert cs-alert-warn" role="status" style={{ marginTop: 14 }}>
                   {t('context.languageMismatch')}
                 </div>
@@ -1248,15 +1251,14 @@ export default function CompetitorOnboarding() {
           {!culturalBusy && culturalAnalysis ? (
             culturalAnalysis.status === 'success' ? (
               <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {culturalAnalysis.generated_language
-                  && culturalAnalysis.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+                {generatedLanguageNeedsRefresh(culturalAnalysis, i18n.resolvedLanguage || i18n.language) ? (
                     <div className="cs-alert cs-alert-warn" role="status">
                       {t('cultural.languageMismatch')}
                     </div>
                   ) : null}
                 <div className="cs-field" style={{ marginBottom: 0 }}>
                   <label className="cs-label">{t('cultural.summary')}</label>
-                  <p dir="auto" style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>
+                  <p dir={generatedTextDirection(culturalAnalysis.generated_language)} style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>
                 </div>
                 {[
                   ['cultural.successFactors', culturalAnalysis.success_factors],
@@ -1268,7 +1270,7 @@ export default function CompetitorOnboarding() {
                     <div key={labelKey} className="cs-field" style={{ marginBottom: 0 }}>
                       <label className="cs-label">{t(labelKey)}</label>
                       <ul style={{ margin: 0, paddingInlineStart: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
-                        {items.map((item, index) => <li key={index} dir="auto">{item}</li>)}
+                        {items.map((item, index) => <li key={index} dir={generatedTextDirection(culturalAnalysis.generated_language)}>{item}</li>)}
                       </ul>
                     </div>
                   ) : null
@@ -1330,8 +1332,7 @@ export default function CompetitorOnboarding() {
                     <div key={item.name} style={{ fontSize: '0.81rem', color: 'var(--text-light)' }}>
                       <strong dir="auto" style={{ color: 'var(--text-dark)' }}>{item.name}</strong>
                       {' — '}
-                      {/* The reason is written by the backend (English only). */}
-                      <bdi>{item.reason}</bdi>
+                      <bdi>{translateRejectionReason(item, t)}</bdi>
                     </div>
                   ))}
                 </div>
@@ -1388,9 +1389,14 @@ export default function CompetitorOnboarding() {
                         </div>
                         <div className="cs-row-main">
                           <div className="cs-row-name" dir="auto">{competitor.name}</div>
-                          <div className="cs-row-desc" dir="auto">
+                          <div className="cs-row-desc" dir={generatedTextDirection(competitor.generated_language)}>
                             {competitor.description || competitor.size_signals?.why_competitor || competitor.domain || '—'}
                           </div>
+                          {generatedLanguageNeedsRefresh(competitor, i18n.resolvedLanguage || i18n.language) ? (
+                            <div className="cs-row-desc" style={{ color: 'var(--warning-dark, #92400e)' }}>
+                              {t('competitors.languageMismatch')}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="cs-row-side">
                           <span className={`cs-pill ${isManual ? 'cs-pill-manual' : 'cs-pill-ai'}`}>

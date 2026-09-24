@@ -11,7 +11,11 @@ from __future__ import annotations
 import json
 
 from app.core import db
-from app.core.language import output_language_instruction, resolve_output_language
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors import business_profile_store
@@ -50,34 +54,46 @@ def derive_cultural_analysis(
     countries_line = ", ".join(country_label(code) for code in target_countries)
     user_prompt = f"{context}\n\nAssess this business's fit for competing in: {countries_line}"
 
-    try:
-        raw = chat_completion(
-            messages=[
+    messages = [
                 {"role": "system", "content": (
                     f"{CULTURAL_ANALYSIS_SYSTEM_PROMPT}\n\n"
                     f"{output_language_instruction(output_language)}"
                 )},
                 {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=4000,
-            timeout=90,
-        )
-        parsed = json.loads(_strip_fences(raw))
-    except (LLMError, json.JSONDecodeError, ValueError) as exc:
-        print(f"  cultural analysis derivation failed: {exc}")
-        return {}
+    ]
+    for attempt in range(2):
+        try:
+            raw = chat_completion(
+                messages=messages,
+                temperature=0.2,
+                max_tokens=4000,
+                timeout=90,
+            )
+            parsed = json.loads(_strip_fences(raw))
+        except (LLMError, json.JSONDecodeError, ValueError) as exc:
+            print(f"  cultural analysis derivation failed: {exc}")
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
 
-    if not isinstance(parsed, dict):
-        return {}
-
-    return {
-        "summary": str(parsed.get("summary") or "").strip(),
-        "success_factors": _as_list(parsed.get("success_factors")),
-        "benefits": _as_list(parsed.get("benefits")),
-        "challenges": _as_list(parsed.get("challenges")),
-        "insights": _as_list(parsed.get("insights")),
-    }
+        result = {
+            "summary": str(parsed.get("summary") or "").strip(),
+            "success_factors": _as_list(parsed.get("success_factors")),
+            "benefits": _as_list(parsed.get("benefits")),
+            "challenges": _as_list(parsed.get("challenges")),
+            "insights": _as_list(parsed.get("insights")),
+        }
+        if text_matches_output_language(result, output_language):
+            return result
+        if attempt == 0:
+            messages.extend([
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": (
+                    "The prose is not in the requested output language. Return the same JSON "
+                    f"again, following this rule exactly: {output_language_instruction(output_language)}"
+                )},
+            ])
+    return {}
 
 
 # --------------------------------------------------------------------------- #

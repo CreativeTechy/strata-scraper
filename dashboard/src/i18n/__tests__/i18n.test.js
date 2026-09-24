@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import i18n from '../index.js';
 import { LANGUAGE_STORAGE_KEY, readStoredLanguage, resolveLanguage, storeLanguage } from '../config.js';
-import { countryName, formatDate, formatNumber, isRtl, languageName } from '../format.js';
+import {
+  countryName, formatDate, formatNumber, generatedLanguageNeedsRefresh,
+  generatedTextDirection, isRtl, languageName,
+} from '../format.js';
+import { translateDiscoveryLog, translateRejectionReason } from '../competitorText.js';
 import { userFacingError, friendlyRunMessage } from '../../errors/userFacingError.js';
 import { apiError } from '../../errors/apiError.js';
 import { REPEAT_UNIT_OPTIONS } from '../../constants/schedule.js';
@@ -93,6 +97,26 @@ describe('translation behavior', () => {
   it('formats numbers with Latin digits', () => {
     expect(formatNumber(12345)).toMatch(/12.345/);
     expect(formatDate('not a date', undefined, 'raw')).toBe('raw');
+  });
+
+  it('uses generated-language metadata for direction and legacy warnings', () => {
+    expect(generatedTextDirection('ar')).toBe('rtl');
+    expect(generatedTextDirection('en')).toBe('ltr');
+    expect(generatedLanguageNeedsRefresh({ analysis_model: 'model', generated_language: null }, 'ar')).toBe(true);
+    expect(generatedLanguageNeedsRefresh({ discovery_source: 'manual' }, 'ar')).toBe(false);
+  });
+
+  it('translates discovery logs and structured rejection reasons', () => {
+    const t = i18n.getFixedT('ar', 'competitorOnboarding');
+    const log = translateDiscoveryLog({ message: 'Acme: found 3 channels.' }, t);
+    expect(log.translated).toBe(true);
+    expect(log.text).toContain('Acme');
+    expect(log.text).toContain('3');
+    const reason = translateRejectionReason({
+      reason_code: 'outsideCountries', reason_params: { country: 'LB' },
+    }, t);
+    expect(reason).not.toContain('outsideCountries');
+    expect(reason).not.toContain('LB');
   });
 });
 

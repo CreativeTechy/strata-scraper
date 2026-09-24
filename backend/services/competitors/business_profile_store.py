@@ -20,7 +20,11 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from app.core import db
-from app.core.language import output_language_instruction, resolve_output_language
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import country_label, validate_countries
@@ -179,38 +183,51 @@ def derive_profile(
         f"Text extracted from their website:\n{scraped_text or '(none — rely on what the user told us)'}"
     )
 
-    try:
-        raw = chat_completion(
-            messages=[
+    messages = [
                 {"role": "system", "content": (
                     f"{PROFILE_SYSTEM_PROMPT}\n\n{output_language_instruction(output_language)}"
                 )},
                 {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=4000,
-            timeout=90,
-        )
-        parsed = json.loads(_strip_fences(raw))
-    except (LLMError, json.JSONDecodeError, ValueError) as exc:
-        print(f"  business profile derivation failed: {exc}")
-        return {}
+    ]
+    for attempt in range(2):
+        try:
+            raw = chat_completion(
+                messages=messages,
+                temperature=0.1,
+                max_tokens=4000,
+                timeout=90,
+            )
+            parsed = json.loads(_strip_fences(raw))
+        except (LLMError, json.JSONDecodeError, ValueError) as exc:
+            print(f"  business profile derivation failed: {exc}")
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
 
-    if not isinstance(parsed, dict):
-        return {}
-
-    return {
-        "name": str(parsed.get("name") or name or "").strip(),
-        "industry": str(parsed.get("industry") or "").strip(),
-        "market": str(parsed.get("market") or "").strip(),
-        "geography": str(parsed.get("geography") or "").strip(),
-        "positioning": str(parsed.get("positioning") or "").strip(),
-        "offerings": _as_list(parsed.get("offerings")),
-        "audience": _as_list(parsed.get("audience")),
-        "differentiators": _as_list(parsed.get("differentiators")),
-        "keywords": _as_list(parsed.get("keywords"), limit=20),
-        "context_summary": str(parsed.get("context_summary") or "").strip(),
-    }
+        result = {
+            "name": str(parsed.get("name") or name or "").strip(),
+            "industry": str(parsed.get("industry") or "").strip(),
+            "market": str(parsed.get("market") or "").strip(),
+            "geography": str(parsed.get("geography") or "").strip(),
+            "positioning": str(parsed.get("positioning") or "").strip(),
+            "offerings": _as_list(parsed.get("offerings")),
+            "audience": _as_list(parsed.get("audience")),
+            "differentiators": _as_list(parsed.get("differentiators")),
+            "keywords": _as_list(parsed.get("keywords"), limit=20),
+            "context_summary": str(parsed.get("context_summary") or "").strip(),
+        }
+        prose = {key: value for key, value in result.items() if key != "name"}
+        if text_matches_output_language(prose, output_language):
+            return result
+        if attempt == 0:
+            messages.extend([
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": (
+                    "The prose is not in the requested output language. Return the same JSON "
+                    f"again, following this rule exactly: {output_language_instruction(output_language)}"
+                )},
+            ])
+    return {}
 
 
 # --------------------------------------------------------------------------- #

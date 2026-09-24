@@ -17,7 +17,11 @@ import requests
 from parsel import Selector
 
 from app.core import settings as config
-from app.core.language import output_language_instruction, resolve_output_language
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from integrations.extraction.feeds import discover_feed_urls
 from llm_client import chat_completion
 from services.sources.sources_store import _default_name, create_source
@@ -410,12 +414,15 @@ def _ai_source_suggestions(project, output_language="en"):
         if key in seen:
             continue
         seen.add(key)
+        reason = str(item.get("reason") or "").strip()
+        if not text_matches_output_language(reason, output_language):
+            reason = ""
         normalized.append(
             {
                 "kind": kind,
                 "value": value,
                 "title": str(item.get("title") or "").strip(),
-                "reason": str(item.get("reason") or "").strip(),
+                "reason": reason,
             }
         )
     return normalized[:10]
@@ -469,7 +476,27 @@ def _looks_like_feed_url(url, content_type=""):
     )
 
 
-def _resolve_source(item):
+def _fallback_reason(kind: str, output_language: str) -> str:
+    reasons = {
+        "ar": {
+            "domain": "تم التوصل إليه من اقتراح نطاق بالذكاء الاصطناعي.",
+            "feed": "تم التوصل إليه من اقتراح خلاصة بالذكاء الاصطناعي.",
+            "social": "تم التوصل إليه من اقتراح حساب اجتماعي بالذكاء الاصطناعي.",
+            "page": "تم التوصل إليه من اقتراح صفحة بالذكاء الاصطناعي.",
+            "username": "تم التوصل إليه من حسابات المشروع.",
+        },
+        "en": {
+            "domain": "Resolved from AI domain suggestion.",
+            "feed": "Resolved from AI feed suggestion.",
+            "social": "Resolved from AI social suggestion.",
+            "page": "Resolved from AI page suggestion.",
+            "username": "Resolved from project usernames.",
+        },
+    }
+    return reasons[resolve_output_language(output_language)][kind]
+
+
+def _resolve_source(item, output_language="en"):
     kind = str(item.get("kind") or "url").strip().lower()
     value = str(item.get("value") or "").strip()
     title = str(item.get("title") or "").strip()
@@ -494,7 +521,7 @@ def _resolve_source(item):
                     {
                         "url": _normalize_url(feed_url),
                         "title": title or _default_name(root_url),
-                        "reason": reason or "Resolved from AI domain suggestion.",
+                        "reason": reason or _fallback_reason("domain", output_language),
                         "source_type": "rss",
                     }
                 )
@@ -518,7 +545,7 @@ def _resolve_source(item):
                 {
                     "url": _normalize_url(feed_url),
                     "title": title or _default_name(feed_url),
-                    "reason": reason or "Resolved from AI feed suggestion.",
+                    "reason": reason or _fallback_reason("feed", output_language),
                     "source_type": "rss",
                 }
             )
@@ -529,7 +556,7 @@ def _resolve_source(item):
             {
                 "url": final_url,
                 "title": title or _default_name(final_url),
-                "reason": reason or "Resolved from AI social suggestion.",
+                "reason": reason or _fallback_reason("social", output_language),
                 # Whichever of tweet/hashtag/username this URL actually is -
                 # there's no generic "social" bucket to fall back on (see
                 # config._infer_source_type).
@@ -545,7 +572,7 @@ def _resolve_source(item):
                 {
                     "url": _normalize_url(feed_url),
                     "title": title or _default_name(feed_url),
-                    "reason": reason or "Resolved from AI page suggestion.",
+                    "reason": reason or _fallback_reason("page", output_language),
                     "source_type": "rss",
                 }
             )
@@ -555,7 +582,7 @@ def _resolve_source(item):
         {
             "url": final_url,
             "title": title or _default_name(final_url),
-            "reason": reason or "Resolved from AI page suggestion.",
+            "reason": reason or _fallback_reason("page", output_language),
             "source_type": "web",
         }
     )
@@ -567,7 +594,8 @@ def discover_project_links(project, output_language="en"):
     if not isinstance(project, dict):
         return {"suggested_sources": [], "source_ids": [], "sources": [], "resolved_urls": []}
 
-    suggestions = _ai_source_suggestions(project, resolve_output_language(output_language))
+    output_language = resolve_output_language(output_language)
+    suggestions = _ai_source_suggestions(project, output_language)
     resolved_sources = []
     seen_urls = set()
     usernames = _clean_terms(project.get("usernames"))
@@ -580,12 +608,12 @@ def discover_project_links(project, output_language="en"):
             {
                 "url": profile_url,
                 "title": f"@{_normalize_username(username)}",
-                "reason": "Resolved from project usernames.",
+                "reason": _fallback_reason("username", output_language),
                 "source_type": "username",
             }
         )
     for item in suggestions:
-        for resolved in _resolve_source(item):
+        for resolved in _resolve_source(item, output_language):
             url = resolved.get("url")
             if not url or url in seen_urls:
                 continue

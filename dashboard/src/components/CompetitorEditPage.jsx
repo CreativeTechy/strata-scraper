@@ -21,6 +21,7 @@ import {
 } from '../competitorApi.js';
 import { SCRAPE_STAGES } from '../constants/competitorStages.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
+import { generatedLanguageNeedsRefresh } from '../i18n/format.js';
 import { CountryPicker, ListEditor, StageList } from './CompetitorOnboarding.jsx';
 import ErrorNotice from './ErrorNotice';
 import { WeekdayPicker } from './ProjectsPage.jsx';
@@ -261,8 +262,7 @@ export default function CompetitorEditPage() {
           </div>
         ) : null}
 
-        {!contextBusy && profileDraft?.generated_language
-          && profileDraft.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+        {!contextBusy && generatedLanguageNeedsRefresh(profileDraft, i18n.resolvedLanguage || i18n.language) ? (
             <div className="cs-alert cs-alert-warn" role="status" style={{ marginTop: 14 }}>
               {t('edit.context.languageMismatch')}
             </div>

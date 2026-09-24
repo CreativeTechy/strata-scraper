@@ -43,7 +43,11 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 from app.core import settings as config
-from app.core.language import output_language_instruction, resolve_output_language
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import COUNTRIES, country_label, validate_countries
@@ -266,26 +270,46 @@ def _ask_for_competitors(
         f"Their own domain (never list this as a competitor): {exclude_domain or 'unknown'}\n\n"
         f"List up to {limit} competitors, {ordering}.{directive}"
     )
-    try:
-        raw = chat_completion(
-            messages=[
+    messages = [
                 {"role": "system", "content": (
                     f"{DISCOVERY_SYSTEM_PROMPT}\n\n"
                     f"{output_language_instruction(output_language)}"
                 )},
                 {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=6000,
-            timeout=120,
-        )
-        parsed = json.loads(_strip_fences(raw))
-    except (LLMError, json.JSONDecodeError, ValueError) as exc:
-        print(f"  competitor discovery failed: {exc}")
-        return []
-
-    entries = parsed.get("competitors") if isinstance(parsed, dict) else None
-    if not isinstance(entries, list):
+    ]
+    entries = None
+    for attempt in range(2):
+        try:
+            raw = chat_completion(
+                messages=messages,
+                temperature=0.2,
+                max_tokens=6000,
+                timeout=120,
+            )
+            parsed = json.loads(_strip_fences(raw))
+        except (LLMError, json.JSONDecodeError, ValueError) as exc:
+            print(f"  competitor discovery failed: {exc}")
+            return []
+        entries = parsed.get("competitors") if isinstance(parsed, dict) else None
+        if not isinstance(entries, list):
+            return []
+        prose = [
+            value
+            for entry in entries if isinstance(entry, dict)
+            for value in (entry.get("description"), entry.get("why_competitor"))
+            if value
+        ]
+        if text_matches_output_language(prose, output_language):
+            break
+        if attempt == 0:
+            messages.extend([
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": (
+                    "The descriptive prose is not in the requested output language. Return the same "
+                    f"JSON again, following this rule exactly: {output_language_instruction(output_language)}"
+                )},
+            ])
+    else:
         return []
     # Which ask produced an entry decides how the country screen treats it: the
     # "global" ask deliberately requests foreign-headquartered chains that trade
@@ -439,10 +463,13 @@ def discover_competitors(
             domain = _domain(website)
 
             if domain and domain == own_domain:
-                dropped.append({"name": name, "reason": "This is the user's own business."})
+                dropped.append({"name": name, "reason": "This is the user's own business.",
+                                "reason_code": "ownBusiness", "reason_params": {}})
                 continue
             if website and not _is_company_site(website):
-                dropped.append({"name": name, "reason": f"{domain or website} is not a company's own site."})
+                dropped.append({"name": name, "reason": f"{domain or website} is not a company's own site.",
+                                "reason_code": "notCompanySite",
+                                "reason_params": {"site": domain or website}})
                 continue
 
             raw_country = str(entry.get("country") or "").strip().upper()
@@ -452,12 +479,15 @@ def discover_competitors(
                 # is how globals with no country field filled a country-scoped
                 # study. With a target country set, unplaceable means rejected.
                 if not country:
-                    dropped.append({"name": name, "reason": "No country given, so it cannot be placed in the target countries."})
+                    dropped.append({"name": name, "reason": "No country given, so it cannot be placed in the target countries.",
+                                    "reason_code": "missingCountry", "reason_params": {}})
                     continue
                 if country not in countries:
                     dropped.append({
                         "name": name,
                         "reason": f"Located in {country_label(country)}, outside the target countries.",
+                        "reason_code": "outsideCountries",
+                        "reason_params": {"country": country},
                     })
                     continue
 
@@ -523,11 +553,13 @@ def discover_competitors(
         check = checks.get(i) or {"reachable": True, "search_hits": 0, "resolved_website": website}
         if corroborate:
             if not check["resolved_website"]:
-                rejected.append({"name": name, "reason": "No reachable website found."})
+                rejected.append({"name": name, "reason": "No reachable website found.",
+                                 "reason_code": "noWebsite", "reason_params": {}})
                 log(f"{name}: rejected — no reachable website found.")
                 continue
             if not check["reachable"] and check["search_hits"] == 0:
-                rejected.append({"name": name, "reason": "Could not corroborate that this company exists."})
+                rejected.append({"name": name, "reason": "Could not corroborate that this company exists.",
+                                 "reason_code": "uncorroborated", "reason_params": {}})
                 log(f"{name}: rejected — could not corroborate that this company exists.")
                 continue
 
@@ -866,6 +898,8 @@ def discover_accounts(
     for entry in candidates:
         platform = str(entry.get("platform") or "").strip().lower()
         handle = str(entry.get("handle") or "").strip()
+        if platform == "keyword" and not text_matches_output_language(handle, output_language):
+            continue
         # `keyword` has no canonical URL of its own — the model is asked to
         # give the search phrase in `handle`, and the real (Google News RSS
         # search) URL is derived from it, the same way a manually-added

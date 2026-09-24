@@ -34,7 +34,38 @@
     }
   },
   "discoveryLog": {
-    "stillWorking": " (still working, {{duration}})"
+    "stillWorking": " (still working, {{duration}})",
+    "website": { "reachable": "reachable", "unreachable": "unreachable" },
+    "events": {
+      "searchingMarket": "Searching the web for real competitors ({{count}} queries)…",
+      "searchFallback": "Search returned nothing usable; using the model’s own knowledge.",
+      "groundedCandidates": "Collected {{count}} search results to ground the candidate list.",
+      "askingSplit": "Asking for {{local}} local and {{global}} large competitors…",
+      "askingCandidates": "Asking the model for competitor candidates…",
+      "retryingWithoutCountry": "No in-country candidates were found; retrying without the country restriction…",
+      "checkingCandidates": "The model suggested {{count}} candidates; checking each one…",
+      "countryFallback": "No candidate passed the country filter; keeping the unfiltered list for review.",
+      "checkingWebsite": "{{name}}: checking whether {{url}} is reachable…",
+      "websiteStatus": "{{name}}: the website is {{status}}.",
+      "searchingOfficialSite": "{{name}}: searching for the official website…",
+      "searchingOfficialSiteFallback": "{{name}}: trying another search provider…",
+      "foundSearchResults": "{{name}}: found {{count}} search results.",
+      "rejectedNoWebsite": "{{name}}: rejected because no reachable website was found.",
+      "rejectedUncorroborated": "{{name}}: rejected because the company could not be corroborated.",
+      "accepted": "{{name}}: accepted.",
+      "checkingFeed": "{{name}}: checking the website for a feed…",
+      "foundFeed": "{{name}}: found the feed {{url}}.",
+      "searchingAccounts": "{{name}}: searching the web for real accounts and hashtags…",
+      "accountSearchFallback": "{{name}}: search returned nothing usable; using the model’s own knowledge.",
+      "groundedChannels": "{{name}}: found {{count}} search results to ground channel discovery.",
+      "searchingReviews": "{{name}}: searching for review and discussion pages…",
+      "foundReviews": "{{name}}: found {{count}} matching review or discussion pages.",
+      "noReviews": "{{name}}: no matching review or discussion pages were found.",
+      "askingChannels": "{{name}}: asking the model for channels…",
+      "droppedX": "{{name}}: dropped {{count}} X handles that did not resolve.",
+      "droppedRegion": "{{name}}: dropped {{count}} channels outside the target region.",
+      "foundChannels": "{{name}}: found {{count}} channels."
+    }
   },
   "listEditor": {
     "remove": "Remove {{item}}"
@@ -94,7 +125,7 @@
     "differentiatorsHint": "used to judge competitor moves",
     "differentiatorsPlaceholder": "implementation in under 30 days",
     "summary": "Market context",
-    "languageMismatch": "This saved market context was generated in another language. Re-run it to generate the content in your current language.",
+    "languageMismatch": "This saved market context was generated in another or unknown language. Re-run it to generate the content in your current language.",
     "continueCultural": "Continue to cultural analysis",
     "continueCompetitors": "Continue to competitors"
   },
@@ -108,7 +139,7 @@
     "benefits": "Benefits",
     "challenges": "Challenges",
     "insights": "Other insights",
-    "languageMismatch": "This saved analysis was generated in another language. Re-run it to generate the content in your current language.",
+    "languageMismatch": "This saved analysis was generated in another or unknown language. Re-run it to generate the content in your current language.",
     "skip": "Skip and continue"
   },
   "competitors": {
@@ -118,8 +149,17 @@
     "suggestHint": "Optional — AI compares your profile against the market and suggests competitors to review. Track the ones you want, and their channels are found automatically.",
     "suggesting": "Suggesting…",
     "suggest": "Suggest competitors with AI",
+    "languageMismatch": "This AI suggestion was generated in another or unknown language. Run discovery again to generate it in your current language.",
     "rejectedSummary_one": "{{count}} suggestion dropped during checking",
     "rejectedSummary_other": "{{count}} suggestions dropped during checking",
+    "rejectionReasons": {
+      "ownBusiness": "This is your own business.",
+      "notCompanySite": "{{site}} is not a company-owned website.",
+      "missingCountry": "No country was supplied, so it could not be placed in the target countries.",
+      "outsideCountries": "Based in {{country}}, outside the target countries.",
+      "noWebsite": "No reachable website was found.",
+      "uncorroborated": "The company’s existence could not be corroborated."
+    },
     "listTitle": "Your competitors",
     "trackedSummary": "<strong>{{tracked}}</strong> tracked. Channels are found and used immediately once a competitor is tracked, manual or AI-suggested.",
     "trackingAll": "Tracking all…",
@@ -164,7 +204,11 @@
     "linkedin": "LinkedIn",
     "threads": "Threads",
     "facebook": "Facebook",
-    "instagram": "Instagram"
+    "instagram": "Instagram",
+    "x": "X",
+    "blog": "Blog",
+    "news": "News",
+    "social": "Social"
   },
   "validationStatus": {
     "pending": "pending",

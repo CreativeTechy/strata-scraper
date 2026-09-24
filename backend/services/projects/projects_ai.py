@@ -7,7 +7,11 @@ import re
 from collections import Counter
 
 from app.core import settings as config
-from app.core.language import output_language_instruction, resolve_output_language
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import chat_completion
 
 STOPWORDS = {
@@ -141,7 +145,10 @@ def _username_profile_urls(usernames):
 
 def _keyword_candidates(name, description):
     text = f"{name} {description}".lower()
-    words = re.findall(r"[a-z0-9][a-z0-9&+-]{2,}", text)
+    # ``[^\W_]`` is a Unicode letter/digit. The old ASCII-only expression
+    # silently returned no candidates for an Arabic project when the LLM was
+    # unavailable, which made the localized fallback mostly empty.
+    words = re.findall(r"[^\W_][^\W_&+-]{2,}", text, re.UNICODE)
     counts = Counter(
         word for word in words
         if word not in STOPWORDS and not word.isdigit()
@@ -221,6 +228,9 @@ def suggest_project_metadata(name, description, output_language="en"):
     hashtags = _normalize_items(payload.get("hashtags") or [], prefix="#", limit=6)
     keywords = _normalize_items(payload.get("keywords") or [], prefix="", limit=8)
     usernames = _normalize_usernames(payload.get("usernames") or [], limit=5)
+
+    if not text_matches_output_language([target_audience, *keywords], output_language):
+        return fallback
 
     return {
         "target_audience": target_audience,
