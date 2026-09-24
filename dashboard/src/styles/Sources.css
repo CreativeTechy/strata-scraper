@@ -78,7 +78,7 @@
 
 .source-article-source {
   overflow-wrap: anywhere;
-  text-align: right;
+  text-align: end;
   max-width: 100%;
 }
 
@@ -118,6 +118,6 @@
   }
 
   .source-article-source {
-    text-align: left;
+    text-align: start;
   }
 }

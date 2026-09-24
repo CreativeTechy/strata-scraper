@@ -22,15 +22,18 @@ import RoleEditPage from './components/RoleEditPage';
 import ProjectLinkageListPage from './components/ProjectLinkageListPage';
 import ProjectLinkageDetailPage from './components/ProjectLinkageDetailPage';
 import ProjectLinkageEditPage from './components/ProjectLinkageEditPage';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth/useAuth.js';
+import { apiError } from './errors/apiError.js';
 
 function RequireAuth() {
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        Loading...
+        {t('access.loading')}
       </div>
     );
   }
@@ -41,12 +44,13 @@ function RequireAuth() {
 }
 
 function RequirePermission({ permissions, children }) {
+  const { t } = useTranslation();
   const { hasPermission } = useAuth();
   if (!hasPermission(...permissions)) {
     return (
       <div style={{ padding: 60, textAlign: 'center' }}>
-        <h2>Access denied</h2>
-        <p className="subtitle">You don't have permission to view this page.</p>
+        <h2>{t('access.deniedTitle')}</h2>
+        <p className="subtitle">{t('access.deniedMessage')}</p>
       </div>
     );
   }
@@ -230,6 +234,14 @@ export default function App() {
     return fallback;
   };
 
+  // Same message as before, plus the backend's error code/params so the
+  // notice that eventually renders this can show it in the UI language.
+  const apiFailure = (data, status, fallback) => {
+    const error = apiError(data, { status, fallback });
+    error.message = formatApiError(data, fallback);
+    return error;
+  };
+
   const loadWorkflowArticles = async (projectId = selectedProjectId) => {
     try {
       const projectIds = (Array.isArray(projectId) ? projectId : [projectId])
@@ -404,7 +416,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/pipeline-runs/${runId}/stop`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(formatApiError(data, `Failed to stop pipeline run (${res.status})`));
+      if (!res.ok) throw apiFailure(data, res.status, `Failed to stop pipeline run (${res.status})`);
       stopPolling();
       setIsScraping(false);
       await loadPipelineRuns();
@@ -423,7 +435,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(data?.error || `Failed to add source (${res.status})`);
+      if (!res.ok || data?.error) throw apiError(data, { status: res.status, fallback: `Failed to add source (${res.status})` });
       await refreshSources();
       await refreshProjects();
       return data?.source ?? null;
@@ -441,7 +453,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(data?.error || `Failed to update source (${res.status})`);
+      if (!res.ok || data?.error) throw apiError(data, { status: res.status, fallback: `Failed to update source (${res.status})` });
       await refreshSources();
       await refreshProjects();
       return data?.source ?? null;
@@ -455,7 +467,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/sources/${sourceId}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(formatApiError(data, `Failed to delete source (${res.status})`));
+      if (!res.ok || data?.error) throw apiFailure(data, res.status, `Failed to delete source (${res.status})`);
       await refreshSources();
       await refreshProjects();
       return true;
@@ -483,7 +495,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(formatApiError(data, `Failed to add project (${res.status})`));
+      if (!res.ok || data?.error) throw apiFailure(data, res.status, `Failed to add project (${res.status})`);
       const created = data?.project ?? null;
       if (created) {
         setProjects((prev) => [...prev, created]);
@@ -508,7 +520,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(formatApiError(data, `Failed to update project (${res.status})`));
+      if (!res.ok || data?.error) throw apiFailure(data, res.status, `Failed to update project (${res.status})`);
       const updated = data?.project ?? null;
       if (updated) {
         setProjects((prev) => prev.map((project) => (Number(project.id) === Number(projectId) ? updated : project)));
@@ -533,7 +545,7 @@ export default function App() {
         body: JSON.stringify({ user_ids: userIds }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(formatApiError(data, `Failed to update linked users (${res.status})`));
+      if (!res.ok || data?.error) throw apiFailure(data, res.status, `Failed to update linked users (${res.status})`);
       await refreshProjects();
       return data;
     } catch (error) {
@@ -546,7 +558,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(formatApiError(data, `Failed to delete project (${res.status})`));
+      if (!res.ok || data?.error) throw apiFailure(data, res.status, `Failed to delete project (${res.status})`);
       await refreshProjects();
       if (Number(selectedProjectId) === Number(projectId)) {
         setSelectedProjectId(null);

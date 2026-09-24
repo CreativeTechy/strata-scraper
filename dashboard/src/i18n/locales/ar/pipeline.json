@@ -1,0 +1,374 @@
+{
+  "history": "سجل عمليات التشغيل",
+  "projectNumber": "المشروع #{{id}}",
+  "unassigned": "غير مُسنَد",
+  "stages": {
+    "queued": "في قائمة الانتظار",
+    "scrape": "جارٍ الجمع",
+    "clean": "جارٍ التحقق",
+    "done": "مكتملة",
+    "cancelled": "ملغاة",
+    "error": "خطأ",
+    "failed": "فشلت",
+    "importing": "جارٍ الاستيراد"
+  },
+  "errors": {
+    "loadRunsFailed": "تعذّر تحميل عمليات التشغيل.",
+    "stopRunFailed": "تعذّر إيقاف عملية التشغيل.",
+    "loadRunFailed": "تعذّر تحميل تفاصيل عملية التشغيل.",
+    "exportFailed": "تعذّر تصدير المقالات."
+  },
+  "errorContext": {
+    "loadRuns": "تحميل عمليات التشغيل",
+    "loadActivity": "تحميل نشاط عمليات التشغيل",
+    "loadRun": "تحميل عملية التشغيل هذه",
+    "exportRunArticles": "استخراج مقالات عملية التشغيل هذه",
+    "completeRun": "إتمام عملية التشغيل هذه"
+  },
+  "pills": {
+    "idle": "خامل",
+    "stopped": "متوقف",
+    "live": "مباشر"
+  },
+  "stopwatch": {
+    "kicker": "ساعة إيقاف مباشرة",
+    "title": "الوقت المنقضي لسير العمل",
+    "scope": "نطاق التشغيل: {{scope}}",
+    "scopeSelect": "اختر مشروعًا",
+    "scopeNone": "لا توجد مشاريع متاحة",
+    "scopeOne": "مشروع واحد",
+    "counting": "المؤقت يعمل أثناء تشغيل أداة الاستخراج.",
+    "lastStarted": "بدأت آخر عملية تشغيل في {{time}}.",
+    "notStarted": "شغّل أداة الاستخراج لبدء توقيت سير العمل."
+  },
+  "getData": {
+    "badge": "المصادر",
+    "title": "جلب البيانات",
+    "run": "تشغيل أداة الاستخراج للمشروع",
+    "runSelectProject": "اختر مشروعًا للتشغيل",
+    "runSelectSource": "اختر مصدرًا واحدًا على الأقل",
+    "running": "جارٍ التشغيل…",
+    "requiresPermission": "يتطلب صلاحية {{permission}}.",
+    "selectSourceHint": "اختر مصدرًا واحدًا على الأقل للتشغيل."
+  },
+  "picker": {
+    "kicker": "النطاق",
+    "title": "اختر مشروعًا لاستخراج بياناته",
+    "total_zero": "لا توجد مشاريع",
+    "total_one": "مشروع واحد إجمالًا",
+    "total_two": "مشروعان إجمالًا",
+    "total_few": "{{formatted}} مشاريع إجمالًا",
+    "total_many": "{{formatted}} مشروعًا إجمالًا",
+    "total_other": "{{formatted}} مشروع إجمالًا",
+    "note": "تعمل أداة الاستخراج للمشروع المحدد، ثم تعكس النتائج أدناه أحدث مقالاته.",
+    "empty": "لا توجد مشاريع بعد. أنشئ مشروعًا أولًا، ثم عُد لتشغيل سير العمل.",
+    "selected": "محدد",
+    "unselected": "غير محدد",
+    "sourceCount_zero": "لا توجد مصادر",
+    "sourceCount_one": "مصدر واحد",
+    "sourceCount_two": "مصدران",
+    "sourceCount_few": "{{formatted}} مصادر",
+    "sourceCount_many": "{{formatted}} مصدرًا",
+    "sourceCount_other": "{{formatted}} مصدر"
+  },
+  "sources": {
+    "title": "المصادر",
+    "selectedSummary": "تم تحديد {{checked}} من {{total}} - يقتصر الجمع على المصادر المحددة",
+    "noneAssigned": "لم تُسنَد أي مصادر إلى هذا المشروع بعد",
+    "deselectAll": "إلغاء تحديد الكل",
+    "expand": "توسيع المصادر",
+    "collapse": "طي المصادر",
+    "emptyList": "لم تُسنَد أي مصادر إلى هذا المشروع بعد. أضف مصدرًا لبدء الجمع.",
+    "collapsedSummary_zero": "تم تحديد {{checked}} من أصل {{formatted}} مصدر. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedSummary_one": "تم تحديد {{checked}} من أصل مصدر واحد. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedSummary_two": "تم تحديد {{checked}} من أصل مصدرين. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedSummary_few": "تم تحديد {{checked}} من أصل {{formatted}} مصادر. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedSummary_many": "تم تحديد {{checked}} من أصل {{formatted}} مصدرًا. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedSummary_other": "تم تحديد {{checked}} من أصل {{formatted}} مصدر. وسّع القائمة لمراجعة التحديد أو تغييره.",
+    "collapsedEmpty": "لا توجد مصادر لعرضها. وسّع القائمة لإضافة مصدر.",
+    "add": "إضافة مصدر"
+  },
+  "validate": {
+    "badgeRunning": "التشغيل جارٍ",
+    "badgeActive": "خط المعالجة نشط",
+    "title": "التحقق وإزالة التكرار",
+    "waiting": "بانتظار الاستخراج…",
+    "steps": {
+      "parsing": "تحليل المحتوى الخام",
+      "validatingJson": "التحقق من مخرجات JSON للذكاء الاصطناعي",
+      "extractingInsights": "استخراج رؤى منظَّمة من المقالات"
+    },
+    "githubNote": "يجري التشغيل على GitHub Actions - تصل الصفوف الجديدة خلال 3 دقائق تقريبًا."
+  },
+  "cleanup": {
+    "kept_zero": "تم الإبقاء على {{kept}}/{{total}} مقالة",
+    "kept_one": "تم الإبقاء على {{kept}}/{{total}} مقالة",
+    "kept_two": "تم الإبقاء على {{kept}}/{{total}} مقالة",
+    "kept_few": "تم الإبقاء على {{kept}}/{{total}} مقالات",
+    "kept_many": "تم الإبقاء على {{kept}}/{{total}} مقالة",
+    "kept_other": "تم الإبقاء على {{kept}}/{{total}} مقالة",
+    "complete": "اكتمل التشغيل",
+    "validatingProgress": "جارٍ التحقق من المقالات {{done}}/{{total}}",
+    "validating": "جارٍ التحقق من المقالات…",
+    "scraping": "جارٍ جمع المصادر…",
+    "scrapingProgress": "جارٍ جمع المصادر: {{pages}} / {{articles}}",
+    "pages_zero": "لا توجد صفحات",
+    "pages_one": "صفحة واحدة",
+    "pages_two": "صفحتان",
+    "pages_few": "{{formatted}} صفحات",
+    "pages_many": "{{formatted}} صفحةً",
+    "pages_other": "{{formatted}} صفحة",
+    "articles_zero": "لا توجد مقالات",
+    "articles_one": "مقالة واحدة",
+    "articles_two": "مقالتان",
+    "articles_few": "{{formatted}} مقالات",
+    "articles_many": "{{formatted}} مقالةً",
+    "articles_other": "{{formatted}} مقالة",
+    "saved_zero": "لم تُحفظ أي مقالة",
+    "saved_one": "تم حفظ مقالة واحدة",
+    "saved_two": "تم حفظ مقالتين",
+    "saved_few": "تم حفظ {{formatted}} مقالات",
+    "saved_many": "تم حفظ {{formatted}} مقالةً",
+    "saved_other": "تم حفظ {{formatted}} مقالة"
+  },
+  "save": {
+    "title": "الحفظ والتخزين",
+    "waiting": "بانتظار البيانات المجمَّعة…",
+    "totalRows": "إجمالي الصفوف المخزَّنة",
+    "rows_zero": "لا توجد صفوف",
+    "rows_one": "صف واحد",
+    "rows_two": "صفّان",
+    "rows_few": "{{formatted}} صفوف",
+    "rows_many": "{{formatted}} صفًّا",
+    "rows_other": "{{formatted}} صف",
+    "uniqueSources": "المصادر الفريدة",
+    "found_zero": "لم يُعثر على أي مصدر",
+    "found_one": "مصدر واحد",
+    "found_two": "مصدران",
+    "found_few": "{{formatted}} مصادر",
+    "found_many": "{{formatted}} مصدرًا",
+    "found_other": "{{formatted}} مصدر",
+    "storyGroups": "مجموعات القصص",
+    "grouped_zero": "لا توجد مجموعات",
+    "grouped_one": "مجموعة واحدة",
+    "grouped_two": "مجموعتان",
+    "grouped_few": "{{formatted}} مجموعات",
+    "grouped_many": "{{formatted}} مجموعةً",
+    "grouped_other": "{{formatted}} مجموعة",
+    "synced": "تمت المزامنة مع قاعدة البيانات"
+  },
+  "log": {
+    "kicker": "سجل التشغيل",
+    "title": "أحدث نشاط لعمليات التشغيل",
+    "currentRun": "عملية التشغيل الحالية",
+    "empty": "لا توجد عمليات تشغيل بعد. شغّل أداة الاستخراج لتوليد النشاط."
+  },
+  "results": {
+    "kicker": "النتائج",
+    "title": "لقطة المخرجات الحالية",
+    "pagesCrawled": "الصفحات المزحوفة",
+    "articlesScraped": "المقالات المجمَّعة",
+    "cleaned": "المنقّاة",
+    "saved": "المحفوظة",
+    "snapshot": "لقطة الجمع",
+    "articlesStored": "المقالات المخزَّنة",
+    "topSources": "أبرز المصادر",
+    "noSources": "لا توجد مصادر بعد.",
+    "recentArticles": "أحدث المقالات",
+    "unknownSource": "مصدر غير معروف",
+    "noArticles": "لا توجد مقالات حديثة لمعاينتها."
+  },
+  "runs": {
+    "title": "عمليات التشغيل",
+    "subtitle": "عرض مستقل لسجل كل عملية جمع.",
+    "backToDashboard": "العودة إلى لوحة المعلومات",
+    "filterProject": "التصفية حسب المشروع",
+    "filterStatus": "التصفية حسب الحالة",
+    "allProjects": "جميع المشاريع",
+    "allStatuses": "جميع الحالات",
+    "upcoming": "قادمة",
+    "upcomingIn": "من المقرر التشغيل خلال {{duration}}، في {{time}}.",
+    "upcomingUnderMinute": "من المقرر التشغيل خلال أقل من دقيقة، في {{time}}.",
+    "upcomingShortly": "من المقرر البدء قريبًا، في {{time}}.",
+    "emptyTitle": "لا توجد عمليات تشغيل",
+    "emptyNoRuns": "لا توجد عمليات تشغيل مسجَّلة بعد.",
+    "emptyFiltered": "لا توجد عمليات تشغيل تطابق عوامل التصفية الحالية.",
+    "stop": "إيقاف",
+    "stopping": "جارٍ الإيقاف…",
+    "stageMessage": "{{stage}} - {{message}}",
+    "counts": {
+      "scraped": "المجمَّعة: {{value}}",
+      "cleaned": "المنقّاة: {{value}}",
+      "saved": "المحفوظة: {{value}}",
+      "pages": "الصفحات: {{value}}"
+    },
+    "created": "أُنشئت في {{time}}",
+    "finished": "انتهت في {{time}}",
+    "createdAndFinished": "أُنشئت في {{created}} • انتهت في {{finished}}"
+  },
+  "detail": {
+    "title": "تفاصيل عملية التشغيل",
+    "backToRuns": "العودة إلى عمليات التشغيل",
+    "loading": "جارٍ تحميل تفاصيل عملية التشغيل…",
+    "totals": {
+      "scraped": "المقالات المجمَّعة",
+      "cleaned": "المقالات المنقّاة",
+      "saved": "المقالات المحفوظة"
+    },
+    "export": {
+      "label": "استخراج المقالات",
+      "exporting": "جارٍ التصدير…",
+      "hint": "تنزيل بصيغة JSONL",
+      "downloadTitle": "تنزيل مقالات عملية التشغيل هذه بصيغة JSONL",
+      "noneSaved": "لم تُحفظ أي مقالة في عملية التشغيل هذه",
+      "confirmTitle": "استخراج المقالات؟",
+      "confirmMessage_zero": "لا توجد مقالات مجمَّعة في عملية التشغيل هذه لتصديرها بصيغة JSONL.",
+      "confirmMessage_one": "سيؤدي هذا إلى تصدير مقالة واحدة جُمعت في عملية التشغيل هذه كملف JSONL.",
+      "confirmMessage_two": "سيؤدي هذا إلى تصدير مقالتين جُمعتا في عملية التشغيل هذه كملف JSONL.",
+      "confirmMessage_few": "سيؤدي هذا إلى تصدير {{formatted}} مقالات جُمعت في عملية التشغيل هذه كملف JSONL.",
+      "confirmMessage_many": "سيؤدي هذا إلى تصدير {{formatted}} مقالةً جُمعت في عملية التشغيل هذه كملف JSONL.",
+      "confirmMessage_other": "سيؤدي هذا إلى تصدير {{formatted}} مقالة جُمعت في عملية التشغيل هذه كملف JSONL.",
+      "confirm": "استخراج"
+    },
+    "summary": {
+      "project": "المشروع",
+      "status": "الحالة",
+      "stage": "المرحلة الحالية",
+      "startedAt": "وقت البدء",
+      "finishedAt": "وقت الانتهاء",
+      "totalDuration": "المدة الإجمالية"
+    },
+    "inProgress": "{{duration}} (قيد التنفيذ)",
+    "message": "الرسالة",
+    "originalMessage": "تفاصيل التشغيل الأصلية",
+    "completeWithIssues_zero": "اكتمل التشغيل. لا توجد مصادر تحتاج إلى متابعة.",
+    "completeWithIssues_one": "اكتمل التشغيل. مصدر واحد يحتاج إلى متابعة؛ راجع التفصيل حسب المصدر أدناه.",
+    "completeWithIssues_two": "اكتمل التشغيل. مصدران يحتاجان إلى متابعة؛ راجع التفصيل حسب المصدر أدناه.",
+    "completeWithIssues_few": "اكتمل التشغيل. {{formatted}} مصادر تحتاج إلى متابعة؛ راجع التفصيل حسب المصدر أدناه.",
+    "completeWithIssues_many": "اكتمل التشغيل. {{formatted}} مصدرًا تحتاج إلى متابعة؛ راجع التفصيل حسب المصدر أدناه.",
+    "completeWithIssues_other": "اكتمل التشغيل. {{formatted}} مصدر تحتاج إلى متابعة؛ راجع التفصيل حسب المصدر أدناه.",
+    "timing": "التوقيت",
+    "legacyTiming": "التفاصيل غير متاحة لعملية تشغيل قديمة — انتهت هذه العملية قبل بدء تتبّع توقيت كل مرحلة.",
+    "stageRows": {
+      "scrape": "الجمع والحفظ"
+    },
+    "perSource": "التفصيل حسب المصدر",
+    "legacySources": "التفاصيل غير متاحة لعملية تشغيل قديمة — انتهت هذه العملية قبل بدء تتبّع إحصاءات كل مصدر.",
+    "noSourceData": "لم تُسجَّل بيانات لكل مصدر في عملية التشغيل هذه بعد.",
+    "columns": {
+      "source": "المصدر",
+      "fetchStatus": "حالة الجلب",
+      "scraped": "المجمَّعة",
+      "duplicate": "المكررة",
+      "contentFiltered": "المستبعدة بالتحقق",
+      "dateFiltered": "خارج النطاق الزمني",
+      "alreadyScraped": "مجمَّعة مسبقًا",
+      "kept": "المُبقاة",
+      "saved": "المحفوظة"
+    },
+    "badges": {
+      "blocked": "محظور (HTTP {{status}})",
+      "http": "HTTP {{status}}",
+      "issue": "مشكلة",
+      "ok": "سليم"
+    },
+    "expandDetails": "توسيع التفاصيل",
+    "collapseDetails": "طي التفاصيل",
+    "visit": "زيارة {{url}}"
+  },
+  "issues": {
+    "setupLinkedin": {
+      "title": "يلزم إعداد LinkedIn",
+      "message": "لا يمكن الجمع من LinkedIn حتى تُهيّأ خدمة الجمع الخاصة به.",
+      "action": "اطلب من المسؤول تهيئة رمز Apify API، ثم أعد التشغيل."
+    },
+    "setupIntegration": {
+      "title": "يلزم إعداد إضافي",
+      "message": "يحتاج هذا المصدر إلى خدمة جمع خارجية.",
+      "action": "اطلب من المسؤول تهيئة رمز Apify API، ثم أعد التشغيل."
+    },
+    "setupXSearch": {
+      "title": "يلزم إعداد البحث في X",
+      "message": "يحتاج هذا المصدر إلى خدمة بحث لاكتشاف المنشورات العامة.",
+      "action": "هيّئ Google Custom Search أو Apify، ثم أعد التشغيل."
+    },
+    "setupSearch": {
+      "title": "يلزم إعداد البحث",
+      "message": "يحتاج هذا المصدر إلى خدمة بحث لاكتشاف المنشورات العامة.",
+      "action": "هيّئ Google Custom Search أو Apify، ثم أعد التشغيل."
+    },
+    "invalidSource": {
+      "title": "مصدر غير صالح",
+      "message": "عنوان المصدر أو نوعه غير معروف.",
+      "action": "تحقق من صيغة المصدر وحدّثه قبل عملية التشغيل التالية."
+    },
+    "notFound": {
+      "title": "المصدر غير موجود",
+      "message": "الحساب أو الصفحة غير موجودة، أو أُعيدت تسميتها، أو لم تعد عامة.",
+      "action": "تحقق من التهجئة أو الرابط، ثم حدّث هذا المصدر أو أزله."
+    },
+    "notFoundX": {
+      "title": "حساب X غير موجود",
+      "message": "الحساب أو الصفحة غير موجودة، أو أُعيدت تسميتها، أو لم تعد عامة.",
+      "action": "تحقق من التهجئة أو الرابط، ثم حدّث هذا المصدر أو أزله."
+    },
+    "rateLimited": {
+      "title": "تقييد مؤقت لمعدل الطلبات",
+      "message": "قيّدت المنصة طلبات الجمع مؤقتًا.",
+      "action": "انتظر بعض الوقت ثم أعد التشغيل."
+    },
+    "accessBlocked": {
+      "title": "الوصول محظور",
+      "message": "رفضت المنصة الطلبات الواردة من الشبكة الحالية لأداة الجمع.",
+      "action": "جرّب الوصول المصادَق عليه أو وكيل جمع (proxy)، ثم أعد التشغيل."
+    },
+    "authenticationFailed": {
+      "title": "المصادقة مطلوبة",
+      "message": "بيانات الاعتماد المهيّأة مفقودة أو مرفوضة أو منتهية الصلاحية.",
+      "action": "تحقق من بيانات اعتماد الخدمة ثم أعد التشغيل."
+    },
+    "serviceUnavailable": {
+      "title": "المنصة غير متاحة مؤقتًا",
+      "message": "أرجعت منصة المصدر خطأً في الخادم.",
+      "action": "حاول الجمع من المصدر مرة أخرى لاحقًا."
+    },
+    "timedOut": {
+      "title": "انتهت مهلة الطلب",
+      "message": "لم يستجب المصدر خلال الوقت المسموح.",
+      "action": "حاول مرة أخرى؛ وإذا استمرت المشكلة، راجع إعدادات الشبكة أو المهلة."
+    },
+    "connectionFailed": {
+      "title": "فشل الاتصال",
+      "message": "تعذّر على أداة الجمع إنشاء اتصال موثوق بهذا المصدر.",
+      "action": "تحقق من الرابط والاتصال بالشبكة، ثم حاول مرة أخرى."
+    },
+    "sourceUnavailable": {
+      "title": "المصدر غير متاح",
+      "message": "المصدر خاص أو محمي أو محذوف أو غير متاح لسبب آخر.",
+      "action": "تأكد من أن المصدر عام أو أزله من المشروع."
+    },
+    "noResults": {
+      "title": "لم يُعثر على مقالات",
+      "message": "تم الوصول إلى المصدر بنجاح لكنه لم يُنتج أي مقالات صالحة في عملية التشغيل هذه.",
+      "action": "تحقق من النطاق الزمني للمشروع ونشاط المصدر قبل المحاولة مرة أخرى."
+    },
+    "httpError": {
+      "title": "تعذّر جلب المصدر",
+      "message": "أرجع المصدر HTTP {{status}} وتعذّر الجمع منه.",
+      "action": "حاول مرة أخرى لاحقًا أو راجع إعدادات المصدر."
+    },
+    "fetchFailed": {
+      "title": "تعذّر الجمع من المصدر",
+      "message": "حالت مشكلة غير متوقعة دون الجمع من هذا المصدر.",
+      "action": "حاول مرة أخرى؛ وإذا استمرت المشكلة، راجع التفاصيل التقنية."
+    }
+  },
+  "fetchNotes": {
+    "noArticles": "لم يُرجع أي مقالة.",
+    "blocked": "محظور (HTTP {{status}}) - غالبًا بسبب حماية مضادة للروبوتات تستهدف شبكة هذا الخادم، وليست مشكلة في المصدر نفسه.",
+    "httpError": "HTTP {{status}} - تعذّر جلب صفحة المصدر.",
+    "telegramUnavailable": "قناة Telegram غير متاحة (خاصة، أو ليست قناة، أو غير موجودة).",
+    "tweetUnavailable": "تعذّر جلب هذه التغريدة (محذوفة، أو خاصة/محمية، أو أن fxtwitter.com غير متاح).",
+    "apifyMissing": "تتطلب مصادر {{platform}} خدمة Apify، ولم يُضبط رمز Apify API."
+  }
+}

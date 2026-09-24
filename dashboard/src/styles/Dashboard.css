@@ -95,6 +95,12 @@
   background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
 }
 
+/* The bar grows from the inline-start edge; keep the gradient running from
+   its base to its tip in RTL too. */
+[dir='rtl'] .dashboard-platform-track > span {
+  background: linear-gradient(270deg, var(--secondary-color), var(--primary-color));
+}
+
 @media (max-width: 640px) {
   .dashboard-platform-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

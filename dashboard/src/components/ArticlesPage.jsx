@@ -1,33 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, Layers, X } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
+import { ExternalLink, Calendar, Search, ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Trash2, Filter, Download, Upload, AlertTriangle, Info, LayoutGrid, List, FolderKanban, Layers, Languages, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import ImportOptionsModal from './articles/ImportOptionsModal.jsx';
 import ExportOptionsModal from './articles/ExportOptionsModal.jsx';
 import { useAuth } from '../auth/useAuth.js';
+import { apiError, localizedError } from '../errors/apiError.js';
 import { userFacingError } from '../errors/userFacingError.js';
+import { formatDate, formatDateTime, formatDuration, formatList, formatNumber, languageName } from '../i18n/format.js';
 import '../styles/Articles.css';
 
+// Values are the API's sort codes; labels are translation keys under
+// `articles:sort.*`, resolved at render time.
 const SORT_OPTIONS = [
-  { value: 'published.desc', label: 'Newest first' },
-  { value: 'published.asc', label: 'Oldest first' },
-  { value: 'fetched_at.desc', label: 'Recently scraped' },
-  { value: 'created_at.desc', label: 'Recently saved' },
-  { value: 'source.asc', label: 'Source (A-Z)' },
+  { value: 'published.desc', labelKey: 'sort.publishedDesc' },
+  { value: 'published.asc', labelKey: 'sort.publishedAsc' },
+  { value: 'fetched_at.desc', labelKey: 'sort.fetchedDesc' },
+  { value: 'created_at.desc', labelKey: 'sort.createdDesc' },
+  { value: 'source.asc', labelKey: 'sort.sourceAsc' },
 ];
 
 const PAGE_SIZES = [12, 24, 48, 96];
 
 // Must match backend/main.py's DELETE_ALL_ARTICLES_CONFIRMATION exactly - the
 // API rejects the request without it, so a typed confirmation replaces what
-// used to be a plain confirm dialog's default-button click.
+// used to be a plain confirm dialog's default-button click. It is a stable
+// backend value, so it stays English in every UI language (the Arabic
+// instructions tell the user to type it exactly as shown).
 const DELETE_ALL_CONFIRMATION = 'DELETE ALL ARTICLES';
 
 const VIEW_MODES = [
-  { value: 'card', label: 'Cards', icon: LayoutGrid },
-  { value: 'list', label: 'List', icon: List },
+  { value: 'card', labelKey: 'viewModes.card', icon: LayoutGrid },
+  { value: 'list', labelKey: 'viewModes.list', icon: List },
 ];
 
 // How often to poll a running import for its counters. Matches the cadence the
@@ -38,26 +45,65 @@ const IMPORT_POLL_MS = 900;
 // input's `accept` filter, so JSONL exports have to be picked out client-side.
 const JSONL_NAME_RE = /\.(jsonl|ndjson)$/i;
 
+// Chips/inline text with a date-input value ("YYYY-MM-DD"): parse as a local
+// date so the label doesn't shift a day in timezones west of UTC.
+function filterDateLabel(value) {
+  const [year, month, day] = String(value).split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return formatDate(new Date(year, month - 1, day), undefined, value);
+}
+
 /** Live view of one import job: how far through the file it is, how fast it is
  *  going, and what it could not read. `run` is whatever the last poll returned,
- *  so this renders the same whether the job is queued, running or finished. */
+ *  so this renders the same whether the job is queued, running or finished.
+ *  The headline and timing lines are built here from the run's counters rather
+ *  than shown from the backend's (English-only) progress messages. */
 function ImportProgressBanner({ run, onDismiss }) {
+  const { t } = useTranslation('articles');
   const done = run.status === 'success' || run.status === 'failed';
   const total = run.total_lines || 0;
   const processed = run.processed || 0;
   const percent = total ? Math.min(100, Math.round((processed / total) * 100)) : 0;
   const rate = run.rate_per_second || 0;
-  const logs = run.logs || [];
+  const saved = run.saved || 0;
+  const elapsed = run.elapsed_seconds || 0;
+  const roundedRate = Math.round(rate);
+
+  let headline;
+  if (run.status === 'success') headline = t('import.headline.success', { count: saved, formatted: formatNumber(saved) });
+  else if (run.status === 'failed') headline = t('import.headline.failed');
+  else if (run.status === 'running') headline = t('import.headline.running');
+  else headline = t('import.headline.queued');
+
+  const failureDetail = run.status === 'failed' && (run.error || run.message)
+    ? userFacingError(run.error || run.message, { context: t('errorContext.importFile') }).message
+    : '';
+
+  let timing = '';
+  if (!done && total && rate > 0 && processed < total) {
+    timing = t('import.timeLeft', { duration: formatDuration((total - processed) / rate) });
+  } else if (!done && elapsed) {
+    timing = t('import.timeElapsed', { duration: formatDuration(elapsed) });
+  }
 
   return (
     <div className={`glass-card articles-import-banner ${run.status === 'failed' ? 'is-failed' : ''}`}>
       {run.status === 'failed' ? <AlertTriangle size={18} /> : <Info size={18} />}
       <div className="articles-import-banner-body">
-        {run._batchLabel ? <p className="articles-import-batch-label">{run._batchLabel}</p> : null}
+        {run._batch ? (
+          <p className="articles-import-batch-label">
+            {t('import.batchLabel', { index: formatNumber(run._batch.index), total: formatNumber(run._batch.total) })}{' '}
+            <span className="ltr-isolate ltr-inline">{run._batch.name}</span>
+          </p>
+        ) : null}
         <div className="articles-import-headline">
-          <strong>{run.message || 'Importing...'}</strong>
-          {!done && rate > 0 ? <span className="articles-import-rate">{Math.round(rate).toLocaleString()} articles/s</span> : null}
+          <strong>{headline}</strong>
+          {!done && rate > 0 ? (
+            <span className="articles-import-rate">{t('import.rate', { count: roundedRate, formatted: formatNumber(roundedRate) })}</span>
+          ) : null}
         </div>
+
+        {failureDetail ? <p className="articles-import-note">{failureDetail}</p> : null}
 
         {!done ? (
           <div
@@ -66,7 +112,7 @@ function ImportProgressBanner({ run, onDismiss }) {
             aria-valuenow={total ? percent : undefined}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Import progress"
+            aria-label={t('import.progressAria')}
           >
             {/* Without a line count there is no honest percentage, so show an
                 indeterminate bar rather than a made-up one. */}
@@ -78,31 +124,36 @@ function ImportProgressBanner({ run, onDismiss }) {
         ) : null}
 
         <div className="articles-import-counts">
-          <span>{(run.saved || 0).toLocaleString()} saved</span>
-          {total ? <span>of ~{total.toLocaleString()} lines</span> : null}
-          {run.skipped ? <span>{run.skipped.toLocaleString()} skipped</span> : null}
-          {done && run.elapsed_seconds ? <span>in {run.elapsed_seconds}s</span> : null}
+          <span>{t('import.saved', { formatted: formatNumber(saved) })}</span>
+          {total ? <span>{t('import.ofLines', { count: total, formatted: formatNumber(total) })}</span> : null}
+          {run.skipped ? <span>{t('import.skipped', { formatted: formatNumber(run.skipped) })}</span> : null}
+          {done && elapsed ? <span>{t('import.elapsedIn', { duration: formatDuration(elapsed) })}</span> : null}
         </div>
 
         {done && run.status === 'success' ? (
-          <p className="articles-import-note">Articles matching an existing URL were updated in place.</p>
+          <p className="articles-import-note">{t('import.updatedNote')}</p>
         ) : null}
 
         {run.errors?.length ? (
           <ul className="articles-import-errors">
             {run.errors.slice(0, 5).map((item) => (
               <li key={item.line}>
-                Line {item.line}: {userFacingError(item.error, { context: 'import this article' }).message}
+                {/* The whole item goes in: userFacingError reads `.error` as
+                    the message and `.code`/`.params` for the translation. */}
+                {t('import.lineError', {
+                  line: formatNumber(item.line),
+                  message: userFacingError(item, { context: t('errorContext.importArticle') }).message,
+                })}
               </li>
             ))}
-            {run.errors.length > 5 ? <li>and {run.errors.length - 5} more...</li> : null}
+            {run.errors.length > 5 ? <li>{t('import.moreErrors', { formatted: formatNumber(run.errors.length - 5) })}</li> : null}
           </ul>
         ) : null}
 
-        {!done && logs.length ? <p className="articles-import-log">{logs[logs.length - 1].message}</p> : null}
+        {timing ? <p className="articles-import-log">{timing}</p> : null}
       </div>
       {done ? (
-        <button type="button" className="articles-import-banner-close" onClick={onDismiss} aria-label="Dismiss import summary">
+        <button type="button" className="articles-import-banner-close" onClick={onDismiss} aria-label={t('import.dismissAria')}>
           <X size={16} />
         </button>
       ) : null}
@@ -110,16 +161,21 @@ function ImportProgressBanner({ run, onDismiss }) {
   );
 }
 
-function articleDate(value) {
-  if (!value) return 'Unknown date';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
+function articleDate(value, t) {
+  if (!value) return t('card.unknownDate');
+  return formatDate(value, undefined, value);
 }
 
-function scrapedAtLabel(value) {
-  if (!value) return 'Unknown';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+function scrapedAtLabel(value, t) {
+  if (!value) return t('card.unknown');
+  return formatDateTime(value, undefined, value);
+}
+
+// The detector's ISO code (`source_language`, or `language` on older rows);
+// null when the row carries neither.
+function articleLanguage(article) {
+  const code = article?.source_language || article?.language;
+  return code ? String(code) : null;
 }
 
 function getPageNumbers(currentPage, totalPages) {
@@ -159,6 +215,8 @@ function SkeletonArticleCard() {
 }
 
 export default function ArticlesPage({ project = null, projectId = null, projects = [], sources = [] }) {
+  const { t, i18n } = useTranslation('articles');
+  const uiLanguage = i18n.resolvedLanguage;
   const normalizedProjectId = useMemo(() => {
     if (projectId == null) return null;
     if (typeof projectId === 'object') {
@@ -260,15 +318,22 @@ export default function ArticlesPage({ project = null, projectId = null, project
     return () => controller.abort();
   }, [activeProject]);
 
+  // Labels are rebuilt when the UI language changes; `value` (the run id the
+  // filter state holds) never is, so switching language keeps the filter.
   const pipelineRunOptions = useMemo(
     () =>
       pipelineRuns.map((run) => ({
         value: run.id,
-        label: `${run.sequence_number ? `Pipeline #${run.sequence_number}` : 'Pipeline run'} - ${
-          run.started_at ? new Date(run.started_at).toLocaleString() : 'unknown date'
-        }`,
+        label: t('filters.pipelineRunOption', {
+          run: run.sequence_number
+            ? t('filters.pipelineNumber', { number: formatNumber(run.sequence_number) })
+            : t('filters.pipelineRun'),
+          date: formatDateTime(run.started_at) || t('filters.unknownDate'),
+        }),
       })),
-    [pipelineRuns],
+    // uiLanguage: formatDateTime reads the active locale, not `t`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pipelineRuns, t, uiLanguage],
   );
 
   useEffect(() => {
@@ -291,14 +356,14 @@ export default function ArticlesPage({ project = null, projectId = null, project
         const res = await fetch(`/api/articles?${params.toString()}`, { signal: controller.signal });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data?.detail || data?.error || `Failed to load articles (${res.status})`);
+          throw apiError(data, { status: res.status, fallback: t('errors.loadFailed') });
         }
 
         setArticles(Array.isArray(data?.articles) ? data.articles : []);
         setTotal(Number(data?.total) || 0);
       } catch (err) {
         if (err?.name !== 'AbortError') {
-          setError(err?.message || 'Failed to load articles.');
+          setError(err?.message ? err : t('errors.loadFailed'));
           if (!hasArticlesRef.current) {
             setArticles([]);
             setTotal(0);
@@ -311,6 +376,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
     loadArticles();
     return () => controller.abort();
+    // `t` is only read for fallback error text; a language switch must not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, projectFilter, sourceFilter, pipelineRunFilter, limit, offset, sort, scrapedFrom, scrapedTo, reloadToken]);
 
   useEffect(() => {
@@ -341,9 +408,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const hasNext = offset + limit < total;
   const isInitialLoading = loading && articles.length === 0;
   const isRefreshing = loading && articles.length > 0;
-  const scopeLabel = projectFilter === 'all' ? 'All projects' : (activeProject?.name || 'Selected project');
-
-  const visibleRange = useMemo(() => `${start}-${end}`, [start, end]);
+  const scopeLabel = projectFilter === 'all' ? t('header.allProjectsOption') : (activeProject?.name || t('toolbar.selectedProject'));
   const searchBusy = Boolean(searchInput) && (searchInput.trim() !== search || loading);
 
   const clearSearch = () => {
@@ -365,7 +430,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
       const res = await fetch(`/api/articles?confirm=${encodeURIComponent(DELETE_ALL_CONFIRMATION)}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
-        throw new Error(data?.detail || data?.error || `Failed to delete articles (${res.status})`);
+        throw apiError(data, { status: res.status, fallback: t('errors.deleteFailed') });
       }
       setSearchInput('');
       setSearch('');
@@ -376,7 +441,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
       setOffset(0);
       setReloadToken((value) => value + 1);
     } catch (err) {
-      setError(err?.message || 'Failed to delete articles.');
+      setError(err?.message ? err : t('errors.deleteFailed'));
     } finally {
       setDeletingAll(false);
     }
@@ -399,7 +464,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
       const res = await fetch(`/api/articles/export?${params.toString()}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.detail || data?.error || `Failed to export articles (${res.status})`);
+        throw apiError(data, { status: res.status, fallback: t('errors.exportFailed') });
       }
 
       const blob = await res.blob();
@@ -413,7 +478,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
-      setError(err?.message || 'Failed to export articles.');
+      setError(err?.message ? err : t('errors.exportFailed'));
     } finally {
       setExporting(false);
     }
@@ -434,14 +499,14 @@ export default function ArticlesPage({ project = null, projectId = null, project
       const res = await fetch(`/api/competitors/export?project_id=${encodeURIComponent(activeProject.id)}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.detail || data?.error || `Failed to export competitors (${res.status})`);
+        throw apiError(data, { status: res.status, fallback: t('errors.exportCompetitorsFailed') });
       }
       const blob = await res.blob();
       const text = await blob.text();
       const count = text.split('\n').filter((line) => line.trim()).length;
       setCompetitorsExportPreview({ blob, count });
     } catch (err) {
-      setError(err?.message || 'Failed to export competitors.');
+      setError(err?.message ? err : t('errors.exportCompetitorsFailed'));
     } finally {
       setExportingCompetitors(false);
     }
@@ -463,9 +528,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
   // Imports one file end to end: queues the backend job, then polls it to
   // completion, rendering its counters and throughput as they arrive.
-  // `batchLabel` (e.g. "File 2 of 3: foo.jsonl") is stamped onto each polled
-  // run so the banner can show which file of a multi-file selection is active.
-  const importSingleFile = async (file, batchLabel) => {
+  // `batch` ({ index, total, name }, e.g. file 2 of 3: foo.jsonl) is stamped
+  // onto each polled run so the banner can show which file of a multi-file
+  // selection is active; the banner turns it into text at render time.
+  const importSingleFile = async (file, batch) => {
     const body = new FormData();
     body.append('file', file);
     // Imported rows land in the project currently in scope, mirroring what a
@@ -475,7 +541,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
     const res = await fetch('/api/articles/import', { method: 'POST', body });
     const queued = await res.json().catch(() => ({}));
     if (!res.ok || queued?.error) {
-      throw new Error(queued?.detail || queued?.error || `Failed to import articles (${res.status})`);
+      throw apiError(queued, { status: res.status, fallback: t('errors.importFailed') });
     }
 
     let lastSaved = 0;
@@ -483,10 +549,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
       const statusRes = await fetch(`/api/articles/import/${queued.run_id}`);
       const payload = await statusRes.json().catch(() => ({}));
       if (!statusRes.ok || payload?.error) {
-        throw new Error(payload?.detail || payload?.error || `Lost track of the import (${statusRes.status})`);
+        throw apiError(payload, { status: statusRes.status, fallback: t('errors.importStatusLost') });
       }
       const run = payload.run || {};
-      setImportRun(batchLabel ? { ...run, _batchLabel: batchLabel } : run);
+      setImportRun(batch ? { ...run, _batch: batch } : run);
       // Refresh the list as rows land, not only at the end, so a long import
       // visibly fills the page instead of sitting empty until it finishes.
       if ((run.saved || 0) > lastSaved) {
@@ -494,7 +560,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
         setReloadToken((value) => value + 1);
       }
       if (run.status === 'success' || run.status === 'failed') {
-        if (run.status === 'failed') throw new Error(run.error || run.message || 'Import failed.');
+        if (run.status === 'failed') throw new Error(run.error || run.message || t('errors.importJobFailed'));
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_MS));
@@ -510,7 +576,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
     // A folder pick hands back every file it contains, so keep only JSONL exports.
     const files = picked.filter((file) => JSONL_NAME_RE.test(file.webkitRelativePath || file.name));
     if (!files.length) {
-      setError('No .jsonl/.ndjson files found in the selected folder.');
+      setError(localizedError(t('errors.noJsonlFiles')));
       return;
     }
 
@@ -524,20 +590,28 @@ export default function ArticlesPage({ project = null, projectId = null, project
     for (let i = 0; i < files.length; i += 1) {
       const file = files[i];
       const displayName = file.webkitRelativePath || file.name;
-      const batchLabel = files.length > 1 ? `File ${i + 1} of ${files.length}: ${displayName}` : null;
+      const batch = files.length > 1 ? { index: i + 1, total: files.length, name: displayName } : null;
       try {
-        await importSingleFile(file, batchLabel);
+        await importSingleFile(file, batch);
       } catch (err) {
-        failures.push({ name: displayName, error: err?.message || 'Failed to import.' });
+        failures.push({ name: displayName, error: err?.message ? err : new Error(t('errors.importFailed')) });
       }
     }
 
     if (failures.length) {
       setError(
         files.length > 1
-          ? `${failures.length} of ${files.length} file(s) failed to import: ${failures
-              .map((f) => `${f.name} (${f.error})`)
-              .join('; ')}`
+          ? localizedError(
+              t('errors.batchFailed', {
+                count: files.length,
+                failed: formatNumber(failures.length),
+                formatted: formatNumber(files.length),
+                details: formatList(
+                  failures.map((f) => t('errors.batchFailureItem', { name: f.name, error: userFacingError(f.error, { context: t('errorContext.importFile') }).message })),
+                ),
+              }),
+            )
+          // A single file keeps its own Error, so an API error code survives.
           : failures[0].error
       );
     }
@@ -554,19 +628,23 @@ export default function ArticlesPage({ project = null, projectId = null, project
           <div>
             <div className="admin-page-kicker" style={{ marginBottom: 10 }}>
               <SlidersHorizontal size={26} color="#ff6b35" />
-              <span>Article Library</span>
+              <span>{t('header.kicker')}</span>
             </div>
-            <h1 className="admin-page-title">Articles</h1>
+            <h1 className="admin-page-title">{t('header.title')}</h1>
             <p className="admin-page-subtitle">
-              Server-side search, project, source, date-range, sort, and pagination powered by the API.
-              {project ? ` Dashboard project: ${project.name}.` : ' Showing all projects.'}
+              {t('header.subtitle')}{' '}
+              {project ? (
+                <Trans t={t} i18nKey="header.dashboardProject" values={{ name: project.name }} components={{ name: <bdi /> }} />
+              ) : (
+                t('header.allProjects')
+              )}
             </p>
           </div>
 
           <div className="dashboard-hero-actions">
             <div className="report-project-control">
               <label className="report-project-control-label" htmlFor="articles-project-select">
-                <FolderKanban size={13} /> Project scope
+                <FolderKanban size={13} /> {t('header.projectScope')}
               </label>
               <div className="report-project-select-wrap">
                 <FolderKanban size={16} aria-hidden="true" />
@@ -575,14 +653,17 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   className="filter-select report-project-select"
                   value={projectFilter}
                   onChange={(e) => setProjectFilter(e.target.value)}
-                  aria-label="Project scope for articles"
+                  aria-label={t('header.projectScopeAria')}
                 >
-                  <option value="all">All projects</option>
-                  {projects.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({item.status || 'draft'})
-                    </option>
-                  ))}
+                  <option value="all">{t('header.allProjectsOption')}</option>
+                  {projects.map((item) => {
+                    const status = item.status || 'draft';
+                    return (
+                      <option key={item.id} value={item.id}>
+                        {t('header.projectOption', { name: item.name, status: t(`common:status.${status}`, { defaultValue: status }) })}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -594,21 +675,21 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 style={{ color: '#b42318', borderColor: 'rgba(180,35,24,0.18)' }}
               >
                 <Trash2 size={16} />
-                {deletingAll ? 'Deleting...' : 'Delete All Articles'}
+                {deletingAll ? t('common:actions.deleting') : t('header.deleteAll')}
               </button>
             )}
             <Link to="/dashboard" className="btn-secondary" style={{ textDecoration: 'none' }}>
-              Back to Dashboard
+              {t('header.backToDashboard')}
             </Link>
           </div>
         </div>
 
         <ConfirmModal
           open={showDeleteAllModal}
-          title="Delete all articles?"
-          message="This will remove every row in the articles table and cannot be undone."
-          confirmLabel={deletingAll ? 'Deleting...' : 'Delete all articles'}
-          cancelLabel="Keep articles"
+          title={t('deleteAll.title')}
+          message={t('deleteAll.message')}
+          confirmLabel={deletingAll ? t('common:actions.deleting') : t('deleteAll.confirm')}
+          cancelLabel={t('deleteAll.cancel')}
           confirmButtonStyle={{
             background: 'linear-gradient(135deg, #ff4757, #e03131)',
             boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',
@@ -628,12 +709,19 @@ export default function ArticlesPage({ project = null, projectId = null, project
           }}
         >
           <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            Type <strong>{DELETE_ALL_CONFIRMATION}</strong> to confirm:
+            <Trans
+              t={t}
+              i18nKey="deleteAll.typeToConfirm"
+              values={{ phrase: DELETE_ALL_CONFIRMATION }}
+              components={{ phrase: <strong className="ltr-isolate ltr-inline" /> }}
+            />
             <input
               type="text"
+              dir="ltr"
               value={deleteAllConfirmText}
               onChange={(event) => setDeleteAllConfirmText(event.target.value)}
               autoComplete="off"
+              aria-label={t('deleteAll.inputAria')}
               style={{
                 display: 'block',
                 width: '100%',
@@ -649,16 +737,18 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
         <ConfirmModal
           open={Boolean(competitorsExportPreview)}
-          title="Export competitors?"
+          title={t('exportCompetitors.title')}
           message={
             competitorsExportPreview
-              ? `This will download ${competitorsExportPreview.count} tracked competitor${
-                  competitorsExportPreview.count === 1 ? '' : 's'
-                } for "${activeProject?.name || 'this project'}" as JSONL.`
+              ? t('exportCompetitors.message', {
+                  count: competitorsExportPreview.count,
+                  formatted: formatNumber(competitorsExportPreview.count),
+                  project: activeProject?.name || t('exportCompetitors.thisProject'),
+                })
               : ''
           }
-          confirmLabel="Export"
-          cancelLabel="Cancel"
+          confirmLabel={t('common:actions.export')}
+          cancelLabel={t('common:actions.cancel')}
           onClose={() => setCompetitorsExportPreview(null)}
           onConfirm={confirmExportCompetitorsJsonl}
         />
@@ -681,10 +771,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
         <ConfirmModal
           open={showExportArticlesConfirm}
-          title="Export articles?"
-          message={`This will export ${total.toLocaleString()} article${total === 1 ? '' : 's'} matching your current filters as a JSONL file.`}
-          confirmLabel={exporting ? 'Exporting...' : 'Export'}
-          cancelLabel="Cancel"
+          title={t('exportArticles.title')}
+          message={t('exportArticles.message', { count: total, formatted: formatNumber(total) })}
+          confirmLabel={exporting ? t('toolbar.exporting') : t('common:actions.export')}
+          cancelLabel={t('common:actions.cancel')}
           onClose={() => {
             if (!exporting) setShowExportArticlesConfirm(false);
           }}
@@ -717,9 +807,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
               disabled={!activeProject || sourceOptions.length === 0}
+              aria-label={t('filters.sourceAria')}
             >
               <option value="all">
-                {activeProject ? 'All sources' : 'Select a project for sources'}
+                {activeProject ? t('filters.allSources') : t('filters.selectProjectForSources')}
               </option>
               {sourceOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -733,10 +824,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
               value={pipelineRunFilter}
               onChange={(e) => setPipelineRunFilter(e.target.value)}
               disabled={!activeProject || pipelineRunOptions.length === 0}
-              aria-label="Filter by pipeline run"
+              aria-label={t('filters.pipelineRunAria')}
             >
               <option value="all">
-                {activeProject ? 'All pipeline runs' : 'Select a project for pipeline runs'}
+                {activeProject ? t('filters.allPipelineRuns') : t('filters.selectProjectForPipelineRuns')}
               </option>
               {pipelineRunOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -747,7 +838,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
             <div className="articles-date-range">
               <span className="articles-date-range-label">
-                <Calendar size={14} /> Scraped between
+                <Calendar size={14} /> {t('filters.scrapedBetween')}
               </span>
               <input
                 type="date"
@@ -755,18 +846,18 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 value={scrapedFrom}
                 max={scrapedTo || undefined}
                 onChange={(e) => setScrapedFrom(e.target.value)}
-                title="Only show articles scraped on or after this date"
-                aria-label="Scraped from date"
+                title={t('filters.scrapedFromTitle')}
+                aria-label={t('filters.scrapedFromAria')}
               />
-              <span className="articles-date-range-sep">to</span>
+              <span className="articles-date-range-sep">{t('filters.dateRangeSeparator')}</span>
               <input
                 type="date"
                 className="filter-select"
                 value={scrapedTo}
                 min={scrapedFrom || undefined}
                 onChange={(e) => setScrapedTo(e.target.value)}
-                title="Only show articles scraped on or before this date"
-                aria-label="Scraped to date"
+                title={t('filters.scrapedToTitle')}
+                aria-label={t('filters.scrapedToAria')}
               />
             </div>
           </div>
@@ -777,6 +868,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
               <input
                 ref={searchInputRef}
                 type="text"
+                dir="auto"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -785,8 +877,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
                     clearSearch();
                   }
                 }}
-                placeholder="Search title, summary, source..."
-                aria-label="Search articles"
+                placeholder={t('filters.searchPlaceholder')}
+                aria-label={t('filters.searchAria')}
                 style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '0.95rem' }}
               />
               {searchBusy ? (
@@ -796,18 +888,18 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   type="button"
                   className="articles-search-clear"
                   onClick={clearSearch}
-                  aria-label="Clear search"
-                  title="Clear search"
+                  aria-label={t('filters.clearSearch')}
+                  title={t('filters.clearSearch')}
                 >
                   <X size={14} />
                 </button>
               ) : null}
             </label>
 
-            <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label={t('filters.sortAria')}>
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </option>
               ))}
             </select>
@@ -816,32 +908,44 @@ export default function ArticlesPage({ project = null, projectId = null, project
 
         <div className="admin-toolbar-row" style={{ justifyContent: 'space-between' }}>
           <div className="articles-toolbar-summary">
-            <span>{loading ? 'Loading articles...' : `${total.toLocaleString()} articles total, showing ${visibleRange}`}</span>
+            <span>
+              {loading
+                ? t('toolbar.loading')
+                : t('toolbar.summary', {
+                    count: total,
+                    formatted: formatNumber(total),
+                    from: formatNumber(start),
+                    to: formatNumber(end),
+                  })}
+            </span>
             <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
               <Filter size={12} />
-              {scopeLabel}
+              <bdi>{scopeLabel}</bdi>
             </span>
             {sourceFilter !== 'all' && (
               <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 <Filter size={12} />
-                {sourceOptions.find((option) => option.value === sourceFilter)?.label || sourceFilter}
+                <bdi>{sourceOptions.find((option) => option.value === sourceFilter)?.label || sourceFilter}</bdi>
               </span>
             )}
             {pipelineRunFilter !== 'all' && (
               <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 <Layers size={12} />
-                {pipelineRunOptions.find((option) => option.value === pipelineRunFilter)?.label || 'Pipeline run'}
+                {pipelineRunOptions.find((option) => option.value === pipelineRunFilter)?.label || t('filters.pipelineRun')}
               </span>
             )}
             {(scrapedFrom || scrapedTo) && (
               <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
                 <Calendar size={12} />
-                Scraped {scrapedFrom || 'any'} to {scrapedTo || 'any'}
+                {t('toolbar.scrapedRange', {
+                  from: scrapedFrom ? filterDateLabel(scrapedFrom) : t('toolbar.anyDate'),
+                  to: scrapedTo ? filterDateLabel(scrapedTo) : t('toolbar.anyDate'),
+                })}
               </span>
             )}
           </div>
           <div className="articles-pager-actions">
-            <div className="source-type-tabs" role="tablist" aria-label="Switch article view">
+            <div className="source-type-tabs" role="tablist" aria-label={t('toolbar.viewSwitcherAria')}>
               {VIEW_MODES.map((mode) => {
                 const Icon = mode.icon;
                 const isActive = viewMode === mode.value;
@@ -854,21 +958,21 @@ export default function ArticlesPage({ project = null, projectId = null, project
                     className={`source-type-tab ${isActive ? 'active' : ''}`}
                     onClick={() => changeViewMode(mode.value)}
                   >
-                    <Icon size={14} /> {mode.label}
+                    <Icon size={14} /> {t(mode.labelKey)}
                   </button>
                 );
               })}
             </div>
-            <select className="filter-select" value={limit} onChange={(e) => setLimit(Number(e.target.value))} aria-label="Articles per page">
+            <select className="filter-select" value={limit} onChange={(e) => setLimit(Number(e.target.value))} aria-label={t('toolbar.perPageAria')}>
               {PAGE_SIZES.map((size) => (
                 <option key={size} value={size}>
-                  {size} per page
+                  {t('toolbar.perPageOption', { formatted: formatNumber(size) })}
                 </option>
               ))}
             </select>
             <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={loading || exporting || exportingCompetitors || deletingAll}>
               <Upload size={16} />
-              {exporting || exportingCompetitors ? 'Exporting...' : 'Export'}
+              {exporting || exportingCompetitors ? t('toolbar.exporting') : t('common:actions.export')}
             </button>
             {canImport && (
               <>
@@ -895,14 +999,14 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   disabled={loading || importing || deletingAll}
                 >
                   <Download size={16} />
-                  {importing ? 'Importing...' : 'Import'}
+                  {importing ? t('toolbar.importing') : t('common:actions.import')}
                 </button>
               </>
             )}
           </div>
         </div>
 
-        <ErrorNotice error={error} context="load or manage articles" onDismiss={() => setError('')} />
+        <ErrorNotice error={error} context={t('errorContext.loadArticles')} onDismiss={() => setError('')} />
 
         {importRun ? <ImportProgressBanner run={importRun} onDismiss={() => setImportRun(null)} /> : null}
 
@@ -932,9 +1036,9 @@ export default function ArticlesPage({ project = null, projectId = null, project
               <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, padding: '14px 18px' }}>
                 <div className="loading-spinner" />
                 <div>
-                  <div style={{ fontWeight: 600, marginBottom: 3 }}>Refreshing results</div>
+                  <div style={{ fontWeight: 600, marginBottom: 3 }}>{t('refreshing.title')}</div>
                   <div style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
-                    Keeping the current list visible while the new filter set loads.
+                    {t('refreshing.message')}
                   </div>
                 </div>
               </div>
@@ -962,10 +1066,10 @@ export default function ArticlesPage({ project = null, projectId = null, project
                           onClick={() => toggleRowExpanded(article.id)}
                           aria-expanded={isExpanded}
                         >
-                          <span className="article-row-title">{article.title || 'Untitled article'}</span>
-                          <span className="article-row-source">{article.source || 'Unknown source'}</span>
+                          <span className="article-row-title" dir="auto">{article.title || t('card.untitled')}</span>
+                          <span className="article-row-source" dir="auto">{article.source || t('card.unknownSource')}</span>
                           <span className="article-row-date">
-                            <Calendar size={13} /> {articleDate(article.published)}
+                            <Calendar size={13} /> {articleDate(article.published, t)}
                           </span>
                           <ChevronDown size={16} className="article-row-chevron" />
                         </button>
@@ -973,33 +1077,38 @@ export default function ArticlesPage({ project = null, projectId = null, project
                         {isExpanded ? (
                           <div className="article-row-details">
                             <div className="article-meta">
-                              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="When the pipeline scraped this article">
-                                <Calendar size={11} style={{ marginRight: 4 }} /> Scraped: {scrapedAtLabel(article.fetched_at)}
+                              <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title={t('card.scrapedTitle')}>
+                                <Calendar size={11} style={{ marginInlineEnd: 4 }} /> {t('card.scraped', { date: scrapedAtLabel(article.fetched_at, t) })}
                               </span>
                               {article.author ? (
                                 <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-                                  By {article.author}
+                                  <Trans t={t} i18nKey="card.byAuthor" values={{ author: article.author }} components={{ author: <bdi /> }} />
+                                </span>
+                              ) : null}
+                              {articleLanguage(article) ? (
+                                <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title={t('card.languageTitle')}>
+                                  <Languages size={11} style={{ marginInlineEnd: 4 }} /> {languageName(articleLanguage(article))}
                                 </span>
                               ) : null}
                               {article.story_id ? (
                                 <span
                                   className="panel-chip muted"
                                   style={{ textTransform: 'none', letterSpacing: 0 }}
-                                  title="Syndication group: articles whose bodies are near-identical share one story group"
+                                  title={t('card.storyTitle')}
                                 >
-                                  <Layers size={11} style={{ marginRight: 4 }} /> Story #{article.story_id}
+                                  <Layers size={11} style={{ marginInlineEnd: 4 }} /> {t('card.story', { id: article.story_id })}
                                 </span>
                               ) : null}
-                              {article.verified ? <span className="badge positive">Verified source</span> : null}
+                              {article.verified ? <span className="badge positive">{t('card.verified')}</span> : null}
                             </div>
 
-                            <p className="article-summary">
-                              {article.text ? `${article.text.substring(0, 400)}...` : 'No text captured.'}
+                            <p className="article-summary" dir={article.text ? 'auto' : undefined}>
+                              {article.text ? `${article.text.substring(0, 400)}...` : t('card.noText')}
                             </p>
 
                             <div className="article-row-details-actions">
                               <a href={article.url} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ textDecoration: 'none' }}>
-                                <ExternalLink size={13} /> Open original
+                                <ExternalLink size={13} /> {t('card.openOriginal')}
                               </a>
                             </div>
                           </div>
@@ -1025,37 +1134,42 @@ export default function ArticlesPage({ project = null, projectId = null, project
                     >
                       <div className="article-header">
                         <div className="article-meta">
-                          <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title="When the pipeline scraped this article">
-                            <Calendar size={11} style={{ marginRight: 4 }} /> Scraped: {scrapedAtLabel(article.fetched_at)}
+                          <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title={t('card.scrapedTitle')}>
+                            <Calendar size={11} style={{ marginInlineEnd: 4 }} /> {t('card.scraped', { date: scrapedAtLabel(article.fetched_at, t) })}
                           </span>
+                          {articleLanguage(article) ? (
+                            <span className="panel-chip muted" style={{ textTransform: 'none', letterSpacing: 0 }} title={t('card.languageTitle')}>
+                              <Languages size={11} style={{ marginInlineEnd: 4 }} /> {languageName(articleLanguage(article))}
+                            </span>
+                          ) : null}
                           {article.story_id ? (
                             <span
                               className="panel-chip muted"
                               style={{ textTransform: 'none', letterSpacing: 0 }}
-                              title="Syndication group: articles whose bodies are near-identical share one story group"
+                              title={t('card.storyTitle')}
                             >
-                              <Layers size={11} style={{ marginRight: 4 }} /> Story #{article.story_id}
+                              <Layers size={11} style={{ marginInlineEnd: 4 }} /> {t('card.story', { id: article.story_id })}
                             </span>
                           ) : null}
-                          {article.verified ? <span className="badge positive">Verified source</span> : null}
+                          {article.verified ? <span className="badge positive">{t('card.verified')}</span> : null}
                         </div>
                       </div>
 
-                      <h3 className="article-title">
+                      <h3 className="article-title" dir="auto">
                         <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {article.title || 'Untitled article'} <ExternalLink size={14} style={{ opacity: 0.5 }} />
+                          {article.title || t('card.untitled')} <ExternalLink size={14} style={{ opacity: 0.5 }} />
                         </a>
                       </h3>
 
-                      <p className="article-summary">
-                        {article.text ? `${article.text.substring(0, 220)}...` : 'No text captured.'}
+                      <p className="article-summary" dir={article.text ? 'auto' : undefined}>
+                        {article.text ? `${article.text.substring(0, 220)}...` : t('card.noText')}
                       </p>
 
                       <div className="article-footer">
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <Calendar size={14} /> {articleDate(article.published)}
+                          <Calendar size={14} /> {articleDate(article.published, t)}
                         </span>
-                        <span>{article.source || 'Unknown source'}</span>
+                        <span dir="auto">{article.source || t('card.unknownSource')}</span>
                       </div>
                     </motion.div>
                   ))}
@@ -1069,8 +1183,8 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   <div className="admin-empty-state-icon">
                     <Search size={18} />
                   </div>
-                  <strong>No articles found</strong>
-                  <span>Try adjusting your search, source, date range, or project filters.</span>
+                  <strong>{t('empty.title')}</strong>
+                  <span>{t('empty.message')}</span>
                 </div>
               </div>
             )}
@@ -1078,9 +1192,9 @@ export default function ArticlesPage({ project = null, projectId = null, project
         )}
 
         {!isInitialLoading && articles.length > 0 && (
-          <div className="articles-pagination" role="navigation" aria-label="Articles pagination">
+          <div className="articles-pagination" role="navigation" aria-label={t('pagination.aria')}>
             <button className="btn-secondary" onClick={() => setOffset((prev) => Math.max(0, prev - limit))} disabled={!hasPrev || loading}>
-              <ChevronLeft size={16} /> Previous
+              <ChevronLeft size={16} className="icon-flip-rtl" /> {t('common:actions.previous')}
             </button>
             {pageNumbers.map((page, index) =>
               page === '...' ? (
@@ -1096,12 +1210,12 @@ export default function ArticlesPage({ project = null, projectId = null, project
                   disabled={loading}
                   aria-current={page === currentPage ? 'page' : undefined}
                 >
-                  {page}
+                  {formatNumber(page)}
                 </button>
               )
             )}
             <button className="btn-secondary" onClick={() => setOffset((prev) => prev + limit)} disabled={!hasNext || loading}>
-              Next <ChevronRight size={16} />
+              {t('common:actions.next')} <ChevronRight size={16} className="icon-flip-rtl" />
             </button>
           </div>
         )}

@@ -1,18 +1,16 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Link2, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatDate, formatNumber } from '../i18n/format.js';
 import '../styles/ProjectLinkage.css';
-
-function formatDate(value) {
-  if (!value) return 'Not set';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleDateString();
-}
 
 // View-only: shows a single project's metadata and its linked users.
 // Changing the linkage happens on ProjectLinkageEditPage.
 export default function ProjectLinkageDetailPage({ projects = [], users = [] }) {
+  const { t } = useTranslation('admin');
+  // Unparseable dates are shown as stored rather than hidden.
+  const displayDate = (value) => (value ? formatDate(value, undefined, String(value)) : t('linkage.detail.notSet'));
   const params = useParams();
 
   const project = useMemo(
@@ -34,10 +32,10 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
             <div className="admin-empty-state-icon">
               <Link2 size={18} />
             </div>
-            <strong>Project not found</strong>
-            <span>It may have been removed, or you may not have access to it.</span>
+            <strong>{t('linkage.notFoundTitle')}</strong>
+            <span>{t('linkage.notFoundBody')}</span>
             <Link to="/admin/project-linkage" className="btn-primary" style={{ marginTop: 8, textDecoration: 'none' }}>
-              <ArrowLeft size={16} /> Back to Project Linkage
+              <ArrowLeft size={16} className="icon-flip-rtl" /> {t('linkage.backToList')}
             </Link>
           </div>
         </div>
@@ -48,32 +46,33 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
   const status = String(project.status || 'draft').toLowerCase();
   const isActive = status === 'active';
   const isArchived = status === 'archived';
+  const statusLabel = t(`projectStatus.${status}`, { defaultValue: status }).toUpperCase();
 
   return (
     <div className="admin-page-shell project-linkage-page">
       <div className="admin-page-header">
         <div>
           <div className="admin-page-kicker">
-            <Link2 size={14} /> Project linkage
+            <Link2 size={14} /> {t('kicker.projectLinkage')}
           </div>
-          <h1 className="admin-page-title">{project.name}</h1>
-          <p className="admin-page-subtitle">Review the dashboard users linked to this project.</p>
+          <h1 className="admin-page-title" dir="auto">{project.name}</h1>
+          <p className="admin-page-subtitle">{t('linkage.detail.subtitle')}</p>
         </div>
         <div className="admin-page-toolbar">
           <div className="admin-page-toolbar-meta">
-            <span>Status</span>
-            <strong>{status.toUpperCase()}</strong>
+            <span>{t('linkage.detail.status')}</span>
+            <strong>{statusLabel}</strong>
           </div>
           <div className="admin-page-toolbar-meta">
-            <span>Linked users</span>
-            <strong>{linkedUsers.length}</strong>
+            <span>{t('linkage.detail.linkedUsers')}</span>
+            <strong>{formatNumber(linkedUsers.length)}</strong>
           </div>
           <Link
             to={`/admin/project-linkage/${project.id}/edit`}
             className="btn-secondary"
             style={{ textDecoration: 'none' }}
           >
-            <Pencil size={16} /> Edit linkage
+            <Pencil size={16} /> {t('linkage.detail.editLinkage')}
           </Link>
         </div>
       </div>
@@ -81,9 +80,9 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
       <div className="project-detail-layout">
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="panel-header-tight">
-            <strong style={{ fontSize: '1rem' }}>Project details</strong>
+            <strong style={{ fontSize: '1rem' }}>{t('linkage.detail.detailsTitle')}</strong>
             <span className={`panel-chip ${isActive ? 'success' : isArchived ? 'muted' : 'warning'}`}>
-              {status.toUpperCase()}
+              {statusLabel}
             </span>
           </div>
 
@@ -91,44 +90,52 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
             <div className="admin-item-card" style={{ margin: 0 }}>
               <div className="admin-item-meta" style={{ marginBottom: 8 }}>
                 <span>
-                  <CalendarDays size={12} /> Start
+                  <CalendarDays size={12} /> {t('linkage.detail.start')}
                 </span>
                 <span>
-                  <CalendarDays size={12} /> End
+                  <CalendarDays size={12} /> {t('linkage.detail.end')}
                 </span>
               </div>
-              <strong style={{ fontSize: '0.98rem' }}>{formatDate(project.start_date)}</strong>
+              <strong style={{ fontSize: '0.98rem' }}>{displayDate(project.start_date)}</strong>
               <div style={{ color: 'var(--text-light)', fontSize: '0.84rem', marginTop: 4 }}>
-                {formatDate(project.end_date)}
+                {displayDate(project.end_date)}
               </div>
             </div>
 
             <div className="admin-item-card" style={{ margin: 0 }}>
               <div className="admin-item-meta" style={{ marginBottom: 8 }}>
-                <span>Location</span>
-                <span>Audience</span>
+                <span>{t('linkage.detail.location')}</span>
+                <span>{t('linkage.detail.audience')}</span>
               </div>
-              <strong style={{ fontSize: '0.98rem', overflowWrap: 'anywhere' }}>{project.location || 'Not set'}</strong>
-              <div style={{ color: 'var(--text-light)', fontSize: '0.84rem', marginTop: 4, overflowWrap: 'anywhere' }}>
-                {project.target_audience || 'No audience specified'}
+              <strong style={{ fontSize: '0.98rem', overflowWrap: 'anywhere' }} dir={project.location ? 'auto' : undefined}>
+                {project.location || t('linkage.detail.notSet')}
+              </strong>
+              <div
+                style={{ color: 'var(--text-light)', fontSize: '0.84rem', marginTop: 4, overflowWrap: 'anywhere' }}
+                dir={project.target_audience ? 'auto' : undefined}
+              >
+                {project.target_audience || t('linkage.detail.noAudience')}
               </div>
             </div>
           </div>
 
           <div className="admin-item-card" style={{ margin: 0 }}>
             <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-              <strong style={{ fontSize: '0.94rem' }}>Description</strong>
+              <strong style={{ fontSize: '0.94rem' }}>{t('linkage.detail.description')}</strong>
             </div>
-            <div style={{ color: 'var(--text-light)', lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {project.description || 'No description has been added for this project yet.'}
+            <div
+              style={{ color: 'var(--text-light)', lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+              dir={project.description ? 'auto' : undefined}
+            >
+              {project.description || t('linkage.detail.noDescription')}
             </div>
           </div>
         </div>
 
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="panel-header-tight">
-            <strong style={{ fontSize: '1rem' }}>Linked users</strong>
-            <span className="panel-chip">{linkedUsers.length} linked</span>
+            <strong style={{ fontSize: '1rem' }}>{t('linkage.detail.linkedUsersTitle')}</strong>
+            <span className="panel-chip">{t('linkage.detail.linkedCount', { count: linkedUsers.length })}</span>
           </div>
 
           {linkedUsers.length === 0 ? (
@@ -136,8 +143,8 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
               <div className="admin-empty-state-icon">
                 <Link2 size={18} />
               </div>
-              <strong>No users linked</strong>
-              <span>Use Edit linkage to add dashboard users to this project.</span>
+              <strong>{t('linkage.detail.noUsersTitle')}</strong>
+              <span>{t('linkage.detail.noUsersBody')}</span>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -146,12 +153,14 @@ export default function ProjectLinkageDetailPage({ projects = [], users = [] }) 
                   <div className="admin-item-top">
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                        <strong className="admin-item-title">{user.username}</strong>
-                        <span className={`panel-chip role-${user.role}`}>{user.role}</span>
+                        <strong className="admin-item-title" dir="auto">{user.username}</strong>
+                        <span className={`panel-chip role-${user.role}`}>
+                          {t(`common:roleNames.${user.role}`, { defaultValue: user.role })}
+                        </span>
                       </div>
                       <div className="admin-item-meta">
-                        <span>{user.email || 'No email on file'}</span>
-                        <span>{user.status}</span>
+                        {user.email ? <span className="ltr-isolate">{user.email}</span> : <span>{t('linkage.noEmail')}</span>}
+                        <span>{t(`userStatus.${user.status}`, { defaultValue: user.status })}</span>
                       </div>
                     </div>
                   </div>

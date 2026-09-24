@@ -1,0 +1,92 @@
+{
+  "header": {
+    "kicker": "Dashboard",
+    "title": "Overview",
+    "subtitle": "Collection health for one project at a time - pick a project to see what it has gathered and what needs a look.",
+    "projectLabel": "Project",
+    "projectOption": "{{name}} ({{mode}})",
+    "modes": {
+      "competitor": "competitor",
+      "opinion": "opinion"
+    }
+  },
+  "noProjects": {
+    "title": "No projects yet",
+    "message": "Create a project to start collecting, then its metrics will show up here.",
+    "action": "Go to Projects"
+  },
+  "errors": {
+    "loadFailed": "Failed to load dashboard data."
+  },
+  "errorContext": {
+    "loadDashboard": "load this project's dashboard"
+  },
+  "stats": {
+    "totalArticles": "Total articles",
+    "totalSources": "Total sources",
+    "totalRuns": "Total pipeline runs",
+    "competitorsTracked": "Competitors tracked"
+  },
+  "runsChart": {
+    "title": "Articles per pipeline run",
+    "caption": "How many articles each scrape run saved, oldest to most recent.",
+    "emptyTitle": "No pipeline runs yet",
+    "emptyMessage": "Once a scrape runs for this project, its article counts will chart here.",
+    "runNumber": "#{{number}}",
+    "articlesSaved": "Articles saved"
+  },
+  "platformBreakdown": {
+    "title": "Articles by platform",
+    "caption": "How each configured collection platform contributes to this project's articles.",
+    "emptyTitle": "No platform data yet",
+    "emptyMessage": "Platform totals will appear once sources are configured.",
+    "shareBelow": "<{{value}}",
+    "shareOfArticles": "{{share}} of project articles",
+    "configuredSources_one": "{{formatted}} configured source",
+    "configuredSources_other": "{{formatted}} configured sources"
+  },
+  "platforms": {
+    "rss": "RSS",
+    "web": "Web",
+    "keyword": "Keyword",
+    "twitter": "Twitter/X",
+    "x": "X",
+    "hashtag": "Hashtag",
+    "blog": "Blog",
+    "news": "News",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "other": "Imported / Other"
+  },
+  "sourceBreakdown": {
+    "title": "Articles by source",
+    "caption": "Which sources have contributed the most articles.",
+    "emptyTitle": "Nothing collected yet",
+    "emptyMessage": "Articles will be broken down by source here once a scrape completes.",
+    "unknownSource": "unknown",
+    "paginationLabel": "Articles by source pagination"
+  },
+  "attention": {
+    "paginationLabel": "Attention list pagination"
+  },
+  "sourceAttention": {
+    "title": "Sources needing attention",
+    "caption": "Sources that were blocked, errored, or returned nothing on the last run.",
+    "healthy": "All sources came back healthy on the last run",
+    "paginationLabel": "Sources needing attention pagination",
+    "fallbackTitle": "Source needs attention",
+    "fallbackAction": "Review the source configuration and try again.",
+    "reviewSources": "Review sources"
+  },
+  "competitorAttention": {
+    "title": "Competitors needing attention",
+    "caption": "Tracked competitors whose linked sources failed or returned 0 articles on the last run.",
+    "healthy": "All tracked competitors' sources came back healthy on the last run",
+    "paginationLabel": "Competitors needing attention pagination",
+    "sourceIssue": "{{platform}}: {{reason}}"
+  }
+}

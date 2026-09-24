@@ -43,6 +43,7 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
   Globe, Link2, Loader2, Plus, Radar, Search, Sparkles, Trash2, Users, X,
@@ -54,48 +55,52 @@ import {
   pollDiscoveryRun, runCulturalAnalysis, saveProfile, setCompetitorStatus, setSchedule, validateAccount,
 } from '../competitorApi.js';
 import { SCRAPE_STAGES } from '../constants/competitorStages.js';
-import { COUNTRIES, countryLabel } from '../constants/countries.js';
+import { countryLabel, localizedCountries } from '../constants/countries.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
 import { AddCompetitorForm, AddSourceRow } from './CompetitorSourceEditor.jsx';
 import { WeekdayPicker } from './ProjectsPage.jsx';
 import ErrorNotice from './ErrorNotice';
+import { apiError } from '../errors/apiError.js';
+import { formatDuration, formatList, formatNumber } from '../i18n/format.js';
 import '../styles/Competitors.css';
 
+// `labelKey` is translated at render time (competitorOnboarding namespace).
 const STEPS = [
-  { id: 2, label: 'Your business', icon: Building2 },
-  { id: 3, label: 'Market context', icon: Sparkles },
-  { id: 4, label: 'Cultural analysis', icon: Users },
-  { id: 5, label: 'Competitors', icon: Radar },
-  { id: 6, label: 'Channels', icon: Link2 },
-  { id: 7, label: 'Schedule', icon: CalendarClock },
+  { id: 2, labelKey: 'steps.business', icon: Building2 },
+  { id: 3, labelKey: 'steps.marketContext', icon: Sparkles },
+  { id: 4, labelKey: 'steps.culturalAnalysis', icon: Users },
+  { id: 5, labelKey: 'steps.competitors', icon: Radar },
+  { id: 6, labelKey: 'steps.channels', icon: Link2 },
+  { id: 7, labelKey: 'steps.schedule', icon: CalendarClock },
 ];
 
 // Phase 1 only asks the model for names and ranks them - no web verification
 // yet (that happens per competitor when it's tracked) and channels are a
 // separate step (CHANNEL_STAGES below), so this list must not claim either.
+// Every stage list holds fully-qualified i18n keys; StageList translates them.
 const DISCOVERY_STAGES = [
-  'Comparing your profile against the market',
-  'Naming candidate competitors',
-  'Filtering out duplicates and unlikely matches',
-  'Ranking them by size',
+  'competitorOnboarding:stages.discovery.compareProfile',
+  'competitorOnboarding:stages.discovery.nameCandidates',
+  'competitorOnboarding:stages.discovery.filterDuplicates',
+  'competitorOnboarding:stages.discovery.rankBySize',
 ];
 
 // One synchronous LLM call against the already-derived business profile —
 // same shape as SCRAPE_STAGES above, not the discovery job's staged polling.
 const CULTURAL_STAGES = [
-  'Reading your market context',
-  'Weighing cultural fit against your target countries',
-  'Working out benefits, difficulties, and success factors',
-  'Writing the summary',
+  'competitorOnboarding:stages.cultural.readContext',
+  'competitorOnboarding:stages.cultural.weighFit',
+  'competitorOnboarding:stages.cultural.workOutFactors',
+  'competitorOnboarding:stages.cultural.writeSummary',
 ];
 
 // Phase 3: finding channels for whichever competitors got tracked.
 const CHANNEL_STAGES = [
-  'Checking each competitor’s site for a feed',
-  'Searching the web for their real accounts and hashtags',
-  'Asking the model for X, LinkedIn, Threads, Facebook, and Instagram accounts, hashtags, and keywords to monitor',
-  'Searching for review and discussion pages',
-  'Linking valid channels as sources',
+  'competitorOnboarding:stages.channels.checkFeeds',
+  'competitorOnboarding:stages.channels.searchAccounts',
+  'competitorOnboarding:stages.channels.askModel',
+  'competitorOnboarding:stages.channels.searchReviews',
+  'competitorOnboarding:stages.channels.linkSources',
 ];
 
 /** Real-time progress lines from a discovery run's `logs` (see
@@ -109,6 +114,7 @@ const CHANNEL_STAGES = [
  *  Exported so CompetitorWorkspace.jsx can reuse it, the same way it already
  *  reuses ListEditor from this file. */
 export function DiscoveryLog({ logs, active }) {
+  const { t } = useTranslation('competitorOnboarding');
   const boxRef = useRef(null);
   const [now, setNow] = useState(null);
 
@@ -143,9 +149,10 @@ export function DiscoveryLog({ logs, active }) {
               className={`cs-progress-row${isCurrent ? ' cs-progress-row-active' : ' cs-progress-row-done'}`}
             >
               {isCurrent ? <span className="cs-spinner" /> : <CheckCircle2 size={15} />}
-              <span>
+              {/* Log lines are written by the backend (English only). */}
+              <span dir="auto">
                 {entry.message}
-                {isCurrent && elapsed >= 4 ? ` (still working, ${elapsed}s)` : ''}
+                {isCurrent && elapsed >= 4 ? t('discoveryLog.stillWorking', { duration: formatDuration(elapsed) }) : ''}
               </span>
             </div>
           );
@@ -160,6 +167,8 @@ export function DiscoveryLog({ logs, active }) {
  *  response, which replaces this component entirely. Rendered only while a
  *  request is in flight, so each run mounts it fresh at stage zero. */
 export function StageList({ stages }) {
+  // Stages are fully-qualified i18n keys (e.g. 'common:competitorStages.fetchWebsite').
+  const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -180,7 +189,7 @@ export function StageList({ stages }) {
             className={`cs-progress-row${active ? ' cs-progress-row-active' : ''}${done ? ' cs-progress-row-done' : ''}`}
           >
             {done ? <CheckCircle2 size={15} /> : active ? <span className="cs-spinner" /> : <span style={{ width: 15 }} />}
-            <span>{stage}</span>
+            <span>{t(stage)}</span>
           </div>
         );
       })}
@@ -189,6 +198,7 @@ export function StageList({ stages }) {
 }
 
 export function ListEditor({ label, hint, values, onChange, placeholder }) {
+  const { t } = useTranslation('competitorOnboarding');
   const [draft, setDraft] = useState('');
   const items = Array.isArray(values) ? values : [];
 
@@ -211,11 +221,11 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
       <div className="cs-pills" style={{ marginBottom: items.length ? 9 : 0 }}>
         {items.map((item) => (
           <span key={item} className="cs-pill">
-            {item}
+            <bdi>{item}</bdi>
             <button
               type="button"
               onClick={() => onChange(items.filter((value) => value !== item))}
-              aria-label={`Remove ${item}`}
+              aria-label={t('listEditor.remove', { item })}
               style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'inherit' }}
             >
               <X size={11} />
@@ -226,6 +236,7 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           className="cs-input"
+          dir="auto"
           value={draft}
           placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
@@ -237,7 +248,7 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
           }}
         />
         <button type="button" className="cs-btn" onClick={add} disabled={!draft.trim()}>
-          <Plus size={14} /> Add
+          <Plus size={14} /> {t('common:actions.add')}
         </button>
       </div>
     </div>
@@ -249,14 +260,19 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
  *  since free text would let "USA" and "United States" reach the discovery
  *  prompt as different values. */
 export function CountryPicker({ label, hint, values, onChange }) {
+  const { t } = useTranslation('competitorOnboarding');
   const [query, setQuery] = useState('');
   const selected = Array.isArray(values) ? values : [];
-  const matches = query.trim()
-    ? COUNTRIES.filter(
+  // Matches the name in the UI language, the English name, or the ISO code,
+  // so "Germany", "ألمانيا", and "DE" all find the same country.
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = needle
+    ? localizedCountries().filter(
         (c) =>
           !selected.includes(c.code) &&
-          (c.name.toLowerCase().includes(query.trim().toLowerCase()) ||
-            c.code.toLowerCase() === query.trim().toLowerCase()),
+          (c.name.toLocaleLowerCase().includes(needle) ||
+            c.englishName.toLowerCase().includes(needle) ||
+            c.code.toLowerCase() === needle),
       ).slice(0, 8)
     : [];
 
@@ -278,7 +294,7 @@ export function CountryPicker({ label, hint, values, onChange }) {
             <button
               type="button"
               onClick={() => onChange(selected.filter((value) => value !== code))}
-              aria-label={`Remove ${countryLabel(code)}`}
+              aria-label={t('countryPicker.remove', { country: countryLabel(code) })}
               style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'inherit' }}
             >
               <X size={11} />
@@ -289,8 +305,9 @@ export function CountryPicker({ label, hint, values, onChange }) {
       <div style={{ position: 'relative' }}>
         <input
           className="cs-input"
+          dir="auto"
           value={query}
-          placeholder="Search countries..."
+          placeholder={t('countryPicker.searchPlaceholder')}
           onChange={(event) => setQuery(event.target.value)}
         />
         {matches.length ? (
@@ -329,6 +346,7 @@ function intervalToDays(value, unit) {
 }
 
 export default function CompetitorOnboarding() {
+  const { t } = useTranslation('competitorOnboarding');
   const navigate = useNavigate();
   const [step, setStep] = useState(2);
   const [error, setError] = useState('');
@@ -421,7 +439,9 @@ export default function CompetitorOnboarding() {
 
   const ensureStudy = async () => {
     if (studyId) return studyId;
-    const fallbackName = business.name.trim() ? `${business.name.trim()} - competitor study` : 'Untitled competitor study';
+    const fallbackName = business.name.trim()
+      ? t('study.defaultName', { name: business.name.trim() })
+      : t('study.untitled');
     const created = await createStudy({ name: studyName.trim() || fallbackName });
     setStudyId(created.study.id);
     return created.study.id;
@@ -438,13 +458,11 @@ export default function CompetitorOnboarding() {
       setProfile(result.profile);
       setScrape(result.scrape);
       if (!result.ai_derived) {
-        setError(
-          'The site was read but the market context could not be generated. Fill it in below and continue.',
-        );
+        setError(t('errors.contextNotGenerated'));
       }
       setStep(3);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setBusy(false);
       setStep1Mode(null);
@@ -469,7 +487,7 @@ export default function CompetitorOnboarding() {
       }
       setExistingBusinesses(businesses);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setLoadingBusinesses(false);
     }
@@ -508,7 +526,7 @@ export default function CompetitorOnboarding() {
     try {
       const { profile: sourceProfile } = await getProfile(study.id);
       if (!sourceProfile) {
-        setError('Could not load that business profile.');
+        setError(t('errors.profileLoadFailed'));
         return;
       }
       setBusiness({
@@ -519,7 +537,7 @@ export default function CompetitorOnboarding() {
       setTargetCountries(sourceProfile.target_countries || []);
       setSelectedBusinessProfile(sourceProfile);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     }
   };
 
@@ -537,7 +555,7 @@ export default function CompetitorOnboarding() {
       setScrape(null);
       setStep(3);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setBusy(false);
       setStep1Mode(null);
@@ -562,7 +580,7 @@ export default function CompetitorOnboarding() {
       setScrape(null);
       setStep(3);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setBusy(false);
       setStep1Mode(null);
@@ -580,12 +598,10 @@ export default function CompetitorOnboarding() {
       setProfile(result.profile);
       setScrape(result.scrape);
       if (!result.ai_derived) {
-        setError(
-          'The site was read but the market context could not be generated. Fill it in below and continue.',
-        );
+        setError(t('errors.contextNotGenerated'));
       }
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setContextBusy(false);
     }
@@ -603,7 +619,7 @@ export default function CompetitorOnboarding() {
       await refreshCompetitors();
       setStep(targetCountries.length ? 4 : 5);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setBusy(false);
     }
@@ -619,7 +635,7 @@ export default function CompetitorOnboarding() {
       const result = await runCulturalAnalysis(studyId);
       setCulturalAnalysis(result.cultural_analysis);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setCulturalBusy(false);
     }
@@ -640,7 +656,7 @@ export default function CompetitorOnboarding() {
         setAccountsByCompetitor((current) => ({ ...current, [result.competitor.id]: result.accounts }));
       }
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setAddingManual(false);
     }
@@ -654,12 +670,15 @@ export default function CompetitorOnboarding() {
       const queued = await discoverCompetitors(studyId, { limit: 12, with_accounts: false });
       const run = await pollDiscoveryRun(studyId, queued.run_id, (r) => setDiscoveryLogs(r.logs || []));
       if (run.status === 'failed') {
-        throw new Error(run.error || run.message || 'Competitor discovery failed.');
+        throw apiError(
+          { ...run, error: run.error || run.message },
+          { fallback: t('errors.discoveryFailed') },
+        );
       }
       await refreshCompetitors();
       setRejected(run.rejected || []);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setDiscovering(false);
     }
@@ -714,7 +733,7 @@ export default function CompetitorOnboarding() {
         return next;
       });
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setFindingChannels(false);
     }
@@ -733,7 +752,7 @@ export default function CompetitorOnboarding() {
       }
       await refreshCompetitors();
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setTrackingBusy((current) => ({ ...current, [competitor.id]: false }));
     }
@@ -767,7 +786,11 @@ export default function CompetitorOnboarding() {
       });
       const failed = results.filter((result) => result.status === 'rejected').length;
       if (failed) {
-        setError(`Tracked ${targets.length - failed} of ${targets.length} competitors — ${failed} failed.`);
+        setError(t('errors.trackAllPartial', {
+          count: targets.length,
+          tracked: targets.length - failed,
+          failed,
+        }));
       }
       await refreshCompetitors();
     } finally {
@@ -791,7 +814,7 @@ export default function CompetitorOnboarding() {
       const result = await listAccounts(competitorId);
       setAccountsByCompetitor((current) => ({ ...current, [competitorId]: result.accounts || [] }));
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     }
   };
 
@@ -806,7 +829,7 @@ export default function CompetitorOnboarding() {
       }));
       await refreshCompetitors();
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     }
   };
 
@@ -820,7 +843,7 @@ export default function CompetitorOnboarding() {
       }));
       await refreshCompetitors();
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
     } finally {
       setSourceBusy((current) => ({ ...current, [competitorId]: false }));
     }
@@ -867,7 +890,7 @@ export default function CompetitorOnboarding() {
       });
       navigate(`/competitors/${studyId}`);
     } catch (caught) {
-      setError(caught.message);
+      setError(caught);
       setBusy(false);
     }
   };
@@ -876,12 +899,8 @@ export default function CompetitorOnboarding() {
     <div className="cs-page cs-wizard">
       <div className="cs-head">
         <div>
-          <h1>New competitor study</h1>
-          <p>
-            Strata reads your website to understand your market, then lets you add competitors
-            yourself — sources you enter are trusted right away. AI suggestions are available if you
-            want a head start, but nothing about tracking a competitor requires them.
-          </p>
+          <h1>{t('page.title')}</h1>
+          <p>{t('page.intro')}</p>
         </div>
       </div>
 
@@ -902,47 +921,43 @@ export default function CompetitorOnboarding() {
                 aria-current={step === item.id}
                 onClick={clickable ? () => setStep(item.id) : undefined}
                 disabled={!clickable}
-                title={clickable ? `Back to ${item.label}` : undefined}
+                title={clickable ? t('steps.backTo', { step: t(item.labelKey) }) : undefined}
               >
                 <span className="cs-step-num">
-                  {step > item.id ? <Check size={12} /> : index + 1}
+                  {step > item.id ? <Check size={12} /> : formatNumber(index + 1)}
                 </span>
                 <Icon size={14} />
-                <span>{item.label}</span>
+                <span>{t(item.labelKey)}</span>
               </button>
-              {index < visibleSteps.length - 1 ? <ChevronRight size={14} className="cs-step-sep" /> : null}
+              {index < visibleSteps.length - 1 ? <ChevronRight size={14} className="cs-step-sep icon-flip-rtl" /> : null}
             </div>
           );
         })}
       </div>
 
-      <ErrorNotice error={error} context="complete competitor setup" onDismiss={() => setError('')} />
+      <ErrorNotice error={error} context={t('errorContext.setup')} onDismiss={() => setError('')} />
 
       {step === 2 ? (
         <div className="cs-panel">
-          <h2 className="cs-panel-title"><Building2 size={16} /> Tell us about your business</h2>
-          <p className="cs-panel-hint">
-            The website matters most — we read it to work out which market you are in and how you
-            position yourself. Everything after this is judged against that, so a real site gives
-            much better competitors than a description alone.
-          </p>
+          <h2 className="cs-panel-title"><Building2 size={16} /> {t('business.title')}</h2>
+          <p className="cs-panel-hint">{t('business.hint')}</p>
 
           <div className="cs-field">
-            <label className="cs-label">Business</label>
-            <div className="cs-view-tabs" style={{ marginLeft: 0, marginBottom: 4 }}>
+            <label className="cs-label">{t('business.label')}</label>
+            <div className="cs-view-tabs" style={{ marginInline: 0, marginBottom: 4 }}>
               <button
                 type="button"
                 className={`cs-view-tab${businessMode === 'new' ? ' active' : ''}`}
                 onClick={() => switchBusinessMode('new')}
               >
-                <Plus size={13} /> Create new
+                <Plus size={13} /> {t('business.createNew')}
               </button>
               <button
                 type="button"
                 className={`cs-view-tab${businessMode === 'existing' ? ' active' : ''}`}
                 onClick={() => switchBusinessMode('existing')}
               >
-                <Search size={13} /> Choose existing
+                <Search size={13} /> {t('business.chooseExisting')}
               </button>
             </div>
           </div>
@@ -954,7 +969,8 @@ export default function CompetitorOnboarding() {
                   <Search size={14} />
                   <input
                     value={businessSearch}
-                    placeholder="Search a business you've studied before..."
+                    dir="auto"
+                    placeholder={t('business.searchPlaceholder')}
                     onChange={(event) => setBusinessSearch(event.target.value)}
                   />
                 </div>
@@ -969,9 +985,9 @@ export default function CompetitorOnboarding() {
                           ? { background: '#f1f5f9', fontWeight: 600 } : undefined}
                         onClick={() => chooseExistingBusiness(item)}
                       >
-                        {item.business_name}
+                        <bdi>{item.business_name}</bdi>
                         {item.business_website ? (
-                          <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--text-light)' }}>
+                          <span className="ltr-isolate" style={{ marginInlineStart: 8, fontWeight: 400, color: 'var(--text-light)' }}>
                             {item.business_website}
                           </span>
                         ) : null}
@@ -982,23 +998,27 @@ export default function CompetitorOnboarding() {
               </div>
 
               {loadingBusinesses ? (
-                <p className="cs-panel-hint"><Loader2 size={13} className="cs-spin" /> Loading past businesses...</p>
+                <p className="cs-panel-hint"><Loader2 size={13} className="cs-spin" /> {t('business.loadingPast')}</p>
               ) : null}
               {!loadingBusinesses && !existingBusinesses.length ? (
-                <p className="cs-panel-hint">No previous business profiles yet — switch to "Create new" above.</p>
+                <p className="cs-panel-hint">{t('business.noPast')}</p>
               ) : null}
               {selectedBusinessProfile ? (
                 <>
                   <div className="cs-alert cs-alert-info" style={{ marginTop: 10 }}>
                     <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
                     <span>
-                      Reusing <strong>{selectedBusinessProfile.name}</strong>&rsquo;s market context — no
-                      re-scraping or AI wait needed. You can still edit it on the next step.
+                      <Trans
+                        t={t}
+                        i18nKey="business.reusing"
+                        values={{ name: selectedBusinessProfile.name }}
+                        components={{ strong: <strong dir="auto" /> }}
+                      />
                     </span>
                   </div>
                   <CountryPicker
-                    label="Target countries"
-                    hint="carried over from that business — edit for this study"
+                    label={t('business.targetCountries')}
+                    hint={t('business.targetCountriesCarriedHint')}
                     values={targetCountries}
                     onChange={setTargetCountries}
                   />
@@ -1010,23 +1030,25 @@ export default function CompetitorOnboarding() {
           {businessMode === 'new' ? (
             <>
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-biz-name">Business name</label>
+                <label className="cs-label" htmlFor="cs-biz-name">{t('business.name')}</label>
                 <input
                   id="cs-biz-name"
                   className="cs-input"
+                  dir="auto"
                   value={business.name}
-                  placeholder="Northwind Analytics"
+                  placeholder={t('business.namePlaceholder')}
                   onChange={(event) => setBusiness({ ...business, name: event.target.value })}
                 />
               </div>
 
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-biz-site">
-                  Website<span className="cs-label-hint">strongly recommended</span>
+                  {t('business.website')}<span className="cs-label-hint">{t('business.websiteHint')}</span>
                 </label>
                 <input
                   id="cs-biz-site"
                   className="cs-input"
+                  dir="ltr"
                   value={business.website}
                   placeholder="northwind.com"
                   onChange={(event) => setBusiness({ ...business, website: event.target.value })}
@@ -1035,20 +1057,21 @@ export default function CompetitorOnboarding() {
 
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-biz-desc">
-                  Anything else<span className="cs-label-hint">optional</span>
+                  {t('business.description')}<span className="cs-label-hint">{t('business.optional')}</span>
                 </label>
                 <textarea
                   id="cs-biz-desc"
                   className="cs-textarea"
+                  dir="auto"
                   value={business.description}
-                  placeholder="What you sell, who buys it, which markets you care about."
+                  placeholder={t('business.descriptionPlaceholder')}
                   onChange={(event) => setBusiness({ ...business, description: event.target.value })}
                 />
               </div>
 
               <CountryPicker
-                label="Target countries"
-                hint="optional — leave blank to search globally"
+                label={t('business.targetCountries')}
+                hint={t('business.targetCountriesHint')}
                 values={targetCountries}
                 onChange={setTargetCountries}
               />
@@ -1057,13 +1080,14 @@ export default function CompetitorOnboarding() {
 
           <div className="cs-field">
             <label className="cs-label" htmlFor="cs-study-name">
-              Study name<span className="cs-label-hint">defaults to your business name</span>
+              {t('study.name')}<span className="cs-label-hint">{t('study.nameHint')}</span>
             </label>
             <input
               id="cs-study-name"
               className="cs-input"
+              dir="auto"
               value={studyName}
-              placeholder={business.name ? `${business.name} - competitor study` : 'Q3 competitor study'}
+              placeholder={business.name ? t('study.defaultName', { name: business.name }) : t('study.namePlaceholder')}
               onChange={(event) => setStudyName(event.target.value)}
             />
           </div>
@@ -1077,12 +1101,10 @@ export default function CompetitorOnboarding() {
           <div className="cs-wizard-foot">
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
               <button type="button" className="cs-btn cs-btn-ghost" onClick={() => navigate('/competitors')} disabled={busy}>
-                <ArrowLeft size={15} /> Back
+                <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
               </button>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>
-                {businessMode === 'existing'
-                  ? 'Reusing a saved profile skips the website read entirely.'
-                  : 'Reading your site takes about 20-40 seconds — or skip that and write the context yourself.'}
+                {businessMode === 'existing' ? t('business.footReuse') : t('business.footRead')}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1093,18 +1115,18 @@ export default function CompetitorOnboarding() {
                   onClick={continueWithExistingBusiness}
                   disabled={!selectedBusinessProfile || busy}
                 >
-                  {busy ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} />}
-                  {busy ? 'Saving...' : 'Continue with this business'}
+                  {busy ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} className="icon-flip-rtl" />}
+                  {busy ? t('common:actions.saving') : t('business.continueExisting')}
                 </button>
               ) : (
                 <>
                   <button type="button" className="cs-btn" onClick={submitBusinessManually} disabled={!canLeaveStep1 || busy}>
                     {busy && step1Mode === 'manual' ? <Loader2 size={15} className="cs-spin" /> : <Building2 size={15} />}
-                    Write manually
+                    {t('business.writeManually')}
                   </button>
                   <button type="button" className="cs-btn cs-btn-primary" onClick={submitBusiness} disabled={!canLeaveStep1 || busy}>
-                    {busy && step1Mode === 'ai' ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} />}
-                    {busy && step1Mode === 'ai' ? 'Reading your site...' : 'Read my site with AI'}
+                    {busy && step1Mode === 'ai' ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} className="icon-flip-rtl" />}
+                    {busy && step1Mode === 'ai' ? t('business.readingSite') : t('business.readWithAi')}
                   </button>
                 </>
               )}
@@ -1119,20 +1141,17 @@ export default function CompetitorOnboarding() {
           {scrape?.status === 'success' ? (
             <div className="cs-alert cs-alert-info">
               <Globe size={16} style={{ flexShrink: 0 }} />
-              <span>{`Read ${scrape.pages.length} page${scrape.pages.length === 1 ? '' : 's'} from your site (${scrape.chars.toLocaleString()} characters). Check the context below — competitors are found from it.`}</span>
+              <span>{t('context.readPages', { count: scrape.pages.length, chars: formatNumber(scrape.chars) })}</span>
             </div>
           ) : scrape ? (
-            <ErrorNotice error={scrape.error || 'The website could not be read.'} context="read your website" compact />
+            <ErrorNotice error={scrape.error || t('errors.websiteUnreadable')} context={t('errorContext.readWebsite')} compact />
           ) : null}
 
           <div className="cs-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div>
-                <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Sparkles size={16} /> What we understood</h2>
-                <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-                  Edit anything that is off. This is the description competitors get matched against and
-                  that every &ldquo;how does this affect us&rdquo; judgement is measured by.
-                </p>
+                <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Sparkles size={16} /> {t('context.title')}</h2>
+                <p className="cs-panel-hint" style={{ marginBottom: 0 }}>{t('context.hint')}</p>
               </div>
               <button
                 type="button"
@@ -1141,7 +1160,7 @@ export default function CompetitorOnboarding() {
                 disabled={!business.website.trim() || contextBusy || busy}
               >
                 {contextBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-                {contextBusy ? 'Reading your site...' : 'Re-run analysis'}
+                {contextBusy ? t('business.readingSite') : t('context.rerun')}
               </button>
             </div>
 
@@ -1153,47 +1172,49 @@ export default function CompetitorOnboarding() {
 
             <div className="cs-grid-2">
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-industry">Industry</label>
-                <input id="cs-industry" className="cs-input" value={profile.industry || ''}
+                <label className="cs-label" htmlFor="cs-industry">{t('context.industry')}</label>
+                <input id="cs-industry" className="cs-input" dir="auto" value={profile.industry || ''}
                   onChange={(event) => setProfile({ ...profile, industry: event.target.value })} />
               </div>
               <div className="cs-field">
-                <label className="cs-label" htmlFor="cs-market">Market you compete in</label>
-                <input id="cs-market" className="cs-input" value={profile.market || ''}
+                <label className="cs-label" htmlFor="cs-market">{t('context.market')}</label>
+                <input id="cs-market" className="cs-input" dir="auto" value={profile.market || ''}
                   onChange={(event) => setProfile({ ...profile, market: event.target.value })} />
               </div>
             </div>
 
             <div className="cs-field">
-              <label className="cs-label" htmlFor="cs-positioning">Positioning</label>
-              <input id="cs-positioning" className="cs-input" value={profile.positioning || ''}
+              <label className="cs-label" htmlFor="cs-positioning">{t('context.positioning')}</label>
+              <input id="cs-positioning" className="cs-input" dir="auto" value={profile.positioning || ''}
                 onChange={(event) => setProfile({ ...profile, positioning: event.target.value })} />
             </div>
 
-            <ListEditor label="What you offer" values={profile.offerings}
-              placeholder="demand forecasting"
+            <ListEditor label={t('context.offerings')} values={profile.offerings}
+              placeholder={t('context.offeringsPlaceholder')}
               onChange={(offerings) => setProfile({ ...profile, offerings })} />
-            <ListEditor label="Who buys it" values={profile.audience}
-              placeholder="operations directors"
+            <ListEditor label={t('context.audience')} values={profile.audience}
+              placeholder={t('context.audiencePlaceholder')}
               onChange={(audience) => setProfile({ ...profile, audience })} />
-            <ListEditor label="What sets you apart" hint="used to judge competitor moves"
-              values={profile.differentiators} placeholder="implementation in under 30 days"
+            <ListEditor label={t('context.differentiators')} hint={t('context.differentiatorsHint')}
+              values={profile.differentiators} placeholder={t('context.differentiatorsPlaceholder')}
               onChange={(differentiators) => setProfile({ ...profile, differentiators })} />
 
             <div className="cs-field">
-              <label className="cs-label" htmlFor="cs-context">Market context</label>
-              <textarea id="cs-context" className="cs-textarea" style={{ minHeight: 110 }}
+              <label className="cs-label" htmlFor="cs-context">{t('context.summary')}</label>
+              <textarea id="cs-context" className="cs-textarea" dir="auto" style={{ minHeight: 110 }}
                 value={profile.context_summary || ''}
                 onChange={(event) => setProfile({ ...profile, context_summary: event.target.value })} />
             </div>
 
             <div className="cs-wizard-foot">
               <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(2)} disabled={busy || contextBusy}>
-                <ArrowLeft size={15} /> Back
+                <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
               </button>
               <button type="button" className="cs-btn cs-btn-primary" onClick={submitContext} disabled={busy || contextBusy}>
-                {busy ? <span className="cs-spinner" /> : <ArrowRight size={15} />}
-                {busy ? 'Saving...' : targetCountries.length ? 'Continue to cultural analysis' : 'Continue to competitors'}
+                {busy ? <span className="cs-spinner" /> : <ArrowRight size={15} className="icon-flip-rtl" />}
+                {busy
+                  ? t('common:actions.saving')
+                  : targetCountries.length ? t('context.continueCultural') : t('context.continueCompetitors')}
               </button>
             </div>
           </div>
@@ -1203,16 +1224,12 @@ export default function CompetitorOnboarding() {
       {/* ---------------- Step 4: cultural analysis ---------------- */}
       {step === 4 ? (
         <div className="cs-panel">
-          <h2 className="cs-panel-title"><Users size={16} /> How will you fit in?</h2>
-          <p className="cs-panel-hint">
-            Optional — an AI assessment of how well your business fits the culture(s) you&rsquo;re
-            targeting: what would help you succeed, the benefits of competing there, the difficulties
-            you&rsquo;d likely face, and other insights worth knowing. Skip this and continue any time.
-          </p>
+          <h2 className="cs-panel-title"><Users size={16} /> {t('cultural.title')}</h2>
+          <p className="cs-panel-hint">{t('cultural.hint')}</p>
 
           <button type="button" className="cs-btn cs-btn-primary" onClick={runCultural} disabled={culturalBusy}>
             {culturalBusy ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-            {culturalBusy ? 'Analyzing...' : culturalAnalysis ? 'Re-run analysis' : 'Run analysis'}
+            {culturalBusy ? t('cultural.analyzing') : culturalAnalysis ? t('context.rerun') : t('cultural.run')}
           </button>
 
           {culturalBusy ? (
@@ -1225,36 +1242,36 @@ export default function CompetitorOnboarding() {
             culturalAnalysis.status === 'success' ? (
               <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="cs-field" style={{ marginBottom: 0 }}>
-                  <label className="cs-label">Summary</label>
-                  <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>
+                  <label className="cs-label">{t('cultural.summary')}</label>
+                  <p dir="auto" style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>
                 </div>
                 {[
-                  ['Success factors', culturalAnalysis.success_factors],
-                  ['Benefits', culturalAnalysis.benefits],
-                  ['Challenges', culturalAnalysis.challenges],
-                  ['Other insights', culturalAnalysis.insights],
-                ].map(([label, items]) => (
+                  ['cultural.successFactors', culturalAnalysis.success_factors],
+                  ['cultural.benefits', culturalAnalysis.benefits],
+                  ['cultural.challenges', culturalAnalysis.challenges],
+                  ['cultural.insights', culturalAnalysis.insights],
+                ].map(([labelKey, items]) => (
                   Array.isArray(items) && items.length ? (
-                    <div key={label} className="cs-field" style={{ marginBottom: 0 }}>
-                      <label className="cs-label">{label}</label>
-                      <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
-                        {items.map((item, index) => <li key={index}>{item}</li>)}
+                    <div key={labelKey} className="cs-field" style={{ marginBottom: 0 }}>
+                      <label className="cs-label">{t(labelKey)}</label>
+                      <ul style={{ margin: 0, paddingInlineStart: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
+                        {items.map((item, index) => <li key={index} dir="auto">{item}</li>)}
                       </ul>
                     </div>
                   ) : null
                 ))}
               </div>
             ) : (
-              <ErrorNotice error={culturalAnalysis.error || 'The analysis could not be generated.'} context="generate this analysis" compact />
+              <ErrorNotice error={culturalAnalysis.error || t('errors.analysisNotGenerated')} context={t('errorContext.generateAnalysis')} compact />
             )
           ) : null}
 
           <div className="cs-wizard-foot">
             <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(3)} disabled={busy || culturalBusy}>
-              <ArrowLeft size={15} /> Back
+              <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
             </button>
             <button type="button" className="cs-btn cs-btn-primary" onClick={() => setStep(5)} disabled={culturalBusy}>
-              <ArrowRight size={15} /> {culturalAnalysis ? 'Continue' : 'Skip and continue'}
+              <ArrowRight size={15} className="icon-flip-rtl" /> {culturalAnalysis ? t('common:actions.continue') : t('cultural.skip')}
             </button>
           </div>
         </div>
@@ -1264,11 +1281,8 @@ export default function CompetitorOnboarding() {
       {step === 5 ? (
         <>
           <div className="cs-panel">
-            <h2 className="cs-panel-title"><Building2 size={16} /> Add your competitors</h2>
-            <p className="cs-panel-hint">
-              Add the companies you compete with directly. Sources you enter here are trusted
-              immediately and start scraping right away.
-            </p>
+            <h2 className="cs-panel-title"><Building2 size={16} /> {t('competitors.addTitle')}</h2>
+            <p className="cs-panel-hint">{t('competitors.addHint')}</p>
             <AddCompetitorForm onSubmit={handleAddManualCompetitor} busy={addingManual} />
           </div>
 
@@ -1276,16 +1290,13 @@ export default function CompetitorOnboarding() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div>
                 <h2 className="cs-panel-title" style={{ marginBottom: 4 }}>
-                  <Sparkles size={16} /> Not sure who else to add?
+                  <Sparkles size={16} /> {t('competitors.suggestTitle')}
                 </h2>
-                <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-                  Optional — AI compares your profile against the market and suggests competitors to
-                  review. Track the ones you want, and their channels are found automatically.
-                </p>
+                <p className="cs-panel-hint" style={{ marginBottom: 0 }}>{t('competitors.suggestHint')}</p>
               </div>
               <button type="button" className="cs-btn" onClick={runAiSuggest} disabled={discovering}>
                 {discovering ? <span className="cs-spinner" /> : <Sparkles size={15} />}
-                {discovering ? 'Suggesting...' : 'Suggest competitors with AI'}
+                {discovering ? t('competitors.suggesting') : t('competitors.suggest')}
               </button>
             </div>
 
@@ -1299,12 +1310,15 @@ export default function CompetitorOnboarding() {
             {rejected.length ? (
               <details style={{ marginTop: 16 }}>
                 <summary style={{ cursor: 'pointer', fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                  {rejected.length} suggestion{rejected.length === 1 ? '' : 's'} dropped during checking
+                  {t('competitors.rejectedSummary', { count: rejected.length })}
                 </summary>
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {rejected.map((item) => (
                     <div key={item.name} style={{ fontSize: '0.81rem', color: 'var(--text-light)' }}>
-                      <strong style={{ color: 'var(--text-dark)' }}>{item.name}</strong> — {item.reason}
+                      <strong dir="auto" style={{ color: 'var(--text-dark)' }}>{item.name}</strong>
+                      {' — '}
+                      {/* The reason is written by the backend (English only). */}
+                      <bdi>{item.reason}</bdi>
                     </div>
                   ))}
                 </div>
@@ -1315,16 +1329,22 @@ export default function CompetitorOnboarding() {
           <div className="cs-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div>
-                <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Radar size={16} /> Your competitors</h2>
+                <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Radar size={16} /> {t('competitors.listTitle')}</h2>
                 <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-                  <strong>{trackedCompetitors.length}</strong> tracked. Channels are found and used
-                  immediately once a competitor is tracked, manual or AI-suggested.
+                  <Trans
+                    t={t}
+                    i18nKey="competitors.trackedSummary"
+                    values={{ tracked: formatNumber(trackedCompetitors.length) }}
+                    components={{ strong: <strong /> }}
+                  />
                 </p>
               </div>
               {untrackedCompetitors.length ? (
                 <button type="button" className="cs-btn cs-btn-sm" onClick={trackAllCompetitors} disabled={trackingAllBusy}>
                   {trackingAllBusy ? <span className="cs-spinner" /> : <Check size={13} />}
-                  {trackingAllBusy ? 'Tracking all...' : `Track all (${untrackedCompetitors.length})`}
+                  {trackingAllBusy
+                    ? t('competitors.trackingAll')
+                    : t('competitors.trackAll', { total: formatNumber(untrackedCompetitors.length) })}
                 </button>
               ) : null}
             </div>
@@ -1332,8 +1352,8 @@ export default function CompetitorOnboarding() {
             {!competitors.length ? (
               <div className="cs-empty">
                 <div className="cs-empty-icon"><Search size={20} /></div>
-                <h3>No competitors yet</h3>
-                <p>Add one above, or suggest some with AI.</p>
+                <h3>{t('competitors.emptyTitle')}</h3>
+                <p>{t('competitors.emptyHint')}</p>
               </div>
             ) : (
               <div className="cs-rows">
@@ -1345,7 +1365,7 @@ export default function CompetitorOnboarding() {
                   return (
                     <div key={competitor.id}>
                       <div className={`cs-row${tracked ? ' cs-row-selected' : ''}`}>
-                        <span className="cs-row-rank">{competitor.size_rank ?? '-'}</span>
+                        <span className="cs-row-rank">{competitor.size_rank != null ? formatNumber(competitor.size_rank) : '-'}</span>
                         <div
                           className="cs-avatar"
                           style={{ background: avatarGradient(competitor.name), width: 30, height: 30, fontSize: '0.72rem' }}
@@ -1354,41 +1374,45 @@ export default function CompetitorOnboarding() {
                           {initials(competitor.name)}
                         </div>
                         <div className="cs-row-main">
-                          <div className="cs-row-name">{competitor.name}</div>
-                          <div className="cs-row-desc">
+                          <div className="cs-row-name" dir="auto">{competitor.name}</div>
+                          <div className="cs-row-desc" dir="auto">
                             {competitor.description || competitor.size_signals?.why_competitor || competitor.domain || '—'}
                           </div>
                         </div>
                         <div className="cs-row-side">
                           <span className={`cs-pill ${isManual ? 'cs-pill-manual' : 'cs-pill-ai'}`}>
-                            {isManual ? 'Manual' : 'AI suggested'}
+                            {isManual ? t('competitors.origin.manual') : t('competitors.origin.ai')}
                           </span>
                           {competitor.country ? (
-                            <span className="cs-pill cs-pill-signal" title="Where this company is headquartered">
-                              Based in {countryLabel(competitor.country)}
+                            <span className="cs-pill cs-pill-signal" title={t('competitors.basedInTitle')}>
+                              {t('competitors.basedIn', { country: countryLabel(competitor.country) })}
                             </span>
                           ) : null}
                           {Array.isArray(competitor.operates_in_countries) && competitor.operates_in_countries.length ? (
                             <span
                               className="cs-pill cs-pill-signal"
-                              title="Where this competitor actually competes with your business"
+                              title={t('competitors.competesInTitle')}
                             >
-                              Competes in {competitor.operates_in_countries.map(countryLabel).join(', ')}
+                              {t('competitors.competesIn', {
+                                countries: formatList(competitor.operates_in_countries.map(countryLabel)),
+                              })}
                             </span>
                           ) : null}
                           <span className={`cs-pill cs-pill-${competitor.size_tier}`}>
-                            {SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier}
+                            {t(`sizeTiers.${competitor.size_tier}`, {
+                              defaultValue: SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier,
+                            })}
                           </span>
                           {tracked && unverified[competitor.id] ? (
                             <span
                               className="cs-pill cs-pill-signal"
-                              title="Tracked, but a live web check couldn't confirm this company exists — worth a manual look."
+                              title={t('competitors.unverifiedTitle')}
                             >
-                              Couldn’t verify
+                              {t('competitors.unverified')}
                             </span>
                           ) : null}
                           <button type="button" className="cs-btn cs-btn-sm" onClick={() => toggleChannels(competitor.id)}>
-                            <Link2 size={13} /> {channelsOpen ? 'Hide sources' : 'Sources'}
+                            <Link2 size={13} /> {channelsOpen ? t('competitors.hideSources') : t('competitors.sources')}
                           </button>
                           <button
                             type="button"
@@ -1399,36 +1423,36 @@ export default function CompetitorOnboarding() {
                             {trackingBusy[competitor.id] ? (
                               <span className="cs-spinner" />
                             ) : tracked ? (
-                              <><Check size={13} /> Tracking</>
+                              <><Check size={13} /> {t('competitors.tracking')}</>
                             ) : (
-                              'Track'
+                              t('competitors.track')
                             )}
                           </button>
                         </div>
                       </div>
 
                       {channelsOpen ? (
-                        <div className="cs-rows" style={{ marginLeft: 30, marginBottom: 14 }}>
+                        <div className="cs-rows" style={{ marginInlineStart: 30, marginBottom: 14 }}>
                           {!accounts ? (
-                            <div className="cs-row-desc" style={{ padding: '8px 0' }}>Loading sources...</div>
+                            <div className="cs-row-desc" style={{ padding: '8px 0' }}>{t('competitors.loadingSources')}</div>
                           ) : (
                             accounts.map((account) => (
                               <div key={account.id} className="cs-row">
                                 <div className="cs-row-main">
                                   <div className="cs-row-name">
-                                    {PLATFORM_LABELS[account.platform] || account.platform}
-                                    {account.handle ? <span style={{ fontWeight: 400, color: 'var(--text-light)' }}> @{account.handle}</span> : null}
+                                    {t(`platforms.${account.platform}`, { defaultValue: PLATFORM_LABELS[account.platform] || account.platform })}
+                                    {account.handle ? <>{' '}<span className="ltr-isolate" style={{ fontWeight: 400, color: 'var(--text-light)' }}>@{account.handle}</span></> : null}
                                   </div>
-                                  <div className="cs-row-desc">{account.url}</div>
+                                  <div className="cs-row-desc ltr-isolate">{account.url}</div>
                                 </div>
                                 <div className="cs-row-side">
                                   <span className={`cs-pill cs-pill-${account.validation_status}`}>
-                                    {account.validation_status}
+                                    {t(`validationStatus.${account.validation_status}`, { defaultValue: account.validation_status })}
                                   </span>
                                   {account.validation_status !== 'rejected' ? (
                                     <button type="button" className="cs-btn cs-btn-sm cs-btn-danger"
                                       onClick={() => decideAccount(competitor.id, account.id, 'rejected')}>
-                                      <Trash2 size={13} /> Not theirs
+                                      <Trash2 size={13} /> {t('channels.notTheirs')}
                                     </button>
                                   ) : null}
                                 </div>
@@ -1461,7 +1485,7 @@ export default function CompetitorOnboarding() {
                 onClick={() => setStep(targetCountries.length ? 4 : 3)}
                 disabled={busy}
               >
-                <ArrowLeft size={15} /> Back
+                <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
               </button>
               <button
                 type="button"
@@ -1469,10 +1493,10 @@ export default function CompetitorOnboarding() {
                 onClick={continueToChannels}
                 disabled={busy || findingChannels || !trackedCompetitors.length}
               >
-                {findingChannels ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} />}
+                {findingChannels ? <Loader2 size={15} className="cs-spin" /> : <ArrowRight size={15} className="icon-flip-rtl" />}
                 {findingChannels
-                  ? 'Finding channels...'
-                  : `Continue with ${trackedCompetitors.length} competitor${trackedCompetitors.length === 1 ? '' : 's'}`}
+                  ? t('competitors.findingChannels')
+                  : t('competitors.continueWith', { count: trackedCompetitors.length })}
               </button>
             </div>
           </div>
@@ -1484,16 +1508,15 @@ export default function CompetitorOnboarding() {
         <div className="cs-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Link2 size={16} /> Review channels</h2>
-              <p className="cs-panel-hint" style={{ marginBottom: 0 }}>
-                Every channel found for your tracked competitors is listed below and already included —
-                discard any that aren&rsquo;t actually theirs, or add one yourself if something&rsquo;s missing.
-              </p>
+              <h2 className="cs-panel-title" style={{ marginBottom: 4 }}><Link2 size={16} /> {t('channels.title')}</h2>
+              <p className="cs-panel-hint" style={{ marginBottom: 0 }}>{t('channels.hint')}</p>
             </div>
             {channellessTracked > 0 ? (
               <button type="button" className="cs-btn cs-btn-sm" onClick={findMoreChannels} disabled={findingChannels}>
                 {findingChannels ? <span className="cs-spinner" /> : <Search size={13} />}
-                {findingChannels ? 'Finding...' : `Find more channels (${channellessTracked})`}
+                {findingChannels
+                  ? t('channels.finding')
+                  : t('channels.findMore', { total: formatNumber(channellessTracked) })}
               </button>
             ) : null}
           </div>
@@ -1508,8 +1531,8 @@ export default function CompetitorOnboarding() {
           {!findingChannels && !trackedCompetitors.length ? (
             <div className="cs-empty">
               <div className="cs-empty-icon"><Link2 size={20} /></div>
-              <h3>No tracked competitors</h3>
-              <p>Go back and track at least one competitor first.</p>
+              <h3>{t('channels.emptyTitle')}</h3>
+              <p>{t('channels.emptyHint')}</p>
             </div>
           ) : null}
 
@@ -1525,31 +1548,31 @@ export default function CompetitorOnboarding() {
                   >
                     {initials(competitor.name)}
                   </div>
-                  <strong style={{ fontSize: '0.88rem' }}>{competitor.name}</strong>
+                  <strong dir="auto" style={{ fontSize: '0.88rem' }}>{competitor.name}</strong>
                 </div>
-                <div className="cs-rows" style={{ marginLeft: 30 }}>
+                <div className="cs-rows" style={{ marginInlineStart: 30 }}>
                   {!accounts ? (
-                    <div className="cs-row-desc" style={{ padding: '8px 0' }}>Loading channels...</div>
+                    <div className="cs-row-desc" style={{ padding: '8px 0' }}>{t('channels.loading')}</div>
                   ) : !accounts.length ? (
-                    <div className="cs-row-desc" style={{ padding: '8px 0' }}>No channels found yet.</div>
+                    <div className="cs-row-desc" style={{ padding: '8px 0' }}>{t('channels.none')}</div>
                   ) : (
                     accounts.map((account) => (
                       <div key={account.id} className="cs-row">
                         <div className="cs-row-main">
                           <div className="cs-row-name">
-                            {PLATFORM_LABELS[account.platform] || account.platform}
-                            {account.handle ? <span style={{ fontWeight: 400, color: 'var(--text-light)' }}> @{account.handle}</span> : null}
+                            {t(`platforms.${account.platform}`, { defaultValue: PLATFORM_LABELS[account.platform] || account.platform })}
+                            {account.handle ? <>{' '}<span className="ltr-isolate" style={{ fontWeight: 400, color: 'var(--text-light)' }}>@{account.handle}</span></> : null}
                           </div>
-                          <div className="cs-row-desc">{account.url}</div>
+                          <div className="cs-row-desc ltr-isolate">{account.url}</div>
                         </div>
                         <div className="cs-row-side">
                           <span className={`cs-pill cs-pill-${account.validation_status}`}>
-                            {account.validation_status}
+                            {t(`validationStatus.${account.validation_status}`, { defaultValue: account.validation_status })}
                           </span>
                           {account.validation_status !== 'rejected' ? (
                             <button type="button" className="cs-btn cs-btn-sm cs-btn-danger"
                               onClick={() => decideAccount(competitor.id, account.id, 'rejected')}>
-                              <Trash2 size={13} /> Not theirs
+                              <Trash2 size={13} /> {t('channels.notTheirs')}
                             </button>
                           ) : null}
                         </div>
@@ -1567,10 +1590,10 @@ export default function CompetitorOnboarding() {
 
           <div className="cs-wizard-foot">
             <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(5)} disabled={busy}>
-              <ArrowLeft size={15} /> Back
+              <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
             </button>
             <button type="button" className="cs-btn cs-btn-primary" onClick={() => setStep(7)} disabled={busy}>
-              <ArrowRight size={15} /> Continue
+              <ArrowRight size={15} className="icon-flip-rtl" /> {t('common:actions.continue')}
             </button>
           </div>
         </div>
@@ -1579,12 +1602,8 @@ export default function CompetitorOnboarding() {
       {/* ---------------- Step 7 (offline): analyze + report ---------------- */}
       {step === 7 ? (
         <div className="cs-panel">
-          <h2 className="cs-panel-title"><Globe size={16} /> Keep it current</h2>
-          <p className="cs-panel-hint">
-            {trackedCompetitors.length} competitor{trackedCompetitors.length === 1 ? '' : 's'} ready to
-            track. Re-scrape their sources on a schedule, using the same pipeline scheduler as the
-            rest of Strata.
-          </p>
+          <h2 className="cs-panel-title"><Globe size={16} /> {t('schedule.title')}</h2>
+          <p className="cs-panel-hint">{t('schedule.hint', { count: trackedCompetitors.length })}</p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', marginBottom: 14 }}>
             <input
               type="checkbox"
@@ -1597,12 +1616,12 @@ export default function CompetitorOnboarding() {
                 setScheduleOn(checked);
               }}
             />
-            Scrape competitors automatically
+            {t('schedule.auto')}
           </label>
           {scheduleOn ? (
             <div className="cs-panel" style={{ margin: '0 0 4px', background: '#fcfdff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '0.88rem', flexWrap: 'wrap' }}>
-                <span>Every</span>
+                <span>{t('schedule.every')}</span>
                 <input className="cs-input" type="number" min="1" style={{ width: 78 }}
                   value={scheduleIntervalValue} onChange={(event) => setScheduleIntervalValue(event.target.value)} />
                 <select
@@ -1624,9 +1643,9 @@ export default function CompetitorOnboarding() {
 
           <div className="cs-field" style={{ marginTop: 18 }}>
             <label className="cs-label">
-              Data retrieval window
+              {t('schedule.window')}
               <span className="cs-label-hint">
-                {scheduleOn ? 'optional — end date follows your repeat schedule when start is set' : 'optional'}
+                {scheduleOn ? t('schedule.windowHintScheduled') : t('business.optional')}
               </span>
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
@@ -1637,7 +1656,7 @@ export default function CompetitorOnboarding() {
                 value={retrievalStart}
                 onChange={(event) => setRetrievalStart(event.target.value)}
               />
-              <span style={{ color: 'var(--text-light)' }}>to</span>
+              <span style={{ color: 'var(--text-light)' }}>{t('schedule.to')}</span>
               <input
                 className="cs-input"
                 type="date"
@@ -1650,17 +1669,22 @@ export default function CompetitorOnboarding() {
             </div>
             <p className="cs-panel-hint" style={{ marginTop: 8, marginBottom: 0 }}>
               {scheduleOn
-                ? `Optional — scopes which article publish dates get pulled in, kept at ${scheduleWindowDays} day(s) wide to match "every ${Math.max(1, Number(scheduleIntervalValue) || 1)} ${scheduleIntervalUnit}" above when a start date is set. Leave the start date blank to pull in articles from any date instead.`
-                : 'Optional — scopes which article publish dates get pulled in. Leave blank to pull in articles from any date.'}
+                ? t('schedule.windowExplainScheduled', {
+                  window: t('schedule.windowDays', { count: scheduleWindowDays }),
+                  interval: t(`schedule.interval.${scheduleIntervalUnit}`, {
+                    count: Math.max(1, Number(scheduleIntervalValue) || 1),
+                  }),
+                })
+                : t('schedule.windowExplain')}
             </p>
           </div>
 
           <div className="cs-wizard-foot">
             <button type="button" className="cs-btn cs-btn-ghost" onClick={() => setStep(6)} disabled={busy}>
-              <ArrowLeft size={15} /> Back
+              <ArrowLeft size={15} className="icon-flip-rtl" /> {t('common:actions.back')}
             </button>
             <button type="button" className="cs-btn cs-btn-primary" onClick={finish} disabled={busy}>
-              {busy ? <span className="cs-spinner" /> : <CheckCircle2 size={15} />} Open workspace
+              {busy ? <span className="cs-spinner" /> : <CheckCircle2 size={15} />} {t('schedule.openWorkspace')}
             </button>
           </div>
         </div>

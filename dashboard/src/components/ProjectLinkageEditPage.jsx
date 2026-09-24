@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Link2, RefreshCw, Save, Search, Users, X } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
+import { formatNumber } from '../i18n/format.js';
 import '../styles/ProjectLinkage.css';
 import ErrorNotice from './ErrorNotice';
 
@@ -8,6 +10,7 @@ import ErrorNotice from './ErrorNotice';
 // the current linkage lives on ProjectLinkageDetailPage; this page only
 // renders the assignment form and hands back to the detail page on save.
 export default function ProjectLinkageEditPage({ projects = [], users = [], onSetProjectUsers }) {
+  const { t } = useTranslation('admin');
   const navigate = useNavigate();
   const params = useParams();
 
@@ -53,7 +56,7 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
       await onSetProjectUsers?.(project.id, draftUserIds);
       navigate(`/admin/project-linkage/${project.id}`);
     } catch (err) {
-      setError(err?.message || 'Failed to update linked users.');
+      setError(err?.message ? err : t('linkage.edit.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -67,10 +70,10 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
             <div className="admin-empty-state-icon">
               <Link2 size={18} />
             </div>
-            <strong>Project not found</strong>
-            <span>It may have been removed, or you may not have access to it.</span>
+            <strong>{t('linkage.notFoundTitle')}</strong>
+            <span>{t('linkage.notFoundBody')}</span>
             <Link to="/admin/project-linkage" className="btn-primary" style={{ marginTop: 8, textDecoration: 'none' }}>
-              <ArrowLeft size={16} /> Back to Project Linkage
+              <ArrowLeft size={16} className="icon-flip-rtl" /> {t('linkage.backToList')}
             </Link>
           </div>
         </div>
@@ -83,30 +86,32 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
       <div className="admin-page-header">
         <div>
           <div className="admin-page-kicker">
-            <Link2 size={14} /> Project linkage
+            <Link2 size={14} /> {t('kicker.projectLinkage')}
           </div>
-          <h1 className="admin-page-title">Edit linkage: {project.name}</h1>
-          <p className="admin-page-subtitle">Add or remove the dashboard users linked to this project.</p>
+          <h1 className="admin-page-title">
+            <Trans t={t} i18nKey="linkage.edit.title" values={{ name: project.name }} components={{ name: <bdi /> }} />
+          </h1>
+          <p className="admin-page-subtitle">{t('linkage.edit.subtitle')}</p>
         </div>
         <div className="admin-page-toolbar">
           <div className="admin-page-toolbar-meta">
-            <span>Selected</span>
-            <strong>{draftUserIds.length}</strong>
+            <span>{t('linkage.edit.selected')}</span>
+            <strong>{formatNumber(draftUserIds.length)}</strong>
           </div>
         </div>
       </div>
 
       <div className="glass-card admin-form-panel" style={{ maxWidth: 780, margin: '0 auto' }}>
-        <ErrorNotice error={error} context="update linked users" onDismiss={() => setError('')} compact />
+        <ErrorNotice error={error} context={t('errorContext.updateLinkedUsers')} onDismiss={() => setError('')} compact />
 
         <div className="assign-sources-panel">
           <div className="assign-sources-header">
             <div>
-              <div className="assign-sources-kicker">Linked users</div>
-              <strong className="assign-sources-title">Choose dashboard users linked to this project</strong>
+              <div className="assign-sources-kicker">{t('linkage.edit.panelKicker')}</div>
+              <strong className="assign-sources-title">{t('linkage.edit.panelTitle')}</strong>
             </div>
             <div className="assign-sources-summary">
-              <span className="panel-chip">{draftUserIds.length} selected</span>
+              <span className="panel-chip">{t('linkage.edit.selectedCount', { count: draftUserIds.length })}</span>
             </div>
           </div>
 
@@ -117,7 +122,8 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter users by username, email, or role"
+                placeholder={t('linkage.edit.searchPlaceholder')}
+                dir="auto"
                 disabled={isSaving}
               />
             </label>
@@ -129,16 +135,16 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
                 <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
                   <Users size={16} />
                 </div>
-                <strong>No dashboard users yet</strong>
-                <span>Create dashboard users first, then link them to this project.</span>
+                <strong>{t('linkage.edit.noUsersTitle')}</strong>
+                <span>{t('linkage.edit.noUsersBody')}</span>
               </div>
             ) : visibleUsers.length === 0 ? (
               <div className="admin-empty-state" style={{ padding: '16px 10px' }}>
                 <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
                   <Search size={16} />
                 </div>
-                <strong>No matching users</strong>
-                <span>Try a different search term.</span>
+                <strong>{t('linkage.edit.noMatchesTitle')}</strong>
+                <span>{t('linkage.edit.noMatchesBody')}</span>
               </div>
             ) : (
               visibleUsers.map((user) => {
@@ -154,10 +160,16 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
                     />
                     <div className="assign-source-copy">
                       <div className="assign-source-topline">
-                        <strong className="assign-source-name">{user.username}</strong>
-                        <span className={`panel-chip role-${user.role}`}>{user.role}</span>
+                        <strong className="assign-source-name" dir="auto">{user.username}</strong>
+                        <span className={`panel-chip role-${user.role}`}>
+                          {t(`common:roleNames.${user.role}`, { defaultValue: user.role })}
+                        </span>
                       </div>
-                      <div className="assign-source-url">{user.email || 'No email on file'}</div>
+                      {user.email ? (
+                        <div className="assign-source-url ltr-isolate">{user.email}</div>
+                      ) : (
+                        <div className="assign-source-url">{t('linkage.noEmail')}</div>
+                      )}
                     </div>
                   </label>
                 );
@@ -173,16 +185,16 @@ export default function ProjectLinkageEditPage({ projects = [], users = [], onSe
             onClick={() => navigate(`/admin/project-linkage/${project.id}`)}
             disabled={isSaving}
           >
-            <X size={16} /> Cancel
+            <X size={16} /> {t('common:actions.cancel')}
           </button>
           <button type="button" className="btn-primary" onClick={save} disabled={isSaving || !isDirty}>
             {isSaving ? (
               <>
-                <RefreshCw size={16} className="spin" /> Saving...
+                <RefreshCw size={16} className="spin" /> {t('common:actions.saving')}
               </>
             ) : (
               <>
-                <Save size={16} /> Save linkage
+                <Save size={16} /> {t('linkage.edit.save')}
               </>
             )}
           </button>

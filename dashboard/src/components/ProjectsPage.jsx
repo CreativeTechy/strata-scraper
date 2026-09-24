@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Trans, useTranslation } from 'react-i18next';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import { useAuth } from '../auth/useAuth.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
+import { apiError } from '../errors/apiError.js';
+import i18n from '../i18n/index.js';
+import { formatDate, formatDateTime, formatList, formatNumber } from '../i18n/format.js';
 import '../styles/Projects.css';
 import {
   CalendarDays,
@@ -39,21 +43,22 @@ const emptyNewSourceDraft = {
 // (and crawled) as a "web" source instead (see
 // backend/app/core/settings.py's _infer_source_type/_resolve_source_type,
 // which reassigns any entered URL to its real platform type regardless of
-// what was picked here).
+// what was picked here). Values are the stable API codes; labels come from
+// projects:sourceTypes.<value> at render time (sourceTypeLabel).
 const SOURCE_TYPE_OPTIONS = [
-  { value: 'rss', label: 'RSS' },
-  { value: 'web', label: 'Web' },
-  { value: 'hashtag', label: 'Hashtag' },
-  { value: 'keyword', label: 'Keyword' },
-  { value: 'username', label: 'X Account' },
-  { value: 'tweet', label: 'Single Post' },
-  { value: 'reddit', label: 'Reddit' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'threads', label: 'Threads' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
-];
+  'rss',
+  'web',
+  'hashtag',
+  'keyword',
+  'username',
+  'tweet',
+  'reddit',
+  'telegram',
+  'linkedin',
+  'threads',
+  'facebook',
+  'instagram',
+].map((value) => ({ value }));
 
 const TERM_SOURCE_TYPES = new Set(['hashtag', 'keyword', 'username']);
 
@@ -78,48 +83,35 @@ const TWITTER_SOURCE_TYPES = new Set(['hashtag', 'username', 'tweet']);
 // keeps every type separate, since filtering by exact type still matters
 // there.
 const SOURCE_TYPE_FORM_TABS = [
-  { value: 'rss', label: 'RSS' },
-  { value: 'web', label: 'Web' },
-  { value: 'keyword', label: 'Keyword' },
-  { value: 'twitter', label: 'Twitter/X' },
-  { value: 'reddit', label: 'Reddit' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'threads', label: 'Threads' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
-];
+  'rss',
+  'web',
+  'keyword',
+  'twitter',
+  'reddit',
+  'telegram',
+  'linkedin',
+  'threads',
+  'facebook',
+  'instagram',
+].map((value) => ({ value }));
 
-const TWITTER_SUB_TYPE_OPTIONS = [
-  { value: 'hashtag', label: 'Hashtag' },
-  { value: 'username', label: 'X Account' },
-  { value: 'tweet', label: 'Single Post' },
-];
+const TWITTER_SUB_TYPE_OPTIONS = ['hashtag', 'username', 'tweet'].map((value) => ({ value }));
 
-const TERM_SOURCE_PLACEHOLDERS = {
-  hashtag: 'Hashtag, without # (e.g. EVSummit)',
-  username: 'X account, without @ (e.g. elonmusk)',
-  keyword: 'Keyword or phrase (e.g. electric vehicles)',
-};
+// Types with a term placeholder (projects:wizard.newSource.termPlaceholders.<type>).
+const TERM_SOURCE_PLACEHOLDER_TYPES = new Set(['hashtag', 'username', 'keyword']);
 
 // Reddit/Telegram/LinkedIn/tweet keep the URL field (unlike the term types
 // above) since it doubles as a free-form input that accepts short forms (a
 // bare subreddit/company/profile slug or search phrase, disambiguated by the
 // kind selector below) as well as full URLs. A tweet has no short form - the
-// full status URL is the only valid input.
-const URL_FIELD_PLACEHOLDERS = {
-  reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
-  telegram: '@channelname, channelname, or https://t.me/channelname',
-  linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
-  tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
-  threads: 'Handle (without @), a search phrase, or a threads.com URL',
-  facebook: 'Page/group/profile slug, a search phrase, or a facebook.com URL',
-  instagram: 'Handle (without @), a hashtag, a search phrase, or an instagram.com URL',
-};
+// full status URL is the only valid input. Placeholder text lives in
+// projects:wizard.newSource.urlPlaceholders.<type>.
+const URL_FIELD_PLACEHOLDER_TYPES = new Set(['reddit', 'telegram', 'linkedin', 'tweet', 'threads', 'facebook', 'instagram']);
 
+// Called during render, so it follows the active UI language.
 function sourceTypeLabel(sourceType) {
-  const match = SOURCE_TYPE_OPTIONS.find((option) => option.value === (sourceType || 'rss'));
-  return match ? match.label : (sourceType || 'RSS');
+  const type = sourceType || 'rss';
+  return i18n.t(`projects:sourceTypes.${type}`, { defaultValue: sourceType || 'RSS' });
 }
 
 // "keyword" sources are crawled as a bare Google News/GDELT/CSE search query
@@ -137,21 +129,11 @@ function scopeKeywordTerm(projectName, term, sourceType) {
   return `${trimmedName} ${trimmedTerm}`.trim();
 }
 
-const SOURCE_ASSIGN_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];
+const SOURCE_ASSIGN_TABS = [{ value: 'all' }, ...SOURCE_TYPE_OPTIONS];
 
-const DISCOVERY_STEPS = [
-  { key: 'suggesting', label: 'Generating AI suggestions' },
-  { key: 'prefilling', label: 'Prefilling sources' },
-  { key: 'syncing', label: 'Syncing sources' },
-  { key: 'success', label: 'Success' },
-];
-
-const DISCOVERY_PHASE_LABELS = {
-  suggesting: 'Generating AI suggestions...',
-  prefilling: 'Prefilling sources...',
-  syncing: 'Syncing sources...',
-  success: 'Sources ready',
-};
+// Labels: projects:discovery.steps.<key> (chips) and
+// projects:discovery.phases.<key> (the AI button while a phase runs).
+const DISCOVERY_STEPS = ['suggesting', 'prefilling', 'syncing', 'success'].map((key) => ({ key }));
 
 function sourceMatchesQuery(source, needle) {
   if (!needle) return true;
@@ -160,6 +142,9 @@ function sourceMatchesQuery(source, needle) {
     source.url,
     source.source_type,
     source.enabled ? 'enabled' : 'disabled',
+    // Also match the labels as shown in the active UI language.
+    sourceTypeLabel(source.source_type),
+    i18n.t(source.enabled ? 'projects:sourceState.enabled' : 'projects:sourceState.disabled'),
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(needle));
@@ -187,40 +172,51 @@ const emptyDraft = {
 };
 
 const STATUS_OPTIONS = ['draft', 'active', 'archived'];
+// value = stable API code; labelKey = projects:locationTypes.<labelKey>.
 const LOCATION_TYPE_OPTIONS = [
-  { value: 'on_site', label: 'On site' },
-  { value: 'remote', label: 'Remote' },
-  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'on_site', labelKey: 'onSite' },
+  { value: 'remote', labelKey: 'remote' },
+  { value: 'hybrid', labelKey: 'hybrid' },
 ];
-const WEEKDAY_OPTIONS = [
-  { value: 'monday', label: 'Monday' },
-  { value: 'tuesday', label: 'Tuesday' },
-  { value: 'wednesday', label: 'Wednesday' },
-  { value: 'thursday', label: 'Thursday' },
-  { value: 'friday', label: 'Friday' },
-  { value: 'saturday', label: 'Saturday' },
-  { value: 'sunday', label: 'Sunday' },
-];
+// Labels: projects:weekdays.<value> / projects:weekdaysShort.<value>.
+const WEEKDAY_OPTIONS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((value) => ({ value }));
 const PAGE_SIZE = 10;
 
-function formatDateTime(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleString();
+function statusLabel(status) {
+  return i18n.t(`projects:statuses.${status}`, { defaultValue: status });
+}
+
+function weekdayLabel(day) {
+  return i18n.t(`projects:weekdays.${day}`, { defaultValue: day });
+}
+
+// "30 minutes" / "minute" - the phrase that follows "every" ("كل") for a
+// repeat interval.
+function intervalLabel(value, unit) {
+  const count = Number(value);
+  return i18n.t(`projects:intervalUnits.${unit}`, { count, defaultValue: `${value} ${unit}` });
+}
+
+// Project start/end dates are date-only ("2026-01-31"), which Date parses as
+// UTC midnight - format those in UTC so they don't shift a day west of UTC.
+function formatProjectDate(value) {
+  if (!value) return '';
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(value));
+  return formatDate(
+    value,
+    { year: 'numeric', month: 'short', day: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) },
+    String(value)
+  );
 }
 
 function repeatSummary(draft) {
   const value = Number(draft.repeat_interval_value);
   if (!draft.repeat_enabled || !Number.isFinite(value) || value <= 0) return '';
-  const unitLabel = value === 1 ? draft.repeat_interval_unit.replace(/s$/, '') : draft.repeat_interval_unit;
+  const interval = intervalLabel(value, draft.repeat_interval_unit);
   const weekdays = Array.isArray(draft.repeat_weekdays) ? draft.repeat_weekdays : [];
-  const weekdaySuffix = weekdays.length
-    ? ` on ${weekdays
-        .map((day) => WEEKDAY_OPTIONS.find((option) => option.value === day)?.label || day)
-        .join(', ')}`
-    : '';
-  return `Runs again every ${value} ${unitLabel} after completion${weekdaySuffix}`;
+  return weekdays.length
+    ? i18n.t('projects:schedule.repeatSummaryOnDays', { interval, days: formatList(weekdays.map(weekdayLabel)) })
+    : i18n.t('projects:schedule.repeatSummary', { interval });
 }
 
 function toDateInput(value) {
@@ -292,10 +288,12 @@ function normalizeDraftForCompare(value) {
 }
 
 function ErrorBanner({ message }) {
-  return <ErrorNotice error={message} context="update this project" compact />;
+  const { t } = useTranslation('projects');
+  return <ErrorNotice error={message} context={t('errorContext.updateProject')} compact />;
 }
 
 function TermChipsField({ label, placeholder, values, onChange, options = [], disabled, hint }) {
+  const { t } = useTranslation('projects');
   const [manualValue, setManualValue] = useState('');
 
   const availableOptions = useMemo(
@@ -324,12 +322,12 @@ function TermChipsField({ label, placeholder, values, onChange, options = [], di
               className="panel-chip"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', overflowWrap: 'anywhere' }}
             >
-              {value}
+              <bdi>{value}</bdi>
               <button
                 type="button"
                 onClick={() => removeValue(value)}
                 disabled={disabled}
-                aria-label={`Remove ${value}`}
+                aria-label={t('terms.remove', { value })}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -361,12 +359,14 @@ function TermChipsField({ label, placeholder, values, onChange, options = [], di
           value={manualValue}
           onChange={(e) => setManualValue(e.target.value)}
           disabled={disabled}
+          dir="auto"
           style={{ flex: 1 }}
         />
         <button
           type="submit"
           className="btn-secondary"
           disabled={disabled || !manualValue.trim()}
+          aria-label={t('terms.add')}
           style={{ padding: '8px 10px' }}
         >
           <Plus size={14} />
@@ -381,9 +381,9 @@ function TermChipsField({ label, placeholder, values, onChange, options = [], di
           }}
           disabled={disabled}
         >
-          <option value="">Add from existing sources...</option>
+          <option value="">{t('terms.addFromExisting')}</option>
           {availableOptions.map((option) => (
-            <option key={option} value={option}>
+            <option key={option} value={option} dir="auto">
               {option}
             </option>
           ))}
@@ -397,6 +397,7 @@ function TermChipsField({ label, placeholder, values, onChange, options = [], di
 }
 
 export function WeekdayPicker({ values, onChange, disabled }) {
+  const { t } = useTranslation('projects');
   const toggleDay = (day) => {
     onChange(values.includes(day) ? values.filter((value) => value !== day) : [...values, day]);
   };
@@ -404,7 +405,7 @@ export function WeekdayPicker({ values, onChange, disabled }) {
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>
-        Repeat on these days
+        {t('schedule.repeatOnDays')}
       </span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {WEEKDAY_OPTIONS.map((option) => {
@@ -417,20 +418,22 @@ export function WeekdayPicker({ values, onChange, disabled }) {
               onClick={() => toggleDay(option.value)}
               disabled={disabled}
               style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+              title={t(`weekdays.${option.value}`)}
             >
-              {option.label.slice(0, 3)}
+              {t(`weekdaysShort.${option.value}`)}
             </button>
           );
         })}
       </div>
       <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-        {values.length ? `Restricted to ${values.length} day${values.length === 1 ? '' : 's'} per week.` : 'Runs on any day the interval lands on.'}
+        {values.length ? t('schedule.restrictedDays', { count: values.length }) : t('schedule.anyDay')}
       </span>
     </div>
   );
 }
 
 function UserAssignField({ users, selectedIds, onToggle, query, onQueryChange, disabled }) {
+  const { t } = useTranslation('projects');
   const visibleUsers = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return users;
@@ -444,12 +447,12 @@ function UserAssignField({ users, selectedIds, onToggle, query, onQueryChange, d
       <div className="assign-sources-header">
         <div>
           <div className="assign-sources-kicker">
-            <Users size={12} style={{ verticalAlign: -1, marginRight: 4 }} /> Linked users
+            <Users size={12} style={{ verticalAlign: -1, marginInlineEnd: 4 }} /> {t('users.kicker')}
           </div>
-          <strong className="assign-sources-title">Choose dashboard users linked to this project</strong>
+          <strong className="assign-sources-title">{t('users.title')}</strong>
         </div>
         <div className="assign-sources-summary">
-          <span className="panel-chip">{selectedIds.length} selected</span>
+          <span className="panel-chip">{t('users.selected', { n: selectedIds.length })}</span>
         </div>
       </div>
 
@@ -460,8 +463,9 @@ function UserAssignField({ users, selectedIds, onToggle, query, onQueryChange, d
             type="text"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Filter users by username, email, or role"
+            placeholder={t('users.filterPlaceholder')}
             disabled={disabled}
+            dir="auto"
           />
         </label>
       </div>
@@ -469,15 +473,15 @@ function UserAssignField({ users, selectedIds, onToggle, query, onQueryChange, d
       <div className="assign-sources-list">
         {users.length === 0 ? (
           <div style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>
-            No dashboard users yet.
+            {t('users.empty')}
           </div>
         ) : visibleUsers.length === 0 ? (
           <div className="admin-empty-state" style={{ padding: '16px 10px' }}>
             <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
               <Search size={16} />
             </div>
-            <strong>No matching users</strong>
-            <span>Try a different search term in this assignment box.</span>
+            <strong>{t('users.noMatchesTitle')}</strong>
+            <span>{t('users.noMatchesHint')}</span>
           </div>
         ) : (
           visibleUsers.map((user) => {
@@ -493,10 +497,16 @@ function UserAssignField({ users, selectedIds, onToggle, query, onQueryChange, d
                 />
                 <div className="assign-source-copy">
                   <div className="assign-source-topline">
-                    <strong className="assign-source-name project-term-name">{user.username}</strong>
-                    <span className={`panel-chip role-${user.role}`}>{user.role}</span>
+                    <strong className="assign-source-name project-term-name" dir="auto">{user.username}</strong>
+                    <span className={`panel-chip role-${user.role}`}>
+                      {t(`common:roleNames.${user.role}`, { defaultValue: user.role })}
+                    </span>
                   </div>
-                  <div className="assign-source-url">{user.email || 'No email on file'}</div>
+                  {user.email ? (
+                    <div className="assign-source-url ltr-isolate">{user.email}</div>
+                  ) : (
+                    <div className="assign-source-url">{t('users.noEmail')}</div>
+                  )}
                 </div>
               </label>
             );
@@ -517,6 +527,7 @@ export default function ProjectsPage({
   onRefreshSources,
   isLoadingProjects,
 }) {
+  const { t } = useTranslation('projects');
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams();
@@ -655,6 +666,7 @@ export default function ProjectsPage({
         [
           project.name,
           project.status,
+          statusLabel(project.status || 'draft'),
           project.description,
           project.location,
           project.target_audience,
@@ -878,7 +890,8 @@ export default function ProjectsPage({
       setNewSourceDraft(emptyNewSourceDraft);
       setShowNewSourceForm(false);
     } catch (error) {
-      setNewSourceError(error?.message || 'Failed to create source.');
+      // Keep the Error itself (not just .message) so its API code reaches ErrorNotice.
+      setNewSourceError(error || t('errors.createSourceFailed'));
     } finally {
       setIsCreatingSource(false);
     }
@@ -939,7 +952,7 @@ export default function ProjectsPage({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
-        throw new Error(data?.detail || data?.error || `Failed to generate discovery details (${res.status})`);
+        throw apiError(data, { status: res.status, fallback: t('errors.suggestFailed', { status: res.status }) });
       }
 
       const suggestions = data?.suggestions || {};
@@ -958,7 +971,7 @@ export default function ProjectsPage({
       }));
       return suggestions;
     } catch (error) {
-      setMetadataError(error?.message || 'Failed to generate AI suggestions.');
+      setMetadataError(error || t('errors.aiSuggestFailed'));
       throw error;
     } finally {
       setIsGeneratingMetadata(false);
@@ -996,7 +1009,7 @@ export default function ProjectsPage({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
-        throw new Error(data?.detail || data?.error || `Failed to discover sources (${res.status})`);
+        throw apiError(data, { status: res.status, fallback: t('errors.discoverFailed', { status: res.status }) });
       }
 
       const discovery = data?.discovery || {};
@@ -1021,7 +1034,7 @@ export default function ProjectsPage({
     } catch (error) {
       clearDiscoveryPhaseTimers();
       setDiscoveryPhase('idle');
-      setMetadataError(error?.message || 'Failed to prefill sources.');
+      setMetadataError(error || t('errors.prefillFailed'));
       return null;
     }
   };
@@ -1126,7 +1139,7 @@ export default function ProjectsPage({
   };
 
   if (isFormRoute) {
-    const heading = isEditRoute ? 'Edit Project' : 'Create Project';
+    const heading = isEditRoute ? t('wizard.headingEdit') : t('wizard.headingCreate');
     const step1Complete = Boolean(draft.name.trim() && draft.description.trim());
     const step2Complete = fillMode === 'manual' || fillMode === 'ai';
     const canContinueFromStep2 = step2Complete && !isGeneratingMetadata;
@@ -1139,12 +1152,17 @@ export default function ProjectsPage({
       ? discoveredSources.slice(0, discoveryPreviewLimit).map((source) => ({ name: source.name || source.url, url: source.url }))
       : discoveredResolvedUrls.slice(0, discoveryPreviewLimit).map((url) => ({ name: url, url }));
     const stepMeta = {
-      basics: { label: 'Project basics', detail: 'Name, location, and description', complete: step1Complete },
-      users: { label: 'Linked users', detail: 'Choose dashboard users to link', complete: true },
-      discovery: { label: 'Discovery details', detail: 'Manual or AI fill', complete: step2Complete },
-      schedule: { label: 'Schedule', detail: 'Status and automatic runs', complete: step3Complete },
-      sources: { label: 'Sources', detail: isEditRoute ? 'Assign sources, data window, and save' : 'Assign sources, data window, and create', complete: true },
+      basics: { label: t('wizard.steps.basics.label'), detail: t('wizard.steps.basics.detail'), complete: step1Complete },
+      users: { label: t('wizard.steps.users.label'), detail: t('wizard.steps.users.detail'), complete: true },
+      discovery: { label: t('wizard.steps.discovery.label'), detail: t('wizard.steps.discovery.detail'), complete: step2Complete },
+      schedule: { label: t('wizard.steps.schedule.label'), detail: t('wizard.steps.schedule.detail'), complete: step3Complete },
+      sources: {
+        label: t('wizard.steps.sources.label'),
+        detail: isEditRoute ? t('wizard.steps.sources.detailEdit') : t('wizard.steps.sources.detailCreate'),
+        complete: true,
+      },
     };
+    const fillModeLabel = fillMode ? t(`wizard.fillModes.${fillMode}`, { defaultValue: fillMode }).toUpperCase() : '';
     const stepOrder = Object.keys(STEP).sort((a, b) => STEP[a] - STEP[b]);
 
     return (
@@ -1152,23 +1170,23 @@ export default function ProjectsPage({
         <div className="admin-page-header">
           <div>
             <div className="admin-page-kicker">
-              <CalendarDays size={14} /> Opinion monitoring
+              <CalendarDays size={14} /> {t('wizard.kicker')}
             </div>
             <h1 className="admin-page-title">{heading}</h1>
             <p className="admin-page-subtitle">
               {isEditRoute
-                ? `Update the project in ${totalSteps} steps. Revisit any step, then save your changes.`
-                : `Build the project in ${totalSteps} steps, then create the workspace.`}
+                ? t('wizard.subtitleEdit', { count: totalSteps })
+                : t('wizard.subtitleCreate', { count: totalSteps })}
             </p>
           </div>
           <div className="admin-page-toolbar">
             <div className="admin-page-toolbar-meta">
-              <span>Step</span>
-              <strong>{wizardStep} of {totalSteps}</strong>
+              <span>{t('wizard.stepLabel')}</span>
+              <strong>{t('wizard.stepOf', { step: wizardStep, total: totalSteps })}</strong>
             </div>
             <div className="admin-page-toolbar-meta">
-              <span>Mode</span>
-              <strong>{fillMode ? fillMode.toUpperCase() : 'Choose one'}</strong>
+              <span>{t('wizard.modeLabel')}</span>
+              <strong>{fillModeLabel || t('wizard.chooseOne')}</strong>
             </div>
           </div>
         </div>
@@ -1196,8 +1214,8 @@ export default function ProjectsPage({
                     background: active ? 'rgba(46, 134, 222, 0.08)' : 'rgba(255,255,255,0.72)',
                   }}
                 >
-                  <span className="panel-chip" style={{ marginRight: 10 }}>
-                    {done ? 'Done' : `0${step}`}
+                  <span className="panel-chip" style={{ marginInlineEnd: 10 }}>
+                    {done ? t('wizard.stepDone') : `0${step}`}
                   </span>
                   <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                     <strong style={{ fontSize: '0.92rem' }}>{item.label}</strong>
@@ -1213,67 +1231,70 @@ export default function ProjectsPage({
           {wizardStep === STEP.basics && (
           <div className="glass-card project-wizard-panel">
             <div className="panel-header-tight" style={{ marginBottom: 12 }}>
-              <strong style={{ fontSize: '1rem' }}>Step {STEP.basics}. Project basics</strong>
-              <span className="panel-chip">{step1Complete ? 'Ready' : 'Required'}</span>
+              <strong style={{ fontSize: '1rem' }}>{t('wizard.stepHeading', { step: STEP.basics, title: t('wizard.basics.title') })}</strong>
+              <span className="panel-chip">{step1Complete ? t('wizard.ready') : t('wizard.required')}</span>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Project name</span>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.basics.nameLabel')}</span>
                 <input
                   type="text"
                   className="source-input"
-                  placeholder="Project name"
+                  placeholder={t('wizard.basics.namePlaceholder')}
                   value={draft.name}
                   onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
                   disabled={isSaving}
+                  dir="auto"
                 />
               </label>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Description</span>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.basics.descriptionLabel')}</span>
                 <textarea
                   className="source-input"
-                  placeholder="Project description"
+                  placeholder={t('wizard.basics.descriptionPlaceholder')}
                   rows={4}
                   value={draft.description}
                   onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
                   style={{ resize: 'vertical', minHeight: 110 }}
                   disabled={isSaving}
+                  dir="auto"
                 />
               </label>
 
               <div className="form-row-location">
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Location type</span>
+                  <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.basics.locationTypeLabel')}</span>
                   <select
                     className="filter-select"
                     value={draft.location_type}
                     onChange={(e) => setDraft((prev) => ({ ...prev, location_type: e.target.value }))}
                     disabled={isSaving}
                   >
-                    <option value="">Select...</option>
+                    <option value="">{t('wizard.basics.selectPlaceholder')}</option>
                     {LOCATION_TYPE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {t(`locationTypes.${option.labelKey}`)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Location</span>
+                  <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.basics.locationLabel')}</span>
                   <input
                     type="text"
                     className="source-input"
-                    placeholder="Location"
+                    placeholder={t('wizard.basics.locationPlaceholder')}
                     value={draft.location}
                     onChange={(e) => setDraft((prev) => ({ ...prev, location: e.target.value }))}
                     disabled={isSaving}
+                    dir="auto"
                   />
                 </label>
               </div>
 
               <div className="project-wizard-nav-row">
                 <span style={{ color: 'var(--text-light)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                  Use a clear working title and a short description. We’ll use these to seed the AI suggestions and source discovery.
+                  {t('wizard.basics.hint')}
                 </span>
                 <div className="project-wizard-nav-actions">
                   <button
@@ -1282,7 +1303,7 @@ export default function ProjectsPage({
                     onClick={() => setWizardStep(STEP.users || STEP.discovery)}
                     disabled={!step1Complete || isSaving}
                   >
-                    Continue
+                    {t('common:actions.continue')}
                   </button>
                 </div>
               </div>
@@ -1293,8 +1314,8 @@ export default function ProjectsPage({
           {canLinkUsers && wizardStep === STEP.users && (
           <div className="glass-card project-wizard-panel">
             <div className="panel-header-tight" style={{ marginBottom: 12 }}>
-              <strong style={{ fontSize: '1rem' }}>Step {STEP.users}. Linked users</strong>
-              <span className="panel-chip">{draft.user_ids.length} selected</span>
+              <strong style={{ fontSize: '1rem' }}>{t('wizard.stepHeading', { step: STEP.users, title: t('wizard.usersStep.title') })}</strong>
+              <span className="panel-chip">{t('users.selected', { n: draft.user_ids.length })}</span>
             </div>
             <div style={{ display: 'grid', gap: 14 }}>
               <UserAssignField
@@ -1308,7 +1329,7 @@ export default function ProjectsPage({
 
               <div className="project-wizard-nav-row">
                 <button type="button" className="btn-secondary wizard-btn-back" onClick={() => setWizardStep(STEP.basics)} disabled={isSaving}>
-                  Back
+                  {t('common:actions.back')}
                 </button>
                 <button
                   type="button"
@@ -1316,7 +1337,7 @@ export default function ProjectsPage({
                   onClick={() => setWizardStep(STEP.discovery)}
                   disabled={isSaving}
                 >
-                  Continue
+                  {t('common:actions.continue')}
                 </button>
               </div>
             </div>
@@ -1329,8 +1350,8 @@ export default function ProjectsPage({
             style={{ opacity: step1Complete ? 1 : 0.7 }}
           >
             <div className="panel-header-tight" style={{ marginBottom: 12 }}>
-              <strong style={{ fontSize: '1rem' }}>Step {STEP.discovery}. Discovery details</strong>
-              <span className="panel-chip">{fillMode ? fillMode.toUpperCase() : 'Choose a method'}</span>
+              <strong style={{ fontSize: '1rem' }}>{t('wizard.stepHeading', { step: STEP.discovery, title: t('wizard.discovery.title') })}</strong>
+              <span className="panel-chip">{fillModeLabel || t('wizard.discovery.chooseMethod')}</span>
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -1340,7 +1361,7 @@ export default function ProjectsPage({
                 onClick={chooseManualFill}
                 disabled={!step1Complete || isSaving}
               >
-                Fill manually
+                {t('wizard.discovery.fillManual')}
               </button>
               <button
                 type="button"
@@ -1349,10 +1370,10 @@ export default function ProjectsPage({
                 disabled={!step1Complete || isSaving || isGeneratingMetadata || discoveryPhase !== 'idle'}
               >
                 {isGeneratingMetadata
-                  ? 'Generating with AI...'
+                  ? t('wizard.discovery.generating')
                   : discoveryPhase !== 'idle'
-                  ? DISCOVERY_PHASE_LABELS[discoveryPhase]
-                  : 'Fill by AI'}
+                  ? t(`discovery.phases.${discoveryPhase}`)
+                  : t('wizard.discovery.fillAi')}
               </button>
             </div>
 
@@ -1361,61 +1382,73 @@ export default function ProjectsPage({
                 <div className="admin-empty-state-icon">
                   <Sparkles size={18} />
                 </div>
-                <strong>Choose a fill method</strong>
-                <span>AI will draft X accounts, hashtags, keywords, and a target audience. Manual mode lets you enter them yourself.</span>
+                <strong>{t('wizard.discovery.emptyTitle')}</strong>
+                <span>{t('wizard.discovery.emptyHint')}</span>
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 <ErrorBanner message={metadataError} />
 
                 <div style={{ display: 'grid', gap: 8 }}>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>Target audience</label>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>{t('wizard.discovery.targetAudienceLabel')}</label>
                   <input
                     type="text"
                     className="source-input"
-                    placeholder="Target audience"
+                    placeholder={t('wizard.discovery.targetAudiencePlaceholder')}
                     value={draft.target_audience}
                     onChange={(e) => setDraft((prev) => ({ ...prev, target_audience: e.target.value }))}
                     disabled={isSaving || isGeneratingMetadata}
+                    dir="auto"
                   />
                 </div>
 
                 <div className="wizard-term-fields">
                   <TermChipsField
-                    label="X Accounts"
-                    placeholder="Add an X account, without @"
+                    label={t('wizard.discovery.xAccountsLabel')}
+                    placeholder={t('wizard.discovery.xAccountsPlaceholder')}
                     values={draft.usernames}
                     onChange={(next) => setDraft((prev) => ({ ...prev, usernames: next }))}
                     options={globalTermOptions.username}
                     disabled={isSaving || isGeneratingMetadata}
                   />
                   <TermChipsField
-                    label="Hashtags"
-                    placeholder="Add a hashtag, without #"
+                    label={t('wizard.discovery.hashtagsLabel')}
+                    placeholder={t('wizard.discovery.hashtagsPlaceholder')}
                     values={draft.hashtags}
                     onChange={(next) => setDraft((prev) => ({ ...prev, hashtags: next }))}
                     options={globalTermOptions.hashtag}
                     disabled={isSaving || isGeneratingMetadata}
                   />
                   <TermChipsField
-                    label="Keywords"
-                    placeholder="Add a keyword or phrase"
+                    label={t('wizard.discovery.keywordsLabel')}
+                    placeholder={t('wizard.discovery.keywordsPlaceholder')}
                     values={draft.keywords}
                     onChange={(next) => setDraft((prev) => ({ ...prev, keywords: next }))}
                     options={globalTermOptions.keyword}
                     disabled={isSaving || isGeneratingMetadata}
                     hint={
-                      draft.name.trim()
-                        ? `Each keyword is searched together with the project name, e.g. "${scopeKeywordTerm(draft.name, draft.keywords[0] || 'coffee', 'keyword')}" - so results stay specific to this project.`
-                        : 'Each keyword is searched together with the project name, so results stay specific to this project.'
+                      draft.name.trim() ? (
+                        <Trans
+                          t={t}
+                          i18nKey="wizard.discovery.keywordHintExample"
+                          values={{
+                            example: scopeKeywordTerm(
+                              draft.name,
+                              draft.keywords[0] || t('wizard.discovery.exampleKeyword'),
+                              'keyword'
+                            ),
+                          }}
+                          components={{ bdi: <bdi /> }}
+                        />
+                      ) : (
+                        t('wizard.discovery.keywordHint')
+                      )
                     }
                   />
                 </div>
 
                 <div className="admin-form-hint">
-                  {isEditRoute
-                    ? 'Selected sources stay reusable across projects. Prefilling looks at the current X accounts, hashtags, and keywords.'
-                    : 'Use AI to prefill sources from the X accounts, hashtags, and keywords above, then assign or add more sources in the next steps.'}
+                  {isEditRoute ? t('wizard.discovery.editHint') : t('wizard.discovery.createHint')}
                 </div>
 
                 {lastDiscovery && (
@@ -1431,9 +1464,9 @@ export default function ProjectsPage({
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '0.92rem', color: 'var(--text-dark)' }}>Discovery results</strong>
+                      <strong style={{ fontSize: '0.92rem', color: 'var(--text-dark)' }}>{t('wizard.discovery.resultsTitle')}</strong>
                       <span className="panel-chip">
-                        {(lastDiscovery.resolved_urls || []).length} source{(lastDiscovery.resolved_urls || []).length === 1 ? '' : 's'}
+                        {t('wizard.discovery.resultsCount', { count: (lastDiscovery.resolved_urls || []).length })}
                       </span>
                     </div>
 
@@ -1445,6 +1478,7 @@ export default function ProjectsPage({
                             href={url}
                             target="_blank"
                             rel="noreferrer"
+                            className="ltr-isolate"
                             style={{
                               fontSize: '0.84rem',
                               color: 'var(--text-dark)',
@@ -1461,7 +1495,7 @@ export default function ProjectsPage({
                       </div>
                     ) : (
                       <div style={{ fontSize: '0.84rem', color: 'var(--text-light)' }}>
-                        No valid URLs were resolved from the X accounts, hashtags, and keywords for this save.
+                        {t('wizard.discovery.noResolvedUrls')}
                       </div>
                     )}
                   </div>
@@ -1481,7 +1515,7 @@ export default function ProjectsPage({
                         >
                           {state === 'active' && <RefreshCw size={12} className="spin" />}
                           {state === 'done' && <Check size={12} />}
-                          {step.label}
+                          {t(`discovery.steps.${step.key}`)}
                         </span>
                       );
                     })}
@@ -1490,7 +1524,7 @@ export default function ProjectsPage({
 
                 <div className="project-wizard-nav-row">
                   <span style={{ color: 'var(--text-light)', fontSize: '0.85rem', lineHeight: 1.5, maxWidth: 480 }}>
-                    The AI step gives you a starting point. You can still reshape handles, tags, and keywords before creating the project.
+                    {t('wizard.discovery.aiNote')}
                   </span>
                   <div className="project-wizard-nav-actions">
                     <button
@@ -1499,7 +1533,7 @@ export default function ProjectsPage({
                       onClick={() => setWizardStep(STEP.users || STEP.basics)}
                       disabled={isSaving || isGeneratingMetadata}
                     >
-                      Back
+                      {t('common:actions.back')}
                     </button>
                     <button
                       type="button"
@@ -1512,10 +1546,10 @@ export default function ProjectsPage({
                     >
                       {isSyncingSources ? (
                         <>
-                          <RefreshCw size={18} className="spin" /> Syncing sources...
+                          <RefreshCw size={18} className="spin" /> {t('wizard.discovery.syncing')}
                         </>
                       ) : (
-                        'Continue'
+                        t('common:actions.continue')
                       )}
                     </button>
                   </div>
@@ -1531,15 +1565,15 @@ export default function ProjectsPage({
             style={{ opacity: step1Complete && step2Complete ? 1 : 0.7 }}
           >
             <div className="panel-header-tight" style={{ marginBottom: 12 }}>
-              <strong style={{ fontSize: '1rem' }}>Step {STEP.schedule}. Schedule and automatic runs</strong>
+              <strong style={{ fontSize: '1rem' }}>{t('wizard.stepHeading', { step: STEP.schedule, title: t('wizard.schedule.title') })}</strong>
               <span className={`panel-chip ${draft.repeat_enabled ? 'success' : 'muted'}`}>
-                {draft.repeat_enabled ? 'Repeat on' : 'Repeat off'}
+                {draft.repeat_enabled ? t('wizard.schedule.repeatOn') : t('wizard.schedule.repeatOff')}
               </span>
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Status</span>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.schedule.statusLabel')}</span>
                 <select
                   className="filter-select"
                   value={draft.status}
@@ -1548,14 +1582,14 @@ export default function ProjectsPage({
                 >
                   {STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
-                      {status[0].toUpperCase() + status.slice(1)}
+                      {statusLabel(status)}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Start first run at</span>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.schedule.firstRunAt')}</span>
                 <input
                   type="datetime-local"
                   className="source-input"
@@ -1567,9 +1601,9 @@ export default function ProjectsPage({
 
               <div className="admin-item-card" style={{ margin: 0 }}>
                 <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                  <strong style={{ fontSize: '0.94rem' }}>Run automatically</strong>
+                  <strong style={{ fontSize: '0.94rem' }}>{t('wizard.schedule.runAutomatically')}</strong>
                   <span className={`panel-chip ${draft.repeat_enabled ? 'success' : 'muted'}`}>
-                    {draft.repeat_enabled ? 'Repeat on' : 'Repeat off'}
+                    {draft.repeat_enabled ? t('wizard.schedule.repeatOn') : t('wizard.schedule.repeatOff')}
                   </span>
                 </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: draft.repeat_enabled ? 12 : 0 }}>
@@ -1579,13 +1613,13 @@ export default function ProjectsPage({
                     onChange={(e) => setDraft((prev) => ({ ...prev, repeat_enabled: e.target.checked }))}
                     disabled={isSaving}
                   />
-                  <span style={{ fontSize: '0.86rem' }}>Automatically rerun this project's workflow after each completion</span>
+                  <span style={{ fontSize: '0.86rem' }}>{t('wizard.schedule.autoRerun')}</span>
                 </label>
                 {draft.repeat_enabled && (
                   <>
                     <div className="form-row-even">
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Repeat every</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.schedule.repeatEvery')}</span>
                         <input
                           type="number"
                           min="1"
@@ -1596,7 +1630,7 @@ export default function ProjectsPage({
                         />
                       </label>
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Unit</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.schedule.unit')}</span>
                         <select
                           className="filter-select"
                           value={draft.repeat_interval_unit}
@@ -1625,7 +1659,7 @@ export default function ProjectsPage({
 
               <div className="project-wizard-nav-row">
                 <button type="button" className="btn-secondary wizard-btn-back" onClick={() => setWizardStep(STEP.discovery)} disabled={isSaving}>
-                  Back
+                  {t('common:actions.back')}
                 </button>
                 <button
                   type="button"
@@ -1633,7 +1667,7 @@ export default function ProjectsPage({
                   onClick={() => setWizardStep(STEP.sources)}
                   disabled={!step3Complete || isSaving}
                 >
-                  Continue
+                  {t('common:actions.continue')}
                 </button>
               </div>
             </div>
@@ -1646,18 +1680,23 @@ export default function ProjectsPage({
             style={{ opacity: step1Complete && step2Complete && step3Complete ? 1 : 0.7 }}
           >
             <div className="panel-header-tight" style={{ marginBottom: 12 }}>
-              <strong style={{ fontSize: '1rem' }}>Step {STEP.sources}. Assign sources and {isEditRoute ? 'save' : 'create'}</strong>
-              <span className="panel-chip">{selectedSourceCount} selected sources</span>
+              <strong style={{ fontSize: '1rem' }}>
+                {t('wizard.stepHeading', {
+                  step: STEP.sources,
+                  title: isEditRoute ? t('wizard.sources.titleEdit') : t('wizard.sources.titleCreate'),
+                })}
+              </strong>
+              <span className="panel-chip">{t('wizard.sources.selectedSources', { count: selectedSourceCount })}</span>
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
               <div className="admin-item-card" style={{ margin: 0 }}>
                 <div className="panel-header-tight" style={{ marginBottom: 10 }}>
-                  <strong style={{ fontSize: '0.94rem' }}>Data retrieval window</strong>
+                  <strong style={{ fontSize: '0.94rem' }}>{t('wizard.sources.windowTitle')}</strong>
                 </div>
                 <div className="form-row-even">
                   <label style={{ display: 'grid', gap: 6 }}>
-                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Start date</span>
+                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.sources.startDate')}</span>
                     <input
                       type="date"
                       className="source-input"
@@ -1667,7 +1706,7 @@ export default function ProjectsPage({
                     />
                   </label>
                   <label style={{ display: 'grid', gap: 6 }}>
-                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>End date</span>
+                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.sources.endDate')}</span>
                     <input
                       type="date"
                       className="source-input"
@@ -1678,24 +1717,24 @@ export default function ProjectsPage({
                   </label>
                 </div>
                 <div style={{ marginTop: 10, color: 'var(--text-light)', fontSize: '0.84rem', lineHeight: 1.5 }}>
-                  These dates scope which article publish dates get retrieved when the sources below are scraped - they don't set how long the project itself runs.
+                  {t('wizard.sources.windowHint')}
                 </div>
               </div>
 
               <div className="assign-sources-panel">
                 <div className="assign-sources-header">
                   <div>
-                    <div className="assign-sources-kicker">Assign sources</div>
-                    <strong className="assign-sources-title">Choose the sources that should power this project</strong>
+                    <div className="assign-sources-kicker">{t('wizard.sources.kicker')}</div>
+                    <strong className="assign-sources-title">{t('wizard.sources.heading')}</strong>
                   </div>
                   <div className="assign-sources-summary">
-                    <span className="panel-chip">{selectedSourceCount} selected</span>
-                    <span className="panel-chip muted">{visibleSourcesForActiveTab.length} shown</span>
+                    <span className="panel-chip">{t('wizard.sources.selected', { n: selectedSourceCount })}</span>
+                    <span className="panel-chip muted">{t('wizard.sources.shown', { n: visibleSourcesForActiveTab.length })}</span>
                   </div>
                 </div>
 
                 {assignableSources.length > 0 && (
-                  <div className="source-type-tabs" role="tablist" aria-label="Filter sources by type">
+                  <div className="source-type-tabs" role="tablist" aria-label={t('wizard.sources.filterByType')}>
                     {SOURCE_ASSIGN_TABS.map((tab) => {
                       const isActive = activeSourceTab === tab.value;
                       return (
@@ -1708,7 +1747,7 @@ export default function ProjectsPage({
                           onClick={() => setActiveSourceTab(tab.value)}
                           disabled={isSaving}
                         >
-                          {tab.label}
+                          {tab.value === 'all' ? t('common:status.all') : sourceTypeLabel(tab.value)}
                           <span className="source-type-tab-count">{sourceTabCounts[tab.value] || 0}</span>
                         </button>
                       );
@@ -1723,8 +1762,9 @@ export default function ProjectsPage({
                       type="text"
                       value={sourceAssignQuery}
                       onChange={(e) => setSourceAssignQuery(e.target.value)}
-                      placeholder="Filter sources by name or URL"
+                      placeholder={t('wizard.sources.filterPlaceholder')}
                       disabled={isSaving}
+                      dir="auto"
                     />
                   </label>
 
@@ -1736,7 +1776,7 @@ export default function ProjectsPage({
                       disabled={isSaving || visibleSourcesForActiveTab.length === 0 || allVisibleSelectedForActiveTab}
                       style={{ padding: '8px 10px', fontSize: '0.78rem' }}
                     >
-                      Select visible
+                      {t('wizard.sources.selectVisible')}
                     </button>
                     <button
                       type="button"
@@ -1745,7 +1785,7 @@ export default function ProjectsPage({
                       disabled={isSaving || visibleSelectedCountForActiveTab === 0}
                       style={{ padding: '8px 10px', fontSize: '0.78rem' }}
                     >
-                      Clear visible
+                      {t('wizard.sources.clearVisible')}
                     </button>
                     <button
                       type="button"
@@ -1757,7 +1797,7 @@ export default function ProjectsPage({
                       disabled={isSaving}
                       style={{ padding: '8px 10px', fontSize: '0.78rem' }}
                     >
-                      <Rss size={14} /> {showNewSourceForm ? 'Close' : 'New source'}
+                      <Rss size={14} /> {showNewSourceForm ? t('common:actions.close') : t('wizard.sources.newSource')}
                     </button>
                   </div>
                 </div>
@@ -1774,10 +1814,10 @@ export default function ProjectsPage({
                       background: 'rgba(255,255,255,0.7)',
                     }}
                   >
-                    <strong style={{ fontSize: '0.86rem' }}>Create a new source</strong>
+                    <strong style={{ fontSize: '0.86rem' }}>{t('wizard.newSource.title')}</strong>
                     <div style={{ display: 'grid', gap: 6 }}>
-                      <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Source type</span>
-                      <div className="source-type-tabs" role="tablist" aria-label="Choose source type">
+                      <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.typeLabel')}</span>
+                      <div className="source-type-tabs" role="tablist" aria-label={t('wizard.newSource.chooseType')}>
                         {SOURCE_TYPE_FORM_TABS.map((option) => {
                           const isActive =
                             option.value === 'twitter'
@@ -1803,7 +1843,7 @@ export default function ProjectsPage({
                               }
                               disabled={isCreatingSource}
                             >
-                              {option.label}
+                              {sourceTypeLabel(option.value)}
                             </button>
                           );
                         })}
@@ -1811,7 +1851,7 @@ export default function ProjectsPage({
                     </div>
                     {TWITTER_SOURCE_TYPES.has(newSourceDraft.source_type) && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Twitter/X source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.twitterKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.source_type}
@@ -1820,7 +1860,7 @@ export default function ProjectsPage({
                         >
                           {TWITTER_SUB_TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
-                              {option.label}
+                              {sourceTypeLabel(option.value)}
                             </option>
                           ))}
                         </select>
@@ -1828,97 +1868,94 @@ export default function ProjectsPage({
                     )}
                     {newSourceDraft.source_type === 'reddit' && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Reddit source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.redditKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.reddit_kind}
                           onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, reddit_kind: e.target.value }))}
                           disabled={isCreatingSource}
                         >
-                          <option value="subreddit">Subreddit</option>
-                          <option value="user">User / profile</option>
-                          <option value="search">Keyword / search (all of Reddit)</option>
-                          <option value="subreddit_search">Keyword within a subreddit</option>
+                          <option value="subreddit">{t('wizard.newSource.redditKinds.subreddit')}</option>
+                          <option value="user">{t('wizard.newSource.redditKinds.user')}</option>
+                          <option value="search">{t('wizard.newSource.redditKinds.search')}</option>
+                          <option value="subreddit_search">{t('wizard.newSource.redditKinds.subreddit_search')}</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
                           {newSourceDraft.reddit_kind === 'subreddit_search'
-                            ? 'Enter the subreddit and the keyword below, e.g. "lebanon protest" or "r/lebanon protest".'
-                            : 'Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input (r/..., u/...) and full reddit.com URLs are unambiguous either way.'}
+                            ? t('wizard.newSource.redditSubredditSearchHint')
+                            : t('wizard.newSource.redditHint')}
                         </span>
                       </label>
                     )}
                     {newSourceDraft.source_type === 'linkedin' && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>LinkedIn source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.linkedinKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.linkedin_kind}
                           onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, linkedin_kind: e.target.value }))}
                           disabled={isCreatingSource}
                         >
-                          <option value="company">Company page</option>
-                          <option value="profile">Personal profile</option>
-                          <option value="search">Keyword / hashtag search</option>
+                          <option value="company">{t('wizard.newSource.linkedinKinds.company')}</option>
+                          <option value="profile">{t('wizard.newSource.linkedinKinds.profile')}</option>
+                          <option value="search">{t('wizard.newSource.linkedinKinds.search')}</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                          Only used to interpret a bare slug or phrase below (e.g. "google" as a company page vs. a
-                          search term). A full linkedin.com URL is unambiguous either way. Requires APIFY_API_TOKEN.
+                          {t('wizard.newSource.linkedinHint')}
                         </span>
                       </label>
                     )}
                     {newSourceDraft.source_type === 'threads' && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Threads source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.threadsKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.threads_kind}
                           onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, threads_kind: e.target.value }))}
                           disabled={isCreatingSource}
                         >
-                          <option value="profile">Profile</option>
-                          <option value="search">Keyword / search</option>
+                          <option value="profile">{t('wizard.newSource.threadsKinds.profile')}</option>
+                          <option value="search">{t('wizard.newSource.threadsKinds.search')}</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                          Requires APIFY_API_TOKEN.
+                          {t('wizard.newSource.requiresApify')}
                         </span>
                       </label>
                     )}
                     {newSourceDraft.source_type === 'facebook' && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Facebook source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.facebookKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.facebook_kind}
                           onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, facebook_kind: e.target.value }))}
                           disabled={isCreatingSource}
                         >
-                          <option value="page">Page</option>
-                          <option value="group">Group</option>
-                          <option value="profile">Personal profile</option>
-                          <option value="search">Keyword / search</option>
+                          <option value="page">{t('wizard.newSource.facebookKinds.page')}</option>
+                          <option value="group">{t('wizard.newSource.facebookKinds.group')}</option>
+                          <option value="profile">{t('wizard.newSource.facebookKinds.profile')}</option>
+                          <option value="search">{t('wizard.newSource.facebookKinds.search')}</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                          Only used to interpret a bare slug below (page vs. personal profile) - Facebook uses the same
-                          URL shape for both. Groups, search, and full profile.php/people/... URLs are unambiguous
-                          either way. Requires APIFY_API_TOKEN.
+                          {t('wizard.newSource.facebookHint')}
                         </span>
                       </label>
                     )}
                     {newSourceDraft.source_type === 'instagram' && (
                       <label style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Instagram source kind</span>
+                        <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('wizard.newSource.instagramKind')}</span>
                         <select
                           className="filter-select"
                           value={newSourceDraft.instagram_kind}
                           onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, instagram_kind: e.target.value }))}
                           disabled={isCreatingSource}
                         >
-                          <option value="profile">Profile</option>
-                          <option value="hashtag">Hashtag</option>
-                          <option value="search">Keyword / search</option>
+                          <option value="profile">{t('wizard.newSource.instagramKinds.profile')}</option>
+                          <option value="hashtag">{t('wizard.newSource.instagramKinds.hashtag')}</option>
+                          <option value="search">{t('wizard.newSource.instagramKinds.search')}</option>
                         </select>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                          Requires APIFY_API_TOKEN.
+                          {t('wizard.newSource.requiresApify')}
                         </span>
                       </label>
                     )}
@@ -1928,23 +1965,31 @@ export default function ProjectsPage({
                         className="source-input"
                         placeholder={
                           newSourceDraft.source_type === 'reddit' && newSourceDraft.reddit_kind === 'subreddit_search'
-                            ? 'Subreddit and keyword (e.g. lebanon protest)'
-                            : URL_FIELD_PLACEHOLDERS[newSourceDraft.source_type] || 'Source URL'
+                            ? t('wizard.newSource.urlPlaceholderRedditSubredditSearch')
+                            : URL_FIELD_PLACEHOLDER_TYPES.has(newSourceDraft.source_type)
+                              ? t(`wizard.newSource.urlPlaceholders.${newSourceDraft.source_type}`)
+                              : t('wizard.newSource.urlPlaceholderDefault')
                         }
                         value={newSourceDraft.url}
                         onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, url: e.target.value }))}
                         disabled={isCreatingSource}
+                        dir="auto"
                       />
                     )}
                     <input
                       type="text"
                       className="source-input"
-                      placeholder={TERM_SOURCE_PLACEHOLDERS[newSourceDraft.source_type] || 'Display name'}
+                      placeholder={
+                        TERM_SOURCE_PLACEHOLDER_TYPES.has(newSourceDraft.source_type)
+                          ? t(`wizard.newSource.termPlaceholders.${newSourceDraft.source_type}`)
+                          : t('wizard.newSource.namePlaceholderDefault')
+                      }
                       value={newSourceDraft.name}
                       onChange={(e) => setNewSourceDraft((prev) => ({ ...prev, name: e.target.value }))}
                       disabled={isCreatingSource}
+                      dir="auto"
                     />
-                    <ErrorNotice error={newSourceError} context="add this source" compact />
+                    <ErrorNotice error={newSourceError} context={t('errorContext.addSource')} compact />
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button
                         type="button"
@@ -1960,11 +2005,11 @@ export default function ProjectsPage({
                       >
                         {isCreatingSource ? (
                           <>
-                            <RefreshCw size={16} className="spin" /> Creating...
+                            <RefreshCw size={16} className="spin" /> {t('wizard.newSource.creating')}
                           </>
                         ) : (
                           <>
-                            <Plus size={16} /> Create source
+                            <Plus size={16} /> {t('wizard.newSource.create')}
                           </>
                         )}
                       </button>
@@ -1978,7 +2023,7 @@ export default function ProjectsPage({
                         }}
                         disabled={isCreatingSource}
                       >
-                        Cancel
+                        {t('common:actions.cancel')}
                       </button>
                     </div>
                   </div>
@@ -1987,20 +2032,20 @@ export default function ProjectsPage({
                 <div className="assign-sources-list">
                   {assignableSources.length === 0 ? (
                     <div style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>
-                      No sources yet. Add sources first, then attach them to projects.
+                      {t('wizard.sources.noSources')}
                     </div>
                   ) : visibleSourcesForActiveTab.length === 0 ? (
                     <div className="admin-empty-state" style={{ padding: '16px 10px' }}>
                       <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
                         <Search size={16} />
                       </div>
-                      <strong>No matching sources</strong>
+                      <strong>{t('wizard.sources.noMatchesTitle')}</strong>
                       <span>
                         {sourceAssignQuery.trim()
-                          ? 'Try a different search term in this assignment box.'
+                          ? t('wizard.sources.tryDifferentSearch')
                           : activeSourceTab === 'all'
-                          ? 'No sources are available to assign yet.'
-                          : `No ${sourceTypeLabel(activeSourceTab)} sources yet. Switch tabs or add one below.`}
+                          ? t('wizard.sources.noneAvailable')
+                          : t('wizard.sources.noneOfType', { type: sourceTypeLabel(activeSourceTab) })}
                       </span>
                     </div>
                   ) : (
@@ -2018,16 +2063,16 @@ export default function ProjectsPage({
                           />
                           <div className="assign-source-copy">
                             <div className="assign-source-topline">
-                              <strong className="assign-source-name project-term-name">{source.name || source.url}</strong>
+                              <strong className="assign-source-name project-term-name" dir="auto">{source.name || source.url}</strong>
                               <span className={`panel-chip ${source.enabled ? 'success' : 'muted'}`}>
-                                {source.enabled ? 'Enabled' : 'Disabled'}
+                                {source.enabled ? t('sourceState.enabled') : t('sourceState.disabled')}
                               </span>
                             </div>
-                            <div className="assign-source-url">{source.url}</div>
+                            <div className="assign-source-url ltr-isolate">{source.url}</div>
                             <div className="assign-source-meta">
                               <span>{sourceTypeLabel(source.source_type)}</span>
                               <span>
-                                {projectCount} project{projectCount === 1 ? '' : 's'}
+                                {t('wizard.sources.projectCount', { count: projectCount })}
                               </span>
                             </div>
                           </div>
@@ -2040,22 +2085,22 @@ export default function ProjectsPage({
 
               <div className="project-wizard-final-actions">
                 <button className="btn-secondary wizard-btn-fixed" type="button" onClick={() => setWizardStep(STEP.schedule)} disabled={isSaving}>
-                  Back
+                  {t('common:actions.back')}
                 </button>
                 <button className="btn-primary wizard-btn-grow" onClick={submit} disabled={isSaving || !step1Complete || !step3Complete}>
                   {isSaving ? (
                     <>
                       <RefreshCw size={18} className="spin" />
-                      Saving...
+                      {t('common:actions.saving')}
                     </>
                   ) : (
                     <>
-                      <Plus size={18} /> {isEditRoute ? 'Update Project' : 'Create Project'}
+                      <Plus size={18} /> {isEditRoute ? t('wizard.updateProject') : t('wizard.createProject')}
                     </>
                   )}
                 </button>
                 <button className="btn-secondary wizard-btn-fixed" type="button" onClick={handleCancel}>
-                  <X size={18} /> Cancel
+                  <X size={18} /> {t('common:actions.cancel')}
                 </button>
               </div>
             </div>
@@ -2066,29 +2111,29 @@ export default function ProjectsPage({
 
         <ConfirmModal
           open={showCancelModal}
-          title="Discard changes?"
-          message="You have unsaved changes on this project. If you cancel now, all edits on this page will be lost."
-          confirmLabel="Discard changes"
-          cancelLabel="Keep editing"
+          title={t('wizard.cancelModal.title')}
+          message={t('wizard.cancelModal.message')}
+          confirmLabel={t('wizard.cancelModal.confirm')}
+          cancelLabel={t('wizard.cancelModal.cancel')}
           onClose={() => setShowCancelModal(false)}
           onConfirm={discardChanges}
         />
 
         <ConfirmModal
           open={showDiscoverySuccessModal}
-          title="Sources prefilled with AI"
-          message="AI discovery finished successfully and the sources list has been refreshed."
-          confirmLabel="Done"
+          title={t('wizard.successModal.title')}
+          message={t('wizard.successModal.message')}
+          confirmLabel={t('common:actions.done')}
           hideCancel
           onClose={closeDiscoverySuccessModal}
         >
           <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span className="panel-chip success">
-                {discoveredSources.length} source{discoveredSources.length === 1 ? '' : 's'} collected
+                {t('wizard.successModal.sourcesCollected', { count: discoveredSources.length })}
               </span>
               <span className="panel-chip">
-                {discoveredResolvedUrls.length} URL{discoveredResolvedUrls.length === 1 ? '' : 's'} resolved
+                {t('wizard.successModal.urlsResolved', { count: discoveredResolvedUrls.length })}
               </span>
             </div>
 
@@ -2104,21 +2149,21 @@ export default function ProjectsPage({
                       background: 'rgba(15, 23, 42, 0.04)',
                     }}
                   >
-                    <strong style={{ display: 'block' }}>{item.name}</strong>
+                    <strong style={{ display: 'block' }} dir="auto">{item.name}</strong>
                     {item.url && item.url !== item.name && (
-                      <div style={{ color: 'var(--text-light)', wordBreak: 'break-word' }}>{item.url}</div>
+                      <div className="ltr-isolate" style={{ color: 'var(--text-light)', wordBreak: 'break-word' }}>{item.url}</div>
                     )}
                   </div>
                 ))}
                 {discoveredSources.length > discoveryPreviewItems.length && (
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                    +{discoveredSources.length - discoveryPreviewItems.length} more
+                    {t('wizard.successModal.more', { n: discoveredSources.length - discoveryPreviewItems.length })}
                   </span>
                 )}
               </div>
             ) : (
               <div style={{ fontSize: '0.84rem', color: 'var(--text-light)' }}>
-                No new sources were collected from the X accounts, hashtags, and keywords for this project.
+                {t('wizard.successModal.noneCollected')}
               </div>
             )}
           </div>
@@ -2132,25 +2177,27 @@ export default function ProjectsPage({
       <div className="admin-page-header">
         <div>
           <div className="admin-page-kicker">
-            <CalendarDays size={14} /> Opinion monitoring
+            <CalendarDays size={14} /> {t('list.kicker')}
           </div>
-          <h1 className="admin-page-title">Opinion Monitor</h1>
+          <h1 className="admin-page-title">{t('list.title')}</h1>
           <p className="admin-page-subtitle">
-            Track what people are saying about each project as its own workspace, attach shared sources, and keep every scrape tied to a named project.
+            {t('list.subtitle')}
           </p>
         </div>
         <div className="admin-page-toolbar">
           <div className="admin-page-toolbar-meta">
-            <span>Status</span>
-            <strong>{projects.length ? 'Configured' : 'Empty'}</strong>
+            <span>{t('list.statusLabel')}</span>
+            <strong>{projects.length ? t('list.configured') : t('list.empty')}</strong>
           </div>
           <div className="admin-page-toolbar-meta">
-            <span>Search</span>
-            <strong>{visibleProjects.length.toLocaleString()} matches</strong>
+            <span>{t('list.searchLabel')}</span>
+            <strong>
+              {t('list.matches', { count: visibleProjects.length, formatted: formatNumber(visibleProjects.length) })}
+            </strong>
           </div>
           {canEdit && (
             <Link to="/projects/new" className="btn-primary" style={{ textDecoration: 'none' }}>
-              <Plus size={16} /> Add Project
+              <Plus size={16} /> {t('list.addProject')}
             </Link>
           )}
         </div>
@@ -2162,8 +2209,8 @@ export default function ProjectsPage({
             <Layers3 size={18} />
           </div>
           <div>
-            <span>Total projects</span>
-            <strong>{stats.total.toLocaleString()}</strong>
+            <span>{t('list.stats.total')}</span>
+            <strong>{formatNumber(stats.total)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -2171,8 +2218,8 @@ export default function ProjectsPage({
             <Flag size={18} />
           </div>
           <div>
-            <span>Active</span>
-            <strong>{stats.active.toLocaleString()}</strong>
+            <span>{t('list.stats.active')}</span>
+            <strong>{formatNumber(stats.active)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -2180,8 +2227,8 @@ export default function ProjectsPage({
             <Clock3 size={18} />
           </div>
           <div>
-            <span>Draft</span>
-            <strong>{stats.draftCount.toLocaleString()}</strong>
+            <span>{t('list.stats.draft')}</span>
+            <strong>{formatNumber(stats.draftCount)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -2189,8 +2236,8 @@ export default function ProjectsPage({
             <Link2 size={18} />
           </div>
           <div>
-            <span>Unique sources in use</span>
-            <strong>{stats.assignedSources.toLocaleString()}</strong>
+            <span>{t('list.stats.uniqueSources')}</span>
+            <strong>{formatNumber(stats.assignedSources)}</strong>
           </div>
         </div>
       </div>
@@ -2202,15 +2249,16 @@ export default function ProjectsPage({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search projects, dates, statuses, or assigned sources"
+            placeholder={t('list.searchPlaceholder')}
+            dir="auto"
           />
         </label>
 
         <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">All statuses</option>
+          <option value="all">{t('list.allStatuses')}</option>
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
-              {status[0].toUpperCase() + status.slice(1)}
+              {statusLabel(status)}
             </option>
           ))}
         </select>
@@ -2218,10 +2266,10 @@ export default function ProjectsPage({
 
       <div className="glass-card admin-list-panel">
         <div className="panel-header-tight">
-          <strong style={{ fontSize: '1rem' }}>Tracked Projects</strong>
+          <strong style={{ fontSize: '1rem' }}>{t('list.trackedTitle')}</strong>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {isLoadingProjects && <span style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>Loading...</span>}
-            <span className="panel-chip">{visibleProjects.length} visible</span>
+            {isLoadingProjects && <span style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>{t('common:status.loading')}</span>}
+            <span className="panel-chip">{t('list.visible', { n: visibleProjects.length })}</span>
           </div>
         </div>
 
@@ -2231,8 +2279,8 @@ export default function ProjectsPage({
               <div className="admin-empty-state-icon">
                 <RefreshCw size={18} className="spin" />
               </div>
-              <strong>Loading projects...</strong>
-              <span>Fetching the latest project list from the workspace.</span>
+              <strong>{t('list.loadingTitle')}</strong>
+              <span>{t('list.loadingHint')}</span>
             </div>
           )}
 
@@ -2241,11 +2289,11 @@ export default function ProjectsPage({
               <div className="admin-empty-state-icon">
                 <CalendarDays size={18} />
               </div>
-              <strong>No projects yet</strong>
-              <span>Start by creating a project, then assign sources and run the scraper against that scope.</span>
+              <strong>{t('list.emptyTitle')}</strong>
+              <span>{t('list.emptyHint')}</span>
               {canEdit && (
                 <Link to="/projects/new" className="btn-primary" style={{ marginTop: 8, textDecoration: 'none' }}>
-                  <Plus size={16} /> Add Project
+                  <Plus size={16} /> {t('list.addProject')}
                 </Link>
               )}
             </div>
@@ -2265,30 +2313,41 @@ export default function ProjectsPage({
                 <div className="admin-item-top">
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-                      <strong className="admin-item-title project-item-title">{project.name}</strong>
+                      <strong className="admin-item-title project-item-title" dir="auto">{project.name}</strong>
                       <span className={`panel-chip ${isActive ? 'success' : project.status === 'archived' ? 'muted' : 'warning'}`}>
-                        {(project.status || 'draft').toUpperCase()}
+                        {statusLabel(project.status || 'draft').toUpperCase()}
                       </span>
                       {project.repeat_enabled && (
                         <span className="panel-chip success">
-                          <RefreshCw size={12} /> Every {project.repeat_interval_value} {project.repeat_interval_unit}
+                          <RefreshCw size={12} />{' '}
+                          {t('schedule.repeatEvery', {
+                            interval: intervalLabel(project.repeat_interval_value, project.repeat_interval_unit),
+                          })}
                         </span>
                       )}
                     </div>
                     <div className="admin-item-meta">
-                      <span>{project.start_date || 'No start date'}</span>
-                      <span>{project.end_date || 'No end date'}</span>
+                      <span>{formatProjectDate(project.start_date) || t('list.noStartDate')}</span>
+                      <span>{formatProjectDate(project.end_date) || t('list.noEndDate')}</span>
                       <span>
-                        {assignedSourceCount} source{assignedSourceCount === 1 ? '' : 's'}
+                        {t('list.sourceCount', { count: assignedSourceCount })}
                       </span>
                       {project.repeat_enabled && (
-                        <span>Next run: {formatDateTime(project.next_run_at) || 'Pending first run'}</span>
+                        <span>{t('list.nextRun', { date: formatDateTime(project.next_run_at) || t('list.pendingFirstRun') })}</span>
                       )}
-                      {project.last_run_at && <span>Last run: {formatDateTime(project.last_run_at)}</span>}
+                      {project.last_run_at && (
+                        <span>{t('list.lastRun', { date: formatDateTime(project.last_run_at, undefined, project.last_run_at) })}</span>
+                      )}
                     </div>
-                    <div style={{ marginTop: 10, color: 'var(--text-light)', fontSize: '0.88rem', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                      {project.description || 'Open the project to see assigned sources, tags, and metadata.'}
-                    </div>
+                    {project.description ? (
+                      <div dir="auto" style={{ marginTop: 10, color: 'var(--text-light)', fontSize: '0.88rem', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                        {project.description}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 10, color: 'var(--text-light)', fontSize: '0.88rem', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                        {t('list.descriptionFallback')}
+                      </div>
+                    )}
                   </div>
 
                   <div className="admin-item-actions">
@@ -2297,7 +2356,7 @@ export default function ProjectsPage({
                       to={`/projects/${project.id}`}
                       style={{ padding: '8px 10px', fontSize: '0.8rem', textDecoration: 'none' }}
                     >
-                      <Eye size={14} /> View
+                      <Eye size={14} /> {t('common:actions.view')}
                     </Link>
                   </div>
                 </div>
@@ -2310,8 +2369,8 @@ export default function ProjectsPage({
               <div className="admin-empty-state-icon">
                 <Search size={18} />
               </div>
-              <strong>No matching projects</strong>
-              <span>Try another search term or switch the status filter.</span>
+              <strong>{t('list.noMatchesTitle')}</strong>
+              <span>{t('list.noMatchesHint')}</span>
             </div>
           )}
         </div>
@@ -2330,7 +2389,11 @@ export default function ProjectsPage({
             }}
           >
             <div style={{ fontSize: '0.84rem', color: 'var(--text-light)' }}>
-              Showing {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, visibleProjects.length)} of {visibleProjects.length}
+              {t('common:pagination.showing', {
+                from: (safePage - 1) * PAGE_SIZE + 1,
+                to: Math.min(safePage * PAGE_SIZE, visibleProjects.length),
+                total: visibleProjects.length,
+              })}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
@@ -2339,10 +2402,10 @@ export default function ProjectsPage({
                 disabled={safePage <= 1}
                 style={{ padding: '8px 10px', fontSize: '0.8rem' }}
               >
-                Previous
+                {t('common:actions.previous')}
               </button>
               <span className="panel-chip">
-                Page {safePage} of {totalPages}
+                {t('common:pagination.page', { page: safePage, total: totalPages })}
               </span>
               <button
                 className="btn-secondary"
@@ -2350,7 +2413,7 @@ export default function ProjectsPage({
                 disabled={safePage >= totalPages}
                 style={{ padding: '8px 10px', fontSize: '0.8rem' }}
               >
-                Next
+                {t('common:actions.next')}
               </button>
             </div>
           </div>

@@ -1,0 +1,327 @@
+{
+  "history": "Pipeline history",
+  "projectNumber": "Project #{{id}}",
+  "unassigned": "Unassigned",
+  "stages": {
+    "queued": "queued",
+    "scrape": "scraping",
+    "clean": "validating",
+    "done": "completed",
+    "cancelled": "cancelled",
+    "error": "error",
+    "failed": "failed",
+    "importing": "importing"
+  },
+  "errors": {
+    "loadRunsFailed": "Failed to load pipeline runs.",
+    "stopRunFailed": "Failed to stop pipeline run.",
+    "loadRunFailed": "Failed to load run details.",
+    "exportFailed": "Failed to export articles."
+  },
+  "errorContext": {
+    "loadRuns": "load pipeline runs",
+    "loadActivity": "load pipeline activity",
+    "loadRun": "load this pipeline run",
+    "exportRunArticles": "extract articles for this pipeline run",
+    "completeRun": "complete this pipeline run"
+  },
+  "pills": {
+    "idle": "idle",
+    "stopped": "stopped",
+    "live": "live"
+  },
+  "stopwatch": {
+    "kicker": "Live stopwatch",
+    "title": "Workflow elapsed time",
+    "scope": "Running scope: {{scope}}",
+    "scopeSelect": "select a project",
+    "scopeNone": "no projects available",
+    "scopeOne": "1 project",
+    "counting": "Timer is counting while the extractor runs.",
+    "lastStarted": "Last run started at {{time}}.",
+    "notStarted": "Start the extractor to begin timing the workflow."
+  },
+  "getData": {
+    "badge": "Sources",
+    "title": "Get Data",
+    "run": "Run Extractor for Project",
+    "runSelectProject": "Select a Project to Run",
+    "runSelectSource": "Select at Least One Source",
+    "running": "Running…",
+    "requiresPermission": "Requires the {{permission}} permission.",
+    "selectSourceHint": "Select at least one source to run."
+  },
+  "picker": {
+    "kicker": "Scope",
+    "title": "Choose a project to extract",
+    "total_one": "{{formatted}} total",
+    "total_other": "{{formatted}} total",
+    "note": "The extractor runs for the selected project, then the results below reflect its latest articles.",
+    "empty": "No projects yet. Create a project first, then come back to run the workflow.",
+    "selected": "Selected",
+    "unselected": "Unselected",
+    "sourceCount_zero": "No sources",
+    "sourceCount_one": "{{formatted}} source",
+    "sourceCount_other": "{{formatted}} sources"
+  },
+  "sources": {
+    "title": "Sources",
+    "selectedSummary": "{{checked}} of {{total}} selected - scraping only runs for checked sources",
+    "noneAssigned": "No sources assigned to this project yet",
+    "deselectAll": "Deselect all",
+    "expand": "Expand sources",
+    "collapse": "Collapse sources",
+    "emptyList": "No sources assigned to this project yet. Add one to start scraping.",
+    "collapsedSummary_one": "{{checked}} of {{formatted}} source selected. Expand to review or change the selection.",
+    "collapsedSummary_other": "{{checked}} of {{formatted}} sources selected. Expand to review or change the selection.",
+    "collapsedEmpty": "No sources to show. Expand to add one.",
+    "add": "Add Source"
+  },
+  "validate": {
+    "badgeRunning": "Pipeline Running",
+    "badgeActive": "Pipeline Active",
+    "title": "Validate & Dedup",
+    "waiting": "Waiting for extraction…",
+    "steps": {
+      "parsing": "Parsing raw content",
+      "validatingJson": "Validating AI JSON output",
+      "extractingInsights": "Extracting structured article insights"
+    },
+    "githubNote": "Running on GitHub Actions - new rows land in about 3 minutes."
+  },
+  "cleanup": {
+    "kept_one": "Kept {{kept}}/{{total}} article",
+    "kept_other": "Kept {{kept}}/{{total}} articles",
+    "complete": "Pipeline complete",
+    "validatingProgress": "Validating articles {{done}}/{{total}}",
+    "validating": "Validating articles…",
+    "scraping": "Scraping sources…",
+    "scrapingProgress": "Scraping sources {{pages}} / {{articles}}",
+    "pages_one": "{{formatted}} page",
+    "pages_other": "{{formatted}} pages",
+    "articles_one": "{{formatted}} article",
+    "articles_other": "{{formatted}} articles",
+    "saved_one": "Saved {{formatted}} article",
+    "saved_other": "Saved {{formatted}} articles"
+  },
+  "save": {
+    "title": "Save & Store",
+    "waiting": "Awaiting collected data…",
+    "totalRows": "Total Rows Stored",
+    "rows_one": "{{formatted}} Row",
+    "rows_other": "{{formatted}} Rows",
+    "uniqueSources": "Unique Sources",
+    "found_one": "{{formatted}} Found",
+    "found_other": "{{formatted}} Found",
+    "storyGroups": "Story Groups",
+    "grouped_one": "{{formatted}} Grouped",
+    "grouped_other": "{{formatted}} Grouped",
+    "synced": "Synced to Database"
+  },
+  "log": {
+    "kicker": "Run log",
+    "title": "Latest pipeline activity",
+    "currentRun": "Current run",
+    "empty": "No pipeline runs yet. Launch the extractor to generate activity."
+  },
+  "results": {
+    "kicker": "Results",
+    "title": "Current output snapshot",
+    "pagesCrawled": "Pages Crawled",
+    "articlesScraped": "Articles Scraped",
+    "cleaned": "Cleaned",
+    "saved": "Saved",
+    "snapshot": "Collection snapshot",
+    "articlesStored": "Articles Stored",
+    "topSources": "Top sources",
+    "noSources": "No sources yet.",
+    "recentArticles": "Recent articles",
+    "unknownSource": "Unknown source",
+    "noArticles": "No recent articles to preview."
+  },
+  "runs": {
+    "title": "Pipeline Runs",
+    "subtitle": "Independent history view for every scrape run.",
+    "backToDashboard": "Back to Dashboard",
+    "filterProject": "Filter by project",
+    "filterStatus": "Filter by status",
+    "allProjects": "All projects",
+    "allStatuses": "All statuses",
+    "upcoming": "Upcoming",
+    "upcomingIn": "Scheduled to run in {{duration}}, at {{time}}.",
+    "upcomingUnderMinute": "Scheduled to run in under a minute, at {{time}}.",
+    "upcomingShortly": "Scheduled to start shortly, at {{time}}.",
+    "emptyTitle": "No pipeline runs",
+    "emptyNoRuns": "No recorded runs yet.",
+    "emptyFiltered": "No runs match the current filters.",
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "stageMessage": "{{stage}} - {{message}}",
+    "counts": {
+      "scraped": "Scraped: {{value}}",
+      "cleaned": "Cleaned: {{value}}",
+      "saved": "Saved: {{value}}",
+      "pages": "Pages: {{value}}"
+    },
+    "created": "Created {{time}}",
+    "finished": "Finished {{time}}",
+    "createdAndFinished": "Created {{created}} • Finished {{finished}}"
+  },
+  "detail": {
+    "title": "Pipeline Run Details",
+    "backToRuns": "Back to Pipeline Runs",
+    "loading": "Loading run details…",
+    "totals": {
+      "scraped": "Articles scraped",
+      "cleaned": "Articles cleaned",
+      "saved": "Articles saved"
+    },
+    "export": {
+      "label": "Extract articles",
+      "exporting": "Exporting…",
+      "hint": "Download as JSONL",
+      "downloadTitle": "Download this run's articles as JSONL",
+      "noneSaved": "No articles were saved in this run",
+      "confirmTitle": "Extract articles?",
+      "confirmMessage_one": "This will export {{formatted}} article collected in this pipeline run as a JSONL file.",
+      "confirmMessage_other": "This will export {{formatted}} articles collected in this pipeline run as a JSONL file.",
+      "confirm": "Extract"
+    },
+    "summary": {
+      "project": "Project",
+      "status": "Status",
+      "stage": "Current stage",
+      "startedAt": "Started at",
+      "finishedAt": "Finished at",
+      "totalDuration": "Total duration"
+    },
+    "inProgress": "{{duration}} (in progress)",
+    "message": "Message",
+    "originalMessage": "Original run details",
+    "completeWithIssues_one": "Pipeline complete. {{formatted}} source needs attention; review the per-source breakdown below.",
+    "completeWithIssues_other": "Pipeline complete. {{formatted}} sources need attention; review the per-source breakdown below.",
+    "timing": "Timing",
+    "legacyTiming": "Details unavailable for legacy run — this run finished before per-stage timing was tracked.",
+    "stageRows": {
+      "scrape": "Scraping & saving"
+    },
+    "perSource": "Per-source breakdown",
+    "legacySources": "Details unavailable for legacy run — this run finished before per-source stats were tracked.",
+    "noSourceData": "No per-source data recorded for this run yet.",
+    "columns": {
+      "source": "Source",
+      "fetchStatus": "Fetch status",
+      "scraped": "Scraped",
+      "duplicate": "Duplicate",
+      "contentFiltered": "Content filtered",
+      "dateFiltered": "Date filtered",
+      "alreadyScraped": "Already scraped",
+      "kept": "Kept",
+      "saved": "Saved"
+    },
+    "badges": {
+      "blocked": "Blocked (HTTP {{status}})",
+      "http": "HTTP {{status}}",
+      "issue": "Issue",
+      "ok": "OK"
+    },
+    "expandDetails": "Expand details",
+    "collapseDetails": "Collapse details",
+    "visit": "Visit {{url}}"
+  },
+  "issues": {
+    "setupLinkedin": {
+      "title": "LinkedIn setup required",
+      "message": "LinkedIn cannot be collected until its scraping integration is configured.",
+      "action": "Ask an administrator to configure the Apify API token, then run the pipeline again."
+    },
+    "setupIntegration": {
+      "title": "Additional setup required",
+      "message": "This source needs an external scraping integration.",
+      "action": "Ask an administrator to configure the Apify API token, then run the pipeline again."
+    },
+    "setupXSearch": {
+      "title": "X search setup required",
+      "message": "This source needs a search integration to discover public posts.",
+      "action": "Configure Google Custom Search or Apify, then run the pipeline again."
+    },
+    "setupSearch": {
+      "title": "Search setup required",
+      "message": "This source needs a search integration to discover public posts.",
+      "action": "Configure Google Custom Search or Apify, then run the pipeline again."
+    },
+    "invalidSource": {
+      "title": "Invalid source",
+      "message": "The source address or type is not recognized.",
+      "action": "Check the source format and update it before the next run."
+    },
+    "notFound": {
+      "title": "Source not found",
+      "message": "The account or page does not exist, was renamed, or is no longer public.",
+      "action": "Check the spelling or URL, then update or remove this source."
+    },
+    "notFoundX": {
+      "title": "X account not found",
+      "message": "The account or page does not exist, was renamed, or is no longer public.",
+      "action": "Check the spelling or URL, then update or remove this source."
+    },
+    "rateLimited": {
+      "title": "Temporarily rate limited",
+      "message": "The platform temporarily limited collection requests.",
+      "action": "Wait a while and run the pipeline again."
+    },
+    "accessBlocked": {
+      "title": "Access blocked",
+      "message": "The platform rejected requests from the scraper's current network.",
+      "action": "Try authenticated access or a scraping proxy, then run the pipeline again."
+    },
+    "authenticationFailed": {
+      "title": "Authentication required",
+      "message": "The configured credentials were missing, rejected, or expired.",
+      "action": "Check the integration credentials and run the pipeline again."
+    },
+    "serviceUnavailable": {
+      "title": "Platform temporarily unavailable",
+      "message": "The source platform returned a server error.",
+      "action": "Try the source again later."
+    },
+    "timedOut": {
+      "title": "Request timed out",
+      "message": "The source did not respond within the allowed time.",
+      "action": "Try again; if it continues, review the network or timeout configuration."
+    },
+    "connectionFailed": {
+      "title": "Connection failed",
+      "message": "The scraper could not establish a reliable connection to this source.",
+      "action": "Check the URL and network connection, then try again."
+    },
+    "sourceUnavailable": {
+      "title": "Source unavailable",
+      "message": "The source is private, protected, deleted, or otherwise unavailable.",
+      "action": "Confirm that the source is public or remove it from the project."
+    },
+    "noResults": {
+      "title": "No articles found",
+      "message": "The source was reached successfully but produced no usable articles in this run.",
+      "action": "Check the project date window and source activity before trying again."
+    },
+    "httpError": {
+      "title": "Source could not be fetched",
+      "message": "The source returned HTTP {{status}} and could not be collected.",
+      "action": "Try again later or review the source configuration."
+    },
+    "fetchFailed": {
+      "title": "Source could not be collected",
+      "message": "An unexpected problem prevented this source from being collected.",
+      "action": "Try again; if it continues, review the technical details."
+    }
+  },
+  "fetchNotes": {
+    "noArticles": "Returned 0 articles.",
+    "blocked": "Blocked (HTTP {{status}}) - likely anti-bot protection against this server's network, not a problem with the source itself.",
+    "httpError": "HTTP {{status}} - the source's page could not be fetched.",
+    "telegramUnavailable": "Telegram channel unavailable (private, not a channel, or missing).",
+    "tweetUnavailable": "Could not fetch this tweet (deleted, private/protected, or fxtwitter.com is unavailable).",
+    "apifyMissing": "{{platform}} sources require Apify, and the Apify API token is not set."
+  }
+}

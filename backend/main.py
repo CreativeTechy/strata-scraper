@@ -28,6 +28,7 @@ from app.core import settings as config
 from app.core import db
 import migrate
 from api.deps import ensure_project_visible
+from api.error_codes import error_body
 from api.errors import AppError
 from api.routers import articles as articles_router
 from api.routers import dashboard as dashboard_router
@@ -78,17 +79,20 @@ app.include_router(dashboard_router.router)
 async def _http_exception_handler(request: Request, exc: HTTPException):
     # Shape every raised HTTPException (401/403/404/...) like this API's
     # existing ad hoc error bodies ({"error": ...}) so the dashboard's
-    # shared formatApiError() handles them without special-casing.
-    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+    # shared formatApiError() handles them without special-casing. `code`/
+    # `params` (api/error_codes.py) let it translate the message.
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_body(exc.detail, exc.status_code),
+        headers=getattr(exc, "headers", None),
+    )
 
 
 @app.exception_handler(AppError)
 async def _app_error_handler(request: Request, exc: AppError):
     # See api/errors.py - replaces the routes that used to return HTTP 200
     # with an {"error": ...} body instead of a real status code.
-    content = {"error": exc.message}
-    if exc.detail:
-        content["detail"] = exc.detail
+    content = error_body(exc.message, exc.status_code, detail=exc.detail, code=exc.code, params=exc.params)
     return JSONResponse(status_code=exc.status_code, content=content)
 
 
@@ -101,7 +105,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
     # it is logged with a stack trace instead of vanishing into a swallowed
     # `except Exception: return []` somewhere downstream.
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"error": "Internal server error."})
+    return JSONResponse(status_code=500, content=error_body("Internal server error.", 500))
 
 
 @app.on_event("startup")

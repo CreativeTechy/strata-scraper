@@ -1,0 +1,223 @@
+{
+  "app": {
+    "name": "Scraper",
+    "fullName": "Scraper App",
+    "tagline": "Media Intelligence Platform",
+    "taglineShort": "Media Intelligence",
+    "brandMark": "S"
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch language to {{language}}"
+  },
+  "actions": {
+    "save": "Save",
+    "saving": "Saving…",
+    "saveChanges": "Save changes",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "edit": "Edit",
+    "create": "Create",
+    "add": "Add",
+    "remove": "Remove",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "search": "Search",
+    "clear": "Clear",
+    "clearFilters": "Clear filters",
+    "view": "View",
+    "open": "Open",
+    "export": "Export",
+    "import": "Import",
+    "dismiss": "Dismiss",
+    "continue": "Continue",
+    "done": "Done",
+    "apply": "Apply",
+    "reset": "Reset",
+    "copy": "Copy",
+    "copied": "Copied",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "selectAll": "Select all"
+  },
+  "status": {
+    "loading": "Loading…",
+    "active": "Active",
+    "inactive": "Inactive",
+    "disabled": "Disabled",
+    "draft": "Draft",
+    "pending": "Pending",
+    "running": "Running",
+    "queued": "Queued",
+    "success": "Success",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "unknown": "Unknown",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "all": "All",
+    "notAvailable": "N/A"
+  },
+  "search": {
+    "placeholder": "Search…",
+    "noMatches": "No matches"
+  },
+  "pagination": {
+    "page": "Page {{page}} of {{total}}",
+    "showing": "Showing {{from}}–{{to}} of {{total}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "perPage": "Per page"
+  },
+  "nav": {
+    "sections": {
+      "collection": "Collection",
+      "monitoring": "Monitoring",
+      "setup": "Setup",
+      "admin": "Admin"
+    },
+    "dashboard": "Dashboard",
+    "articles": "Articles",
+    "opinionMonitor": "Opinion Monitor",
+    "competitorAnalysis": "Competitor Analysis",
+    "sources": "Sources",
+    "manualRun": "Manual Run",
+    "pipelineRuns": "Pipeline Runs",
+    "users": "Users",
+    "roles": "Roles",
+    "projectAccess": "Project Access",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation",
+    "expandNavigation": "Expand navigation",
+    "collapseNavigation": "Collapse navigation",
+    "logOut": "Log out",
+    "profileTitle": "{{username}} ({{role}})"
+  },
+  "access": {
+    "loading": "Loading…",
+    "deniedTitle": "Access denied",
+    "deniedMessage": "You don't have permission to view this page."
+  },
+  "login": {
+    "welcome": "Welcome back",
+    "intro": "Sign in to access your intelligence workspace",
+    "username": "Username or email",
+    "usernamePlaceholder": "you@company.com",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "failed": "Login failed.",
+    "footnote": "Protected workspace · Contact an admin for access",
+    "errorContext": "sign you in"
+  },
+  "errors": {
+    "defaultContext": "complete this action",
+    "technicalDetails": "Technical details",
+    "dismiss": "Dismiss error",
+    "generic": {
+      "title": "Something went wrong",
+      "message": "We couldn't {{context}}.",
+      "action": "Try again. If the problem continues, contact an administrator."
+    },
+    "signIn": {
+      "title": "Sign-in failed",
+      "message": "The username or password is incorrect.",
+      "action": "Check your details and try again."
+    },
+    "session": {
+      "title": "Session expired",
+      "message": "Your session is no longer active.",
+      "action": "Sign in again, then retry the action."
+    },
+    "permission": {
+      "title": "Permission required",
+      "message": "You don't have permission to {{context}}.",
+      "action": "Ask an administrator for the required access."
+    },
+    "notFound": {
+      "title": "Not found",
+      "message": "The requested item could not be found.",
+      "action": "Refresh the page and check whether it was removed or renamed."
+    },
+    "conflict": {
+      "title": "Already exists",
+      "message": "This conflicts with an existing item.",
+      "action": "Use a different name or review the existing item."
+    },
+    "rateLimit": {
+      "title": "Too many requests",
+      "message": "The service is temporarily limiting requests.",
+      "action": "Wait a moment, then try again."
+    },
+    "timeout": {
+      "title": "Request timed out",
+      "message": "It took too long to {{context}}.",
+      "action": "Check the connection and try again."
+    },
+    "network": {
+      "title": "Connection problem",
+      "message": "The service could not be reached.",
+      "action": "Check your connection and confirm the service is running, then retry."
+    },
+    "setup": {
+      "title": "Setup required",
+      "message": "A required service has not been configured.",
+      "action": "Ask an administrator to review the service settings."
+    },
+    "validation": {
+      "title": "Check the entered information",
+      "action": "Correct the highlighted information and try again."
+    },
+    "unavailable": {
+      "title": "Service unavailable",
+      "message": "The service is temporarily unavailable.",
+      "action": "Try again shortly. If it continues, contact an administrator."
+    },
+    "requestFailed": "Request failed ({{status}})"
+  },
+  "run": {
+    "completeWithIssues_one": "Pipeline complete. {{count}} source needs attention.",
+    "completeWithIssues_other": "Pipeline complete. {{count}} sources need attention.",
+    "failed": "Pipeline did not complete. Open the run to review the issue and suggested action.",
+    "cancelled": "Pipeline was stopped before it completed.",
+    "success": "Pipeline completed successfully.",
+    "running": "Pipeline is currently running.",
+    "waiting": "Pipeline is waiting to start."
+  },
+  "confirm": {
+    "title": "Are you sure?"
+  },
+  "time": {
+    "justNow": "just now",
+    "never": "Never"
+  },
+  "translation": {
+    "sourceLanguage": "Original language: {{language}}"
+  },
+  "roleNames": {
+    "admin": "Admin",
+    "editor": "Editor",
+    "operator": "Operator",
+    "viewer": "Viewer"
+  },
+  "scheduleUnits": {
+    "minutes": "Minutes",
+    "hours": "Hours",
+    "days": "Days"
+  },
+  "competitorStages": {
+    "fetchWebsite": "Fetching your website",
+    "extractText": "Extracting page text",
+    "readPositioning": "Reading how you position yourself",
+    "writeContext": "Writing your market context"
+  }
+}

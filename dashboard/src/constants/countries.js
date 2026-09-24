@@ -1,3 +1,5 @@
+import { countryName, intlLocale } from '../i18n/format.js';
+
 /**
  * Fixed ISO 3166-1 alpha-2 country list, mirroring
  * backend/services/competitors/countries.py so target-country codes mean the
@@ -106,7 +108,18 @@ export const COUNTRIES = [
 
 const BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c.name]));
 
+// The country's name in the UI language (via Intl.DisplayNames), falling
+// back to the English name above, then the bare code.
 export function countryLabel(code) {
   const upper = String(code || '').trim().toUpperCase();
-  return BY_CODE.get(upper) || upper;
+  return countryName(upper, BY_CODE.get(upper) || upper);
+}
+
+// COUNTRIES with names in the UI language, sorted for that language. Call at
+// render time so a language switch re-sorts it.
+export function localizedCountries() {
+  const collator = new Intl.Collator(intlLocale());
+  return COUNTRIES
+    .map((country) => ({ code: country.code, name: countryLabel(country.code), englishName: country.name }))
+    .sort((a, b) => collator.compare(a.name, b.name));
 }

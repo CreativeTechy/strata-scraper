@@ -1,0 +1,219 @@
+{
+  "header": {
+    "kicker": "مكتبة المقالات",
+    "title": "المقالات",
+    "subtitle": "البحث والتصفية حسب المشروع والمصدر والنطاق الزمني والفرز والتقسيم إلى صفحات، جميعها تتم عبر الواجهة البرمجية على الخادم.",
+    "dashboardProject": "مشروع لوحة المعلومات: <name>{{name}}</name>.",
+    "allProjects": "يتم عرض جميع المشاريع.",
+    "projectScope": "نطاق المشروع",
+    "projectScopeAria": "نطاق المشروع للمقالات",
+    "allProjectsOption": "جميع المشاريع",
+    "projectOption": "{{name}} ({{status}})",
+    "deleteAll": "حذف جميع المقالات",
+    "backToDashboard": "العودة إلى لوحة المعلومات"
+  },
+  "deleteAll": {
+    "title": "حذف جميع المقالات؟",
+    "message": "سيؤدي هذا إلى إزالة جميع الصفوف في جدول المقالات، ولا يمكن التراجع عن ذلك.",
+    "confirm": "حذف جميع المقالات",
+    "cancel": "الإبقاء على المقالات",
+    "typeToConfirm": "للتأكيد، اكتب العبارة الإنجليزية <phrase>{{phrase}}</phrase> تمامًا كما هي (بالأحرف الكبيرة):",
+    "inputAria": "عبارة التأكيد"
+  },
+  "exportCompetitors": {
+    "title": "تصدير المنافسين؟",
+    "message_zero": "لا يوجد منافسون متتبَّعون لتنزيلهم لمشروع «{{project}}».",
+    "message_one": "سيتم تنزيل منافس متتبَّع واحد لمشروع «{{project}}» بصيغة JSONL.",
+    "message_two": "سيتم تنزيل منافسَين متتبَّعَين لمشروع «{{project}}» بصيغة JSONL.",
+    "message_few": "سيتم تنزيل {{formatted}} منافسين متتبَّعين لمشروع «{{project}}» بصيغة JSONL.",
+    "message_many": "سيتم تنزيل {{formatted}} منافسًا متتبَّعًا لمشروع «{{project}}» بصيغة JSONL.",
+    "message_other": "سيتم تنزيل {{formatted}} منافس متتبَّع لمشروع «{{project}}» بصيغة JSONL.",
+    "thisProject": "هذا المشروع"
+  },
+  "exportArticles": {
+    "title": "تصدير المقالات؟",
+    "message_zero": "لا توجد مقالات مطابقة لعوامل التصفية الحالية لتصديرها.",
+    "message_one": "سيتم تصدير مقالة واحدة مطابقة لعوامل التصفية الحالية كملف JSONL.",
+    "message_two": "سيتم تصدير مقالتين مطابقتين لعوامل التصفية الحالية كملف JSONL.",
+    "message_few": "سيتم تصدير {{formatted}} مقالات مطابقة لعوامل التصفية الحالية كملف JSONL.",
+    "message_many": "سيتم تصدير {{formatted}} مقالةً مطابقة لعوامل التصفية الحالية كملف JSONL.",
+    "message_other": "سيتم تصدير {{formatted}} مقالة مطابقة لعوامل التصفية الحالية كملف JSONL."
+  },
+  "exportModal": {
+    "title": "تصدير البيانات",
+    "closeDialog": "إغلاق مربع الحوار",
+    "intro": "اختر ما تريد تنزيله كملف JSONL.",
+    "articlesTitle": "تصدير المقالات",
+    "articlesDescription_zero": "لا توجد مقالات مطابقة لعوامل التصفية الحالية.",
+    "articlesDescription_one": "مقالة واحدة مطابقة لعوامل التصفية الحالية.",
+    "articlesDescription_two": "مقالتان مطابقتان لعوامل التصفية الحالية.",
+    "articlesDescription_few": "{{formatted}} مقالات مطابقة لعوامل التصفية الحالية.",
+    "articlesDescription_many": "{{formatted}} مقالةً مطابقة لعوامل التصفية الحالية.",
+    "articlesDescription_other": "{{formatted}} مقالة مطابقة لعوامل التصفية الحالية.",
+    "competitorsTitle": "تصدير المنافسين",
+    "competitorsDescription": "جميع المنافسين المتتبَّعين لمشروع <name>{{name}}</name>.",
+    "thisProject": "هذا المشروع"
+  },
+  "importModal": {
+    "title": "استيراد المقالات",
+    "closeDialog": "إغلاق مربع الحوار",
+    "introWithProject": "استيراد ملفات JSONL المصدَّرة (.jsonl و‎.ndjson) إلى المشروع المحدد حاليًا.",
+    "introWithoutProject": "استيراد ملفات JSONL المصدَّرة (.jsonl و‎.ndjson). لن تُربط المقالات بأي مشروع - اختر نطاق مشروع في الأعلى للاستيراد إليه.",
+    "filesTitle": "رفع ملف أو أكثر",
+    "filesDescription": "اختر ملف JSONL مصدَّرًا واحدًا أو أكثر من جهازك.",
+    "folderTitle": "رفع مجلد",
+    "folderDescription": "استيراد جميع ملفات JSONL المصدَّرة الموجودة داخل مجلد."
+  },
+  "filters": {
+    "allSources": "جميع المصادر",
+    "selectProjectForSources": "اختر مشروعًا لعرض المصادر",
+    "sourceAria": "التصفية حسب المصدر",
+    "allPipelineRuns": "جميع عمليات التشغيل",
+    "selectProjectForPipelineRuns": "اختر مشروعًا لعرض عمليات التشغيل",
+    "pipelineRunAria": "التصفية حسب عملية التشغيل",
+    "pipelineRunOption": "{{run}} - {{date}}",
+    "pipelineNumber": "عملية التشغيل رقم {{number}}",
+    "pipelineRun": "عملية تشغيل",
+    "unknownDate": "تاريخ غير معروف",
+    "scrapedBetween": "تاريخ الجمع بين",
+    "dateRangeSeparator": "و",
+    "scrapedFromTitle": "عرض المقالات التي جُمعت في هذا التاريخ أو بعده فقط",
+    "scrapedFromAria": "تاريخ بداية الجمع",
+    "scrapedToTitle": "عرض المقالات التي جُمعت في هذا التاريخ أو قبله فقط",
+    "scrapedToAria": "تاريخ نهاية الجمع",
+    "searchPlaceholder": "ابحث في العنوان أو الملخص أو المصدر…",
+    "searchAria": "البحث في المقالات",
+    "clearSearch": "مسح البحث",
+    "sortAria": "فرز المقالات"
+  },
+  "sort": {
+    "publishedDesc": "الأحدث أولًا",
+    "publishedAsc": "الأقدم أولًا",
+    "fetchedDesc": "الأحدث جمعًا",
+    "createdDesc": "الأحدث حفظًا",
+    "sourceAsc": "المصدر (أبجديًا)"
+  },
+  "toolbar": {
+    "loading": "جارٍ تحميل المقالات…",
+    "summary_zero": "لا توجد مقالات، يُعرض {{from}}–{{to}}",
+    "summary_one": "مقالة واحدة إجمالًا، يُعرض {{from}}–{{to}}",
+    "summary_two": "مقالتان إجمالًا، يُعرض {{from}}–{{to}}",
+    "summary_few": "{{formatted}} مقالات إجمالًا، يُعرض {{from}}–{{to}}",
+    "summary_many": "{{formatted}} مقالةً إجمالًا، يُعرض {{from}}–{{to}}",
+    "summary_other": "{{formatted}} مقالة إجمالًا، يُعرض {{from}}–{{to}}",
+    "selectedProject": "المشروع المحدد",
+    "scrapedRange": "تاريخ الجمع من {{from}} إلى {{to}}",
+    "anyDate": "أي تاريخ",
+    "viewSwitcherAria": "تبديل طريقة عرض المقالات",
+    "perPageOption": "{{formatted}} لكل صفحة",
+    "perPageAria": "عدد المقالات في كل صفحة",
+    "exporting": "جارٍ التصدير…",
+    "importing": "جارٍ الاستيراد…"
+  },
+  "viewModes": {
+    "card": "بطاقات",
+    "list": "قائمة"
+  },
+  "refreshing": {
+    "title": "جارٍ تحديث النتائج",
+    "message": "تبقى القائمة الحالية ظاهرة ريثما يتم تحميل نتائج عوامل التصفية الجديدة."
+  },
+  "card": {
+    "untitled": "مقالة بلا عنوان",
+    "unknownSource": "مصدر غير معروف",
+    "unknownDate": "تاريخ غير معروف",
+    "unknown": "غير معروف",
+    "scrapedTitle": "وقت جمع هذه المقالة بواسطة عملية التشغيل",
+    "scraped": "تاريخ الجمع: {{date}}",
+    "byAuthor": "بقلم <author>{{author}}</author>",
+    "storyTitle": "مجموعة النشر المشترك: المقالات التي تتطابق نصوصها تقريبًا تنتمي إلى مجموعة قصة واحدة",
+    "story": "القصة رقم {{id}}",
+    "verified": "مصدر موثَّق",
+    "languageTitle": "اللغة المكتشفة",
+    "noText": "لم يُجمع أي نص.",
+    "openOriginal": "فتح المقالة الأصلية"
+  },
+  "empty": {
+    "title": "لم يُعثر على مقالات",
+    "message": "جرّب تعديل البحث أو المصدر أو النطاق الزمني أو عوامل تصفية المشروع."
+  },
+  "pagination": {
+    "aria": "التنقل بين صفحات المقالات"
+  },
+  "import": {
+    "batchLabel": "الملف {{index}} من {{total}}:",
+    "headline": {
+      "queued": "جارٍ التحضير للاستيراد…",
+      "running": "جارٍ الاستيراد…",
+      "success_zero": "لم تُستورد أي مقالة",
+      "success_one": "تم استيراد مقالة واحدة",
+      "success_two": "تم استيراد مقالتين",
+      "success_few": "تم استيراد {{formatted}} مقالات",
+      "success_many": "تم استيراد {{formatted}} مقالةً",
+      "success_other": "تم استيراد {{formatted}} مقالة",
+      "failed": "فشل الاستيراد"
+    },
+    "rate_zero": "أقل من مقالة واحدة في الثانية",
+    "rate_one": "مقالة واحدة في الثانية",
+    "rate_two": "مقالتان في الثانية",
+    "rate_few": "{{formatted}} مقالات في الثانية",
+    "rate_many": "{{formatted}} مقالةً في الثانية",
+    "rate_other": "{{formatted}} مقالة في الثانية",
+    "progressAria": "تقدّم الاستيراد",
+    "saved": "المحفوظة: {{formatted}}",
+    "ofLines_zero": "من أصل {{formatted}} سطر تقريبًا",
+    "ofLines_one": "من أصل سطر واحد تقريبًا",
+    "ofLines_two": "من أصل سطرين تقريبًا",
+    "ofLines_few": "من أصل {{formatted}} أسطر تقريبًا",
+    "ofLines_many": "من أصل {{formatted}} سطرًا تقريبًا",
+    "ofLines_other": "من أصل {{formatted}} سطر تقريبًا",
+    "skipped": "المتخطّاة: {{formatted}}",
+    "elapsedIn": "خلال {{duration}}",
+    "timeLeft": "يتبقى {{duration}} تقريبًا",
+    "timeElapsed": "انقضى {{duration}}",
+    "updatedNote": "تم تحديث المقالات التي تطابق عنوان URL موجودًا مسبقًا في مكانها.",
+    "lineError": "السطر {{line}}: {{message}}",
+    "moreErrors": "و{{formatted}} أخرى…",
+    "dismissAria": "إغلاق ملخص الاستيراد"
+  },
+  "errors": {
+    "loadFailed": "تعذّر تحميل المقالات.",
+    "deleteFailed": "تعذّر حذف المقالات.",
+    "exportFailed": "تعذّر تصدير المقالات.",
+    "exportCompetitorsFailed": "تعذّر تصدير المنافسين.",
+    "importFailed": "تعذّر استيراد المقالات.",
+    "importStatusLost": "تعذّر تتبّع حالة الاستيراد.",
+    "importJobFailed": "فشل الاستيراد.",
+    "noJsonlFiles": "لم يُعثر على ملفات ‎.jsonl أو ‎.ndjson في المجلد المحدد.",
+    "batchFailed_zero": "تعذّر استيراد {{failed}} من الملفات: {{details}}",
+    "batchFailed_one": "تعذّر استيراد {{failed}} من أصل ملف واحد: {{details}}",
+    "batchFailed_two": "تعذّر استيراد {{failed}} من أصل ملفين: {{details}}",
+    "batchFailed_few": "تعذّر استيراد {{failed}} من أصل {{formatted}} ملفات: {{details}}",
+    "batchFailed_many": "تعذّر استيراد {{failed}} من أصل {{formatted}} ملفًا: {{details}}",
+    "batchFailed_other": "تعذّر استيراد {{failed}} من أصل {{formatted}} ملف: {{details}}",
+    "batchFailureItem": "{{name}} ({{error}})"
+  },
+  "errorContext": {
+    "loadArticles": "تحميل المقالات أو إدارتها",
+    "importArticle": "استيراد هذه المقالة",
+    "importFile": "استيراد هذا الملف"
+  },
+  "sourceView": {
+    "sentimentAria": "التصفية حسب المشاعر",
+    "categoryAria": "التصفية حسب الفئة",
+    "allSentiments": "جميع المشاعر",
+    "allCategories": "جميع الفئات",
+    "sentiments": {
+      "positive": "إيجابي",
+      "negative": "سلبي",
+      "neutral": "محايد",
+      "mixed": "مختلط"
+    },
+    "defaultCategory": "أخبار",
+    "score": "الدرجة: {{score}}/10",
+    "projectMatch": "مطابقة المشروع: {{score}}",
+    "loadMore": "تحميل المزيد من المقالات",
+    "emptyTitle": "لم يُعثر على مقالات",
+    "emptyMessage": "جرّب عامل تصفية مختلفًا للمشاعر أو الفئة."
+  }
+}

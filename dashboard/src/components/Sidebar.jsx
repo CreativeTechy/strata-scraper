@@ -17,7 +17,9 @@ import {
   X,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/useAuth.js';
+import LanguageSwitcher from './LanguageSwitcher';
 
 // Kept visibly apart by what they're for: "Collection" is the data itself,
 // "Monitoring" is the two ongoing watch programs that decide what gets
@@ -26,38 +28,38 @@ import { useAuth } from '../auth/useAuth.js';
 // list is what made the old navigation ambiguous.
 const NAV_SECTIONS = [
   {
-    label: 'Collection',
+    id: 'collection',
     items: [
-      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/articles', label: 'Articles', icon: Newspaper },
+      { to: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+      { to: '/articles', labelKey: 'nav.articles', icon: Newspaper },
     ],
   },
   {
-    label: 'Monitoring',
+    id: 'monitoring',
     items: [
-      { to: '/projects', label: 'Opinion Monitor', icon: CalendarDays },
-      { to: '/competitors', label: 'Competitor Analysis', icon: Radar, permission: 'competitors.view' },
+      { to: '/projects', labelKey: 'nav.opinionMonitor', icon: CalendarDays },
+      { to: '/competitors', labelKey: 'nav.competitorAnalysis', icon: Radar, permission: 'competitors.view' },
     ],
   },
   {
-    label: 'Setup',
+    id: 'setup',
     items: [
-      { to: '/sources', label: 'Sources', icon: Rss },
-      { to: '/workflow', label: 'Manual Run', icon: GitMerge },
-      { to: '/pipeline-runs', label: 'Pipeline Runs', icon: Database },
+      { to: '/sources', labelKey: 'nav.sources', icon: Rss },
+      { to: '/workflow', labelKey: 'nav.manualRun', icon: GitMerge },
+      { to: '/pipeline-runs', labelKey: 'nav.pipelineRuns', icon: Database },
     ],
   },
 ];
 
 const ADMIN_NAV_ITEMS = [
-  { to: '/admin/users', label: 'Users', icon: Users, permission: 'users.view' },
-  { to: '/admin/roles', label: 'Roles', icon: ShieldCheck, permission: 'roles.view' },
-  { to: '/admin/project-linkage', label: 'Project Access', icon: Link2, permission: 'projects.link_users' },
+  { to: '/admin/users', labelKey: 'nav.users', icon: Users, permission: 'users.view' },
+  { to: '/admin/roles', labelKey: 'nav.roles', icon: ShieldCheck, permission: 'roles.view' },
+  { to: '/admin/project-linkage', labelKey: 'nav.projectAccess', icon: Link2, permission: 'projects.link_users' },
 ];
 
 // Rendered as one more collapsible group alongside NAV_SECTIONS so admin gets
 // the same expand/collapse and permission-filtering treatment as everything else.
-const ALL_NAV_SECTIONS = [...NAV_SECTIONS, { label: 'Admin', items: ADMIN_NAV_ITEMS }];
+const ALL_NAV_SECTIONS = [...NAV_SECTIONS, { id: 'admin', items: ADMIN_NAV_ITEMS }];
 
 const SECTION_STATE_KEY = 'strata.sidebarSections';
 
@@ -70,9 +72,14 @@ function loadSectionState() {
   }
 }
 
-function sectionDomId(label) {
-  return `sidebar-section-${label.toLowerCase().replace(/\s+/g, '-')}`;
+function sectionDomId(id) {
+  return `sidebar-section-${id}`;
 }
+
+// Open/closed state is keyed by stable section id, not the (translated)
+// heading. The old English headings are still honored so a saved state from
+// before localization survives.
+const LEGACY_SECTION_KEYS = { collection: 'Collection', monitoring: 'Monitoring', setup: 'Setup', admin: 'Admin' };
 
 export default function Sidebar({
   collapsed = false,
@@ -80,6 +87,7 @@ export default function Sidebar({
   mobileOpen = false,
   onCloseMobile = () => {},
 }) {
+  const { t } = useTranslation();
   const { user, hasPermission, logout } = useAuth();
   const navigate = useNavigate();
   const [openSections, setOpenSections] = useState(loadSectionState);
@@ -88,11 +96,13 @@ export default function Sidebar({
   const showCollapsed = collapsed && !mobileOpen;
 
   // Sections default to open unless the user has explicitly collapsed them before.
-  const isSectionOpen = (label) => openSections[label] !== false;
+  const isSectionOpen = (id) => (openSections[id] ?? openSections[LEGACY_SECTION_KEYS[id]]) !== false;
 
-  const toggleSection = (label) => {
+  const toggleSection = (id) => {
     setOpenSections((prev) => {
-      const next = { ...prev, [label]: !(prev[label] !== false) };
+      const wasOpen = (prev[id] ?? prev[LEGACY_SECTION_KEYS[id]]) !== false;
+      const next = { ...prev, [id]: !wasOpen };
+      delete next[LEGACY_SECTION_KEYS[id]];
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(next));
       }
@@ -108,6 +118,10 @@ export default function Sidebar({
   const initials = user?.username
     ? user.username.trim().slice(0, 2).toUpperCase()
     : '?';
+
+  const toggleLabel = mobileOpen
+    ? t('nav.closeNavigation')
+    : (collapsed ? t('nav.expandNavigation') : t('nav.collapseNavigation'));
 
   const navStyle = ({ isActive }) => ({
     background: isActive ? 'white' : 'rgba(255,255,255,0.45)',
@@ -125,11 +139,11 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="sidebar-brand">
           {showCollapsed ? (
-            <span className="sidebar-brand-mark">S</span>
+            <span className="sidebar-brand-mark">{t('app.brandMark')}</span>
           ) : (
             <>
-              <h1 className="title">Scraper</h1>
-              <p className="subtitle">Media Intelligence</p>
+              <h1 className="title">{t('app.name')}</h1>
+              <p className="subtitle">{t('app.taglineShort')}</p>
             </>
           )}
         </div>
@@ -137,10 +151,11 @@ export default function Sidebar({
           type="button"
           className="sidebar-toggle-btn"
           onClick={mobileOpen ? onCloseMobile : onToggleCollapse}
-          title={mobileOpen ? 'Close navigation' : (collapsed ? 'Expand navigation' : 'Collapse navigation')}
-          aria-label={mobileOpen ? 'Close navigation' : (collapsed ? 'Expand navigation' : 'Collapse navigation')}
+          title={toggleLabel}
+          aria-label={toggleLabel}
         >
-          {mobileOpen ? <X size={18} /> : (collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />)}
+          {/* Chevrons point toward the content edge, so they mirror in RTL via .icon-flip-rtl. */}
+          {mobileOpen ? <X size={18} /> : (collapsed ? <ChevronsRight size={18} className="icon-flip-rtl" /> : <ChevronsLeft size={18} className="icon-flip-rtl" />)}
         </button>
       </div>
 
@@ -152,7 +167,9 @@ export default function Sidebar({
           );
           if (!visible.length) return null;
 
-          const links = visible.map(({ to, label, icon: Icon }) => (
+          const links = visible.map(({ to, labelKey, icon: Icon }) => {
+            const label = t(labelKey);
+            return (
             <NavLink
               key={to}
               to={to}
@@ -163,25 +180,26 @@ export default function Sidebar({
             >
               <Icon size={18} /> {!showCollapsed && <span>{label}</span>}
             </NavLink>
-          ));
+            );
+          });
 
           // Collapsed desktop rail stays a flat icon list; no headers to toggle.
           if (showCollapsed) {
-            return <React.Fragment key={section.label}>{links}</React.Fragment>;
+            return <React.Fragment key={section.id}>{links}</React.Fragment>;
           }
 
-          const open = isSectionOpen(section.label);
-          const domId = sectionDomId(section.label);
+          const open = isSectionOpen(section.id);
+          const domId = sectionDomId(section.id);
           return (
-            <div className="sidebar-nav-group" key={section.label}>
+            <div className="sidebar-nav-group" key={section.id}>
               <button
                 type="button"
                 className="sidebar-nav-section"
-                onClick={() => toggleSection(section.label)}
+                onClick={() => toggleSection(section.id)}
                 aria-expanded={open}
                 aria-controls={domId}
               >
-                <span>{section.label}</span>
+                <span>{t(`nav.sections.${section.id}`)}</span>
                 <ChevronDown size={14} className={`sidebar-nav-chevron${open ? '' : ' sidebar-nav-chevron-closed'}`} />
               </button>
               {open && (
@@ -198,23 +216,24 @@ export default function Sidebar({
         <div className="sidebar-profile">
           <div
             className="sidebar-profile-row"
-            title={showCollapsed ? `${user.username} (${user.role})` : undefined}
+            title={showCollapsed ? t('nav.profileTitle', { username: user.username, role: t(`roleNames.${user.role}`, { defaultValue: user.role }) }) : undefined}
           >
             <div className="sidebar-avatar">{initials}</div>
             {!showCollapsed && (
               <div className="sidebar-profile-meta">
-                <span className="sidebar-profile-name">{user.username}</span>
-                <span className={`panel-chip role-${user.role}`}>{user.role}</span>
+                <bdi className="sidebar-profile-name">{user.username}</bdi>
+                <span className={`panel-chip role-${user.role}`}>{t(`roleNames.${user.role}`, { defaultValue: user.role })}</span>
               </div>
             )}
           </div>
+          <LanguageSwitcher compact={showCollapsed} className="sidebar-language-switcher" />
           <button
             type="button"
             className="btn-secondary sidebar-logout"
             onClick={handleLogout}
-            title={showCollapsed ? 'Log out' : undefined}
+            title={showCollapsed ? t('nav.logOut') : undefined}
           >
-            <LogOut size={16} /> {!showCollapsed && 'Log out'}
+            <LogOut size={16} className="icon-flip-rtl" /> {!showCollapsed && t('nav.logOut')}
           </button>
         </div>
       )}

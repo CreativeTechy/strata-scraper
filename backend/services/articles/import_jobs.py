@@ -128,11 +128,16 @@ def run_import_job(run_id: str, path: str, project_id: int | None = None) -> Non
             **fields,
         )
 
-    def note_error(line_number: int, message: str) -> None:
+    def note_error(line_number: int, message: str, code: str, params: dict | None = None) -> None:
+        # `code`/`params` are the translatable twin of the English `error`
+        # (see api/error_codes.py); the dashboard renders them per line.
         nonlocal skipped
         skipped += 1
         if len(errors) < MAX_ERRORS_REPORTED:
-            errors.append({"line": line_number, "error": message})
+            item = {"line": line_number, "error": message, "code": code}
+            if params:
+                item["params"] = params
+            errors.append(item)
 
     def flush() -> None:
         nonlocal saved, batch
@@ -167,14 +172,14 @@ def run_import_job(run_id: str, path: str, project_id: int | None = None) -> Non
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    note_error(lineno, f"Invalid JSON: {exc.msg}")
+                    note_error(lineno, f"Invalid JSON: {exc.msg}", "articles.import_line_invalid_json", {"reason": exc.msg})
                     continue
                 if not isinstance(entry, dict):
-                    note_error(lineno, "Expected a JSON object.")
+                    note_error(lineno, "Expected a JSON object.", "articles.import_line_not_object")
                     continue
                 url = str(entry.get("url") or "").strip()
                 if not url:
-                    note_error(lineno, "Missing url.")
+                    note_error(lineno, "Missing url.", "articles.import_line_missing_url")
                     continue
 
                 row = {key: value for key, value in entry.items() if key in allowed}

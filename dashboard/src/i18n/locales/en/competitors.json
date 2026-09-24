@@ -1,0 +1,326 @@
+{
+  "platforms": {
+    "rss": "RSS",
+    "web": "Web",
+    "hashtag": "Hashtag",
+    "keyword": "Keyword",
+    "username": "X Account",
+    "tweet": "Single Post",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "unknown": "Unknown"
+  },
+  "sourceKinds": {
+    "reddit": {
+      "subreddit": "Subreddit",
+      "user": "User / profile",
+      "search": "Keyword / search"
+    },
+    "linkedin": {
+      "company": "Company page",
+      "profile": "Personal profile",
+      "search": "Keyword / hashtag search"
+    },
+    "threads": {
+      "profile": "Profile",
+      "search": "Keyword / search"
+    },
+    "facebook": {
+      "page": "Page",
+      "group": "Group",
+      "profile": "Personal profile",
+      "search": "Keyword / search"
+    },
+    "instagram": {
+      "profile": "Profile",
+      "hashtag": "Hashtag",
+      "search": "Keyword / search"
+    }
+  },
+  "placeholders": {
+    "term": {
+      "hashtag": "Hashtag, without # (e.g. EVSummit)",
+      "username": "X account, without @ (e.g. elonmusk)",
+      "keyword": "Keyword or phrase (e.g. electric vehicles)"
+    },
+    "url": {
+      "reddit": "r/subreddit, u/username, a search term, or a reddit.com URL",
+      "telegram": "@channelname, channelname, or https://t.me/channelname",
+      "linkedin": "Company/profile slug, a search phrase, or a linkedin.com URL",
+      "tweet": "Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)",
+      "threads": "Handle (without @), a search phrase, or a threads.com URL",
+      "facebook": "Page/group/profile slug, a search phrase, or a facebook.com URL",
+      "instagram": "Handle (without @), a hashtag, a search phrase, or an instagram.com URL"
+    },
+    "value": "Value"
+  },
+  "sizeTiers": {
+    "enterprise": "Enterprise",
+    "mid_market": "Mid-market",
+    "smb": "SMB",
+    "startup": "Startup",
+    "unknown": "Unknown size"
+  },
+  "accountStatus": {
+    "valid": "Valid",
+    "pending": "Pending",
+    "rejected": "Rejected"
+  },
+  "studyStatus": {
+    "draft": "Draft",
+    "active": "Active",
+    "archived": "Archived"
+  },
+  "backToStudies": "Back to studies",
+  "studyNotFound": "Study not found.",
+  "optional": "optional",
+  "dateRangeSeparator": "to",
+  "workspace": {
+    "allStudies": "All studies",
+    "untitledStudy": "Competitor study",
+    "trackedAgainst": "Tracked against <strong>{{name}}</strong>. Confirm each competitor's channels and they are collected on every run of this study.",
+    "trackedAgainstInMarket": "Tracked against <strong>{{name}}</strong> in {{market}}. Confirm each competitor's channels and they are collected on every run of this study.",
+    "noProfile": "Add your business profile so competitor discovery has something to compare against.",
+    "runScrape": "Run scrape",
+    "starting": "Starting…",
+    "competitorCount_one": "{{count}} competitor",
+    "competitorCount_other": "{{count}} competitors",
+    "deleteStudy": "Delete study",
+    "scrapeFailed": "Scrape request failed ({{status}})",
+    "scrapeAlreadyRunning": "A scrape is already running for this study.",
+    "scrapeStarted": "Scrape started.",
+    "viewProgress": "View progress",
+    "pendingChannels_one": "{{count}} channel still awaiting confirmation. Unconfirmed channels are not scraped, so nothing from them is collected.",
+    "pendingChannels_other": "{{count}} channels still awaiting confirmation. Unconfirmed channels are not scraped, so nothing from them is collected.",
+    "reviewThem": "Review them",
+    "stats": {
+      "tracked": "Tracked",
+      "totalSources": "Total sources",
+      "valid": "Valid",
+      "pending": "Pending",
+      "lastScrape": "Last scrape"
+    },
+    "deleteConfirm": {
+      "title": "Delete study \"{{name}}\"?",
+      "message": "This will permanently remove the study, its business profile, tracked competitors, and findings.",
+      "confirm": "Delete study",
+      "cancel": "Keep study"
+    },
+    "distribution": {
+      "title": "Sources distribution",
+      "hint": "Every discovered or manually-added source across all competitors, by source type.",
+      "typeCount_one": "{{count}} source type",
+      "typeCount_other": "{{count}} source types",
+      "empty": "No sources yet."
+    },
+    "sources": {
+      "title": "All sources",
+      "summary_one": "{{count}} source across every tracked and suggested competitor.",
+      "summary_other": "{{count}} sources across every tracked and suggested competitor.",
+      "searchPlaceholder": "Search competitor, handle, or URL…",
+      "filterByCompetitor": "Filter by competitor",
+      "allCompetitors": "All competitors",
+      "filterByType": "Filter by source type",
+      "allTypes": "All source types",
+      "filterByStatus": "Filter by validation status",
+      "allStatuses": "All statuses",
+      "confidence": "{{percent}} confidence",
+      "noMatchesTitle": "No matching sources",
+      "noMatchesHint": "Try a different search term or clear the filters.",
+      "emptyTitle": "No sources yet",
+      "emptyHint": "Track a competitor and confirm or discover its channels to see them here.",
+      "chooseCompetitors": "Choose competitors"
+    },
+    "cultural": {
+      "title": "Cultural fit",
+      "targeting": "Targeting {{countries}}.",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "analyzing": "Analyzing…",
+      "rerun": "Re-run analysis",
+      "run": "Run analysis",
+      "summary": "Summary",
+      "successFactors": "Success factors",
+      "benefits": "Benefits",
+      "challenges": "Challenges",
+      "insights": "Other insights",
+      "failed": "The analysis could not be generated.",
+      "notYet": "Not yet analyzed — run it here, or from the study wizard."
+    }
+  },
+  "edit": {
+    "title": "Edit study",
+    "intro": "Update the study, its business context, tracking schedule, and data window.",
+    "saved": "Saved. Study details, business context, and schedule are up to date.",
+    "study": {
+      "title": "Study",
+      "name": "Name",
+      "description": "Description",
+      "status": "Status"
+    },
+    "context": {
+      "title": "Business context",
+      "hint": "This is the description competitors get matched against, and what every “how does this affect us” judgement is measured by.",
+      "readingSite": "Reading your site…",
+      "rerun": "Re-run analysis",
+      "businessName": "Business name",
+      "website": "Website",
+      "description": "Description",
+      "industry": "Industry",
+      "market": "Market you compete in",
+      "targetCountries": "Target countries",
+      "targetCountriesHint": "optional — leave blank to search globally",
+      "positioning": "Positioning",
+      "offerings": "What you offer",
+      "offeringsPlaceholder": "demand forecasting",
+      "audience": "Who buys it",
+      "audiencePlaceholder": "operations directors",
+      "differentiators": "What sets you apart",
+      "differentiatorsHint": "used to judge competitor moves",
+      "differentiatorsPlaceholder": "implementation in under 30 days",
+      "marketContext": "Market context"
+    },
+    "schedule": {
+      "title": "Tracking schedule",
+      "hint": "Automatically re-scrape this study’s confirmed competitor channels on a recurring interval.",
+      "enabled": "Scrape automatically",
+      "every": "Every",
+      "intervalValue": "Interval",
+      "intervalUnit": "Interval unit"
+    },
+    "window": {
+      "title": "Data retrieval window",
+      "hint": "Scopes which article publish dates get pulled in. Leave blank to pull in articles from any date.",
+      "startDate": "Start date",
+      "endDate": "End date"
+    }
+  },
+  "list": {
+    "title": "Competitors",
+    "summary_one": "{{count}} competitor, {{tracked}} tracked.",
+    "summary_other": "{{count}} competitors, {{tracked}} tracked.",
+    "summaryHint": "Only tracked competitors are scraped, and only their confirmed channels are collected.",
+    "discover": "Discover with AI",
+    "discovering": "Discovering…",
+    "findChannelsCount": "Find channels ({{formatted}})",
+    "findingChannels": "Finding channels…",
+    "exportTitle": "Export this study's tracked competitors as JSONL, alongside its articles.",
+    "preparing": "Preparing…",
+    "exportCompetitors": "Export competitors",
+    "exportFailed": "Failed to export competitors ({{status}})",
+    "discoveryFailed": "Competitor discovery failed.",
+    "channelDiscoveryFailed": "Channel discovery failed.",
+    "discovered_one": "Discovered {{count}} competitor.",
+    "discovered_other": "Discovered {{count}} competitors.",
+    "dropped_one": "{{count}} suggestion dropped during checking.",
+    "dropped_other": "{{count}} suggestions dropped during checking.",
+    "searchPlaceholder": "Search by name, website, or alias…",
+    "addManually": "Add competitor manually",
+    "emptyTitle": "No competitors yet",
+    "emptyHint": "Add one above, or discover some with AI.",
+    "noMatchesTitle": "No matching competitors",
+    "noMatchesHint": "Try a different search term.",
+    "noRank": "-",
+    "channelsConfirmed": "{{valid}}/{{total}} channels confirmed",
+    "pendingCount_one": "{{count}} pending",
+    "pendingCount_other": "{{count}} pending",
+    "reportCount_one": "{{count}} report",
+    "reportCount_other": "{{count}} reports",
+    "headquarteredTitle": "Where this company is headquartered",
+    "basedIn": "Based in {{country}}",
+    "competesInTitle": "Where this competitor actually competes with your business",
+    "competesIn": "Competes in {{countries}}",
+    "unverifiedTitle": "Tracked, but a live web check couldn't confirm this company exists — worth a manual look.",
+    "unverified": "Couldn’t verify",
+    "channels": "Channels",
+    "hideChannels": "Hide channels",
+    "tracking": "Tracking",
+    "track": "Track",
+    "deleteCompetitor": "Delete {{name}}",
+    "loadingChannels": "Loading channels…",
+    "noChannels": "No channels found yet.",
+    "findChannels": "Find channels",
+    "sure": "{{percent}} sure",
+    "notTheirs": "Not theirs",
+    "removeConfirm": {
+      "title": "Remove \"{{name}}\" from this study?",
+      "message": "This permanently removes the competitor and its channels. Any past findings about it are kept.",
+      "confirm": "Remove competitor",
+      "confirming": "Removing…",
+      "cancel": "Keep competitor"
+    },
+    "exportConfirm": {
+      "title": "Export competitors?",
+      "message_one": "This will download {{count}} tracked competitor for \"{{name}}\" as JSONL.",
+      "message_other": "This will download {{count}} tracked competitors for \"{{name}}\" as JSONL.",
+      "messageUnnamed_one": "This will download {{count}} tracked competitor for this study as JSONL.",
+      "messageUnnamed_other": "This will download {{count}} tracked competitors for this study as JSONL."
+    }
+  },
+  "sourceEditor": {
+    "chooseType": "Choose source type",
+    "kindLabel": "{{platform}} source kind",
+    "aliases": {
+      "label": "Other names",
+      "placeholder": "e.g. Younes Bros, قهوة يونس",
+      "saved": "Saved",
+      "hint": "Comma separated. Articles naming any of these count as evidence for this competitor."
+    },
+    "displayNamePlaceholder": "display name (optional)",
+    "competitorName": "Competitor name",
+    "competitorNamePlaceholder": "Acme Inc.",
+    "website": "Website",
+    "description": "Description",
+    "descriptionPlaceholder": "What they do, briefly",
+    "sources": "Sources",
+    "sourcesHint": "optional — add now or later",
+    "removeSource": "Remove source",
+    "addAnotherSource": "Add another source",
+    "addCompetitor": "Add competitor",
+    "errors": {
+      "nameRequired": "A competitor name is required.",
+      "valueRequired": "Enter a value.",
+      "invalidUrl": "Enter a valid URL."
+    }
+  },
+  "studies": {
+    "title": "Competitor Analysis",
+    "intro": "Track what your competitors are doing, what it means for your business, and what to do about it. Separate from sentiment and opinion tracking, which answers what people are saying.",
+    "newStudy": "New study",
+    "searchPlaceholder": "Search study, business, market…",
+    "filterByStatus": "Filter by status",
+    "allStatuses": "All statuses",
+    "lastScrapedFrom": "Last scraped from",
+    "lastScrapedTo": "Last scraped to",
+    "switchView": "Switch study view",
+    "viewCards": "Cards",
+    "viewList": "List",
+    "noProfile": "Business profile not set up yet",
+    "trackedCount": "{{formatted}} tracked",
+    "trackedStrong": "<strong>{{formatted}}</strong> tracked",
+    "articleCount_one": "{{formatted}} article",
+    "articleCount_other": "{{formatted}} articles",
+    "articlesStrong_one": "<strong>{{formatted}}</strong> article",
+    "articlesStrong_other": "<strong>{{formatted}}</strong> articles",
+    "scheduled": "scheduled",
+    "lastScraped": "Last scraped {{time}}",
+    "neverScraped": "Never scraped",
+    "noMatchesTitle": "No matching studies",
+    "noMatchesHint": "Try adjusting your search, status, or date filters.",
+    "emptyTitle": "No competitor studies yet",
+    "emptyHint": "Start one and Strata will read your website to work out your market, find who you compete with, and collect everything they publish.",
+    "createFirst": "Create your first study"
+  },
+  "errorContext": {
+    "loadStudies": "load competitor studies",
+    "loadStudy": "load this competitor study",
+    "loadOrUpdateStudy": "load or update this competitor study",
+    "saveStudy": "save this competitor study",
+    "generateAnalysis": "generate this analysis",
+    "updateCompetitors": "update competitors"
+  }
+}

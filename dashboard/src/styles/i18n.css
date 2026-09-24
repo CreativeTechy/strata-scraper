@@ -1,0 +1,128 @@
+/* Language/direction support shared by every page.
+   <html lang dir> is set from the selected UI language (src/i18n/index.js);
+   component CSS uses logical properties (margin-inline-start, text-align:
+   start, inset-inline-end, ...) so it mirrors without per-rule overrides. */
+
+/* Arabic script first, Latin fallback for mixed names/URLs. Headings use the
+   same stack: Plus Jakarta Sans has no Arabic glyphs. */
+:root:lang(ar) body,
+:root:lang(ar) .title,
+:root:lang(ar) h1,
+:root:lang(ar) h2,
+:root:lang(ar) h3,
+:root:lang(ar) h4,
+:root:lang(ar) button,
+:root:lang(ar) input,
+:root:lang(ar) select,
+:root:lang(ar) textarea {
+  font-family: 'Noto Sans Arabic', 'Inter', sans-serif;
+}
+
+/* Arabic glyphs need a little more line height than Latin to stay legible,
+   and letter-spacing breaks cursive joining. */
+:root:lang(ar) body {
+  line-height: 1.6;
+}
+:root:lang(ar) * {
+  letter-spacing: normal !important;
+}
+
+/* Directional icons (chevrons, arrows, "log out") point along the reading
+   direction, so they mirror in RTL. Non-directional icons are left alone. */
+[dir='rtl'] .icon-flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* Content whose direction comes from the text itself, not the UI language:
+   article titles/bodies, mixed Arabic/English names. */
+.bidi-auto {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* URLs, handles, IDs, code: always left-to-right, isolated so surrounding
+   RTL text doesn't reorder their punctuation. */
+.ltr-isolate {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+[dir='rtl'] .ltr-isolate {
+  text-align: end;
+}
+[dir='rtl'] .ltr-isolate.ltr-inline {
+  text-align: start;
+}
+
+/* ---- Language switcher ------------------------------------------------ */
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.language-switcher-icon {
+  margin-inline: 6px 2px;
+  color: var(--text-light);
+}
+
+.language-switcher-option {
+  border: 0;
+  background: transparent;
+  color: var(--text-light);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.language-switcher-option[lang='ar'] {
+  font-family: 'Noto Sans Arabic', 'Inter', sans-serif;
+}
+
+.language-switcher-option.is-active {
+  background: white;
+  color: var(--text-dark);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.language-switcher-option:focus-visible,
+.language-switcher-compact:focus-visible {
+  outline: 2px solid var(--secondary-color);
+  outline-offset: 2px;
+}
+
+.language-switcher-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.sidebar-language-switcher.language-switcher {
+  align-self: stretch;
+  justify-content: center;
+}
+
+.login-language-switcher {
+  position: absolute;
+  inset-block-start: 20px;
+  inset-inline-end: 20px;
+  z-index: 2;
+}
+
+.login-page {
+  position: relative;
+}

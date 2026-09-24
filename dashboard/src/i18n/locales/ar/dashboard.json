@@ -1,0 +1,96 @@
+{
+  "header": {
+    "kicker": "لوحة المعلومات",
+    "title": "نظرة عامة",
+    "subtitle": "حالة الجمع لكل مشروع على حدة - اختر مشروعًا لترى ما جمعه وما يحتاج إلى مراجعة.",
+    "projectLabel": "المشروع",
+    "projectOption": "{{name}} ({{mode}})",
+    "modes": {
+      "competitor": "دراسة المنافسين",
+      "opinion": "رصد الرأي"
+    }
+  },
+  "noProjects": {
+    "title": "لا توجد مشاريع بعد",
+    "message": "أنشئ مشروعًا لبدء الجمع، وستظهر مقاييسه هنا.",
+    "action": "الانتقال إلى المشاريع"
+  },
+  "errors": {
+    "loadFailed": "تعذّر تحميل بيانات لوحة المعلومات."
+  },
+  "errorContext": {
+    "loadDashboard": "تحميل لوحة معلومات هذا المشروع"
+  },
+  "stats": {
+    "totalArticles": "إجمالي المقالات",
+    "totalSources": "إجمالي المصادر",
+    "totalRuns": "إجمالي عمليات التشغيل",
+    "competitorsTracked": "المنافسون المتتبَّعون"
+  },
+  "runsChart": {
+    "title": "المقالات في كل عملية تشغيل",
+    "caption": "عدد المقالات التي حفظتها كل عملية جمع، من الأقدم إلى الأحدث.",
+    "emptyTitle": "لا توجد عمليات تشغيل بعد",
+    "emptyMessage": "بمجرد تشغيل عملية جمع لهذا المشروع، ستظهر أعداد مقالاتها في هذا الرسم البياني.",
+    "runNumber": "#{{number}}",
+    "articlesSaved": "المقالات المحفوظة"
+  },
+  "platformBreakdown": {
+    "title": "المقالات حسب المنصة",
+    "caption": "مدى إسهام كل منصة جمع مهيّأة في مقالات هذا المشروع.",
+    "emptyTitle": "لا توجد بيانات للمنصات بعد",
+    "emptyMessage": "ستظهر إجماليات المنصات بعد تهيئة المصادر.",
+    "shareBelow": "<{{value}}",
+    "shareOfArticles": "{{share}} من مقالات المشروع",
+    "configuredSources_zero": "لا توجد مصادر مهيّأة",
+    "configuredSources_one": "مصدر واحد مهيّأ",
+    "configuredSources_two": "مصدران مهيّآن",
+    "configuredSources_few": "{{formatted}} مصادر مهيّأة",
+    "configuredSources_many": "{{formatted}} مصدرًا مهيّأً",
+    "configuredSources_other": "{{formatted}} مصدر مهيّأ"
+  },
+  "platforms": {
+    "rss": "RSS",
+    "web": "الويب",
+    "keyword": "كلمة مفتاحية",
+    "twitter": "Twitter/X",
+    "x": "X",
+    "hashtag": "وسم",
+    "blog": "مدونة",
+    "news": "الأخبار",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "other": "مستورد / أخرى"
+  },
+  "sourceBreakdown": {
+    "title": "المقالات حسب المصدر",
+    "caption": "المصادر التي أسهمت بأكبر عدد من المقالات.",
+    "emptyTitle": "لم يُجمع شيء بعد",
+    "emptyMessage": "سيظهر هنا توزيع المقالات حسب المصدر بعد اكتمال عملية جمع.",
+    "unknownSource": "غير معروف",
+    "paginationLabel": "التنقل بين صفحات المقالات حسب المصدر"
+  },
+  "attention": {
+    "paginationLabel": "التنقل بين صفحات قائمة المتابعة"
+  },
+  "sourceAttention": {
+    "title": "مصادر تحتاج إلى متابعة",
+    "caption": "المصادر التي حُظرت أو واجهت خطأً أو لم تُرجع أي نتائج في آخر عملية تشغيل.",
+    "healthy": "عملت جميع المصادر بشكل سليم في آخر عملية تشغيل",
+    "paginationLabel": "التنقل بين صفحات المصادر التي تحتاج إلى متابعة",
+    "fallbackTitle": "المصدر يحتاج إلى متابعة",
+    "fallbackAction": "راجع إعدادات المصدر وحاول مرة أخرى.",
+    "reviewSources": "مراجعة المصادر"
+  },
+  "competitorAttention": {
+    "title": "منافسون يحتاجون إلى متابعة",
+    "caption": "المنافسون المتتبَّعون الذين فشلت مصادرهم المرتبطة أو لم تُرجع أي مقالة في آخر عملية تشغيل.",
+    "healthy": "عملت مصادر جميع المنافسين المتتبَّعين بشكل سليم في آخر عملية تشغيل",
+    "paginationLabel": "التنقل بين صفحات المنافسين الذين يحتاجون إلى متابعة",
+    "sourceIssue": "{{platform}}: {{reason}}"
+  }
+}

@@ -1,0 +1,182 @@
+{
+  "types": {
+    "rss": "RSS",
+    "web": "الويب",
+    "hashtag": "وسم",
+    "keyword": "كلمة مفتاحية",
+    "username": "حساب X",
+    "tweet": "منشور واحد",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "twitter": "Twitter/X"
+  },
+  "kinds": {
+    "reddit": {
+      "subreddit": "مجتمع فرعي (Subreddit)",
+      "user": "مستخدم / ملف شخصي",
+      "search": "كلمة مفتاحية / بحث (في كل Reddit)",
+      "subreddit_search": "كلمة مفتاحية داخل مجتمع فرعي (Subreddit)"
+    },
+    "linkedin": {
+      "company": "صفحة شركة",
+      "profile": "ملف شخصي",
+      "search": "بحث بكلمة مفتاحية / وسم"
+    },
+    "threads": {
+      "profile": "ملف شخصي",
+      "search": "كلمة مفتاحية / بحث"
+    },
+    "facebook": {
+      "page": "صفحة",
+      "group": "مجموعة",
+      "profile": "ملف شخصي",
+      "search": "كلمة مفتاحية / بحث"
+    },
+    "instagram": {
+      "profile": "ملف شخصي",
+      "hashtag": "وسم",
+      "search": "كلمة مفتاحية / بحث"
+    }
+  },
+  "kicker": "مكتبة المصادر",
+  "sourceStatus": {
+    "enabled": "مفعّل",
+    "disabled": "معطّل"
+  },
+  "reach": {
+    "limited": "محدود",
+    "global": "عام"
+  },
+  "form": {
+    "editTitle": "تعديل المصدر",
+    "createTitle": "إنشاء مصدر",
+    "saveButton": "حفظ المصدر",
+    "createButton": "إنشاء المصدر",
+    "editSubtitle": "حدّث مصدرًا متتبَّعًا وحافظ على تزامن إسناده إلى المشاريع.",
+    "createSubtitle": "أضف مصدرًا جديدًا وصنّفه وأسنده إلى المشاريع التي سيغذّيها.",
+    "mode": "الوضع",
+    "modeEditing": "تعديل",
+    "modeCreating": "إنشاء",
+    "projects": "المشاريع",
+    "chipEditing": "تحديث مصدر موجود",
+    "chipCreating": "إنشاء مصدر جديد",
+    "sourceType": "نوع المصدر",
+    "chooseSourceType": "اختر نوع المصدر",
+    "twitterKind": "نوع مصدر Twitter/X",
+    "redditKind": "نوع مصدر Reddit",
+    "linkedinKind": "نوع مصدر LinkedIn",
+    "threadsKind": "نوع مصدر Threads",
+    "facebookKind": "نوع مصدر Facebook",
+    "instagramKind": "نوع مصدر Instagram",
+    "redditKindHelp": "يُستخدم فقط لتفسير كلمة مفردة مُدخلة أدناه (مثل \"ev\" بوصفها مجتمعًا فرعيًا أم عبارة بحث). أما المدخلات المسبوقة (r/...، u/...) وروابط reddit.com الكاملة فواضحة في جميع الأحوال.",
+    "facebookKindHelp": "يُستخدم فقط لتفسير معرّف مختصر مُدخل أدناه (صفحة أم ملف شخصي)، إذ يستخدم Facebook صيغة الرابط نفسها لكليهما. أما المجموعات والبحث وروابط profile.php/people/... الكاملة فواضحة في جميع الأحوال. يتطلب رمز Apify API ‏(APIFY API TOKEN).",
+    "requiresApify": "يتطلب رمز Apify API ‏(APIFY API TOKEN)",
+    "sourceUrl": "رابط المصدر",
+    "urlPlaceholders": {
+      "default": "رابط المصدر",
+      "reddit": "r/subreddit أو u/username أو عبارة بحث أو رابط reddit.com",
+      "telegram": "@channelname أو channelname أو https://t.me/channelname",
+      "linkedin": "المعرّف المختصر للشركة/الملف الشخصي، أو عبارة بحث، أو رابط linkedin.com",
+      "tweet": "رابط المنشور الكامل (مثل https://x.com/elonmusk/status/1234567890)",
+      "threads": "اسم المستخدم (بدون @)، أو عبارة بحث، أو رابط threads.com",
+      "facebook": "المعرّف المختصر للصفحة/المجموعة/الملف الشخصي، أو عبارة بحث، أو رابط facebook.com",
+      "instagram": "اسم المستخدم (بدون @)، أو وسم، أو عبارة بحث، أو رابط instagram.com",
+      "redditSubredditSearch": "المجتمع الفرعي والكلمة المفتاحية (مثل lebanon protest)"
+    },
+    "displayName": "الاسم المعروض",
+    "optional": " (اختياري)",
+    "termPlaceholders": {
+      "default": "الاسم المعروض",
+      "hashtag": "الوسم بدون # (مثل EVSummit)",
+      "username": "حساب X بدون @ (مثل elonmusk)",
+      "keyword": "كلمة مفتاحية أو عبارة (مثل السيارات الكهربائية)"
+    },
+    "statusTitle": "حالة المصدر",
+    "statusHelp": "عطّل هذا المصدر لإبقائه في المكتبة دون استخدامه في عمليات التشغيل.",
+    "reachTitle": "نطاق المصدر",
+    "reachHelp": "لا تظهر المصادر المحدودة في قائمة المصادر القابلة للإسناد في صفحات إنشاء المشاريع وتعديلها، ما لم تكن مرتبطة بذلك المشروع مسبقًا.",
+    "assignKicker": "إسناد المشاريع",
+    "assignTitle": "اختر المشاريع التي سيغذّيها هذا المصدر",
+    "selectedCount_zero": "لم يُحدَّد أي مشروع",
+    "selectedCount_one": "مشروع واحد محدد",
+    "selectedCount_two": "مشروعان محددان",
+    "selectedCount_few": "{{count}} مشاريع محددة",
+    "selectedCount_many": "{{count}} مشروعًا محددًا",
+    "selectedCount_other": "{{count}} مشروع محدد",
+    "filterProjects": "تصفية المشاريع حسب الاسم",
+    "noProjectsTitle": "لا توجد مشاريع بعد",
+    "noProjectsHint": "أنشئ مشروعًا أولًا، ثم عُد لإسناد هذا المصدر إليه.",
+    "noMatchingProjectsTitle": "لا توجد مشاريع مطابقة",
+    "noMatchingProjectsHint": "جرّب عبارة بحث مختلفة في مربع الإسناد هذا.",
+    "discardTitle": "تجاهل التغييرات؟",
+    "discardMessage": "لديك تغييرات غير محفوظة على هذا المصدر. إذا ألغيت الآن، فستفقد جميع التعديلات في هذه الصفحة.",
+    "discardConfirm": "تجاهل التغييرات",
+    "keepEditing": "متابعة التعديل",
+    "saveFailed": "تعذّر حفظ المصدر.",
+    "redditSubredditSearchHelp": "أدخل المجتمع الفرعي ثم الكلمة المفتاحية أدناه، مثل \"lebanon protest\" أو \"r/lebanon protest\"."
+  },
+  "list": {
+    "title": "إدارة المصادر",
+    "subtitle": "نظّم مجموعة المصادر، وأسند المصادر إلى مشروع واحد أو أكثر، واجعل المصادر المفعّلة سهلة الاستعراض.",
+    "dataSource": "مصدر البيانات",
+    "search": "البحث",
+    "matches_zero": "لا توجد نتائج",
+    "matches_one": "نتيجة واحدة",
+    "matches_two": "نتيجتان",
+    "matches_few": "{{formatted}} نتائج",
+    "matches_many": "{{formatted}} نتيجةً",
+    "matches_other": "{{formatted}} نتيجة",
+    "addSource": "إضافة مصدر",
+    "stats": {
+      "total": "إجمالي المصادر",
+      "enabled": "مفعّلة",
+      "assigned": "مُسندة",
+      "rss": "مصادر RSS"
+    },
+    "filterByType": "تصفية المصادر حسب النوع",
+    "searchPlaceholder": "ابحث في المصادر أو الروابط أو أسماء المشاريع",
+    "statusFilter": {
+      "all": "جميع المصادر",
+      "enabled": "مفعّلة",
+      "disabled": "معطّلة",
+      "assigned": "مُسندة",
+      "unassigned": "غير مُسندة"
+    },
+    "reachFilter": {
+      "all": "عامة ومحدودة",
+      "global": "عامة",
+      "limited": "محدودة"
+    },
+    "trackedSources": "المصادر المتتبَّعة",
+    "visibleCount_zero": "لا توجد مصادر ظاهرة",
+    "visibleCount_one": "مصدر واحد ظاهر",
+    "visibleCount_two": "مصدران ظاهران",
+    "visibleCount_few": "{{formatted}} مصادر ظاهرة",
+    "visibleCount_many": "{{formatted}} مصدرًا ظاهرًا",
+    "visibleCount_other": "{{formatted}} مصدر ظاهر",
+    "emptyTitle": "لا توجد مصادر بعد",
+    "emptyHint": "أضف مصدرك الأول، ثم اربطه بمشروع واحد أو أكثر.",
+    "projectCount_zero": "لا توجد مشاريع",
+    "projectCount_one": "مشروع واحد",
+    "projectCount_two": "مشروعان",
+    "projectCount_few": "{{count}} مشاريع",
+    "projectCount_many": "{{count}} مشروعًا",
+    "projectCount_other": "{{count}} مشروع",
+    "unassigned": "غير مُسند",
+    "noMatchesTitle": "لا توجد مصادر مطابقة",
+    "noMatchesHint": "جرّب عبارة بحث أو عامل تصفية حالة مختلفًا.",
+    "deleteTitle": "حذف المصدر \"{{name}}\"؟",
+    "deleteMessage": "سيؤدي هذا إلى إزالة المصدر نهائيًا وفصله عن جميع المشاريع المرتبطة به.",
+    "deleteConfirm": "حذف المصدر",
+    "keepSource": "الإبقاء على المصدر",
+    "deleteFailed": "تعذّر حذف المصدر."
+  },
+  "errorContext": {
+    "save": "حفظ هذا المصدر",
+    "manage": "إدارة المصادر"
+  }
+}

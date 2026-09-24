@@ -25,7 +25,12 @@ import {
   PackageOpen,
   Layers3,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ErrorNotice from './ErrorNotice';
+import { apiError } from '../errors/apiError.js';
+import i18n from '../i18n/index.js';
+import { formatDateTime, formatNumber, formatPercent, isRtl } from '../i18n/format.js';
+import { translateFetchNote, translateSourceIssue } from '../lib/sourceIssue.js';
 import {
   ResponsiveContainer,
   LineChart,
@@ -37,41 +42,50 @@ import {
 } from 'recharts';
 import '../styles/Dashboard.css';
 
-function formatDateTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
+const CHART_DATE_OPTIONS = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
 
 function RunsChart({ runs }) {
+  const { t } = useTranslation('dashboard');
   if (!runs.length) {
     return (
       <div className="admin-empty-state">
         <div className="admin-empty-state-icon">
           <TrendingUp size={20} />
         </div>
-        <strong>No pipeline runs yet</strong>
-        <p>Once a scrape runs for this project, its article counts will chart here.</p>
+        <strong>{t('runsChart.emptyTitle')}</strong>
+        <p>{t('runsChart.emptyMessage')}</p>
       </div>
     );
   }
 
   const data = runs.map((run) => ({
-    label: run.sequence_number ? `#${run.sequence_number}` : formatDateTime(run.created_at),
-    when: formatDateTime(run.created_at),
+    label: run.sequence_number
+      ? t('runsChart.runNumber', { number: run.sequence_number })
+      : formatDateTime(run.created_at, CHART_DATE_OPTIONS),
+    when: formatDateTime(run.created_at, CHART_DATE_OPTIONS),
     articles: run.articles_saved || 0,
   }));
+  // Runs read oldest -> newest in the reading direction, so the time axis
+  // (and the value axis beside it) mirror in RTL.
+  const rtl = isRtl();
 
   return (
     <div className="dashboard-chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: -12 }}>
+        <LineChart data={data} margin={rtl ? { top: 8, right: -12, bottom: 0, left: 16 } : { top: 8, right: 16, bottom: 0, left: -12 }}>
           <CartesianGrid stroke="rgba(15, 23, 42, 0.08)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--text-light)' }} axisLine={false} tickLine={false} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: 'var(--text-light)' }} axisLine={false} tickLine={false} width={36} />
+          <XAxis dataKey="label" reversed={rtl} tick={{ fontSize: 12, fill: 'var(--text-light)' }} axisLine={false} tickLine={false} />
+          <YAxis
+            allowDecimals={false}
+            orientation={rtl ? 'right' : 'left'}
+            tickFormatter={(value) => formatNumber(value)}
+            tick={{ fontSize: 12, fill: 'var(--text-light)' }}
+            axisLine={false}
+            tickLine={false}
+            width={36}
+          />
           <Tooltip
-            formatter={(value) => [value, 'Articles saved']}
+            formatter={(value) => [formatNumber(value), t('runsChart.articlesSaved')]}
             labelFormatter={(label, payload) => payload?.[0]?.payload?.when || label}
             contentStyle={{ borderRadius: 12, border: '1px solid var(--border-soft)' }}
           />
@@ -100,6 +114,7 @@ const PLATFORM_ICONS = {
 };
 
 function PlatformBreakdown({ items, totalArticles }) {
+  const { t } = useTranslation('dashboard');
   const ranked = items
     .filter((item) => (Number(item.count) || 0) > 0)
     .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
@@ -110,8 +125,8 @@ function PlatformBreakdown({ items, totalArticles }) {
         <div className="admin-empty-state-icon">
           <Layers3 size={20} />
         </div>
-        <strong>No platform data yet</strong>
-        <p>Platform totals will appear once sources are configured.</p>
+        <strong>{t('platformBreakdown.emptyTitle')}</strong>
+        <p>{t('platformBreakdown.emptyMessage')}</p>
       </div>
     );
   }
@@ -125,7 +140,9 @@ function PlatformBreakdown({ items, totalArticles }) {
         const count = Math.max(0, Number(item.count) || 0);
         const sourceCount = Math.max(0, Number(item.source_count) || 0);
         const share = total > 0 ? (count / total) * 100 : 0;
-        const shareLabel = share > 0 && share < 0.1 ? '<0.1%' : `${share.toFixed(1)}%`;
+        const shareLabel = share > 0 && share < 0.1
+          ? t('platformBreakdown.shareBelow', { value: formatPercent(0.001, { maximumFractionDigits: 1 }) })
+          : formatPercent(share / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
         return (
           <div className="dashboard-platform-card" key={item.platform}>
@@ -135,12 +152,14 @@ function PlatformBreakdown({ items, totalArticles }) {
               </span>
               <span className="dashboard-platform-share">{shareLabel}</span>
             </div>
-            <span className="dashboard-platform-name">{item.label || item.platform}</span>
-            <strong className="dashboard-platform-count">{count.toLocaleString()}</strong>
-            <span className="dashboard-platform-meta">
-              {sourceCount.toLocaleString()} configured source{sourceCount === 1 ? '' : 's'}
+            <span className="dashboard-platform-name">
+              {t(`platforms.${item.platform}`, { defaultValue: item.label || item.platform })}
             </span>
-            <div className="dashboard-platform-track" aria-label={`${shareLabel} of project articles`}>
+            <strong className="dashboard-platform-count">{formatNumber(count)}</strong>
+            <span className="dashboard-platform-meta">
+              {t('platformBreakdown.configuredSources', { count: sourceCount, formatted: formatNumber(sourceCount) })}
+            </span>
+            <div className="dashboard-platform-track" aria-label={t('platformBreakdown.shareOfArticles', { share: shareLabel })}>
               <span style={{ width: `${Math.min(100, share)}%` }} />
             </div>
           </div>
@@ -151,6 +170,7 @@ function PlatformBreakdown({ items, totalArticles }) {
 }
 
 function SourceBreakdown({ items }) {
+  const { t } = useTranslation('dashboard');
   const [page, setPage] = useState(0);
 
   if (!items.length) {
@@ -159,8 +179,8 @@ function SourceBreakdown({ items }) {
         <div className="admin-empty-state-icon">
           <Rss size={20} />
         </div>
-        <strong>Nothing collected yet</strong>
-        <p>Articles will be broken down by source here once a scrape completes.</p>
+        <strong>{t('sourceBreakdown.emptyTitle')}</strong>
+        <p>{t('sourceBreakdown.emptyMessage')}</p>
       </div>
     );
   }
@@ -176,8 +196,8 @@ function SourceBreakdown({ items }) {
       {pageItems.map((item) => (
         <div className="dashboard-source-row" key={item.source}>
           <div className="dashboard-source-row-label">
-            <span className="dashboard-source-row-name">{item.source || 'unknown'}</span>
-            <span className="dashboard-source-row-count">{item.count.toLocaleString()}</span>
+            <span className="dashboard-source-row-name" dir="auto">{item.source || t('sourceBreakdown.unknownSource')}</span>
+            <span className="dashboard-source-row-count">{formatNumber(item.count)}</span>
           </div>
           <div className="report-insight-track">
             <div
@@ -191,17 +211,17 @@ function SourceBreakdown({ items }) {
         </div>
       ))}
       {totalPages > 1 ? (
-        <div className="dashboard-source-pagination" role="navigation" aria-label="Articles by source pagination">
+        <div className="dashboard-source-pagination" role="navigation" aria-label={t('sourceBreakdown.paginationLabel')}>
           <button
             type="button"
             className="btn-secondary"
             onClick={() => setPage((prev) => Math.max(0, prev - 1))}
             disabled={currentPage === 0}
           >
-            <ChevronLeft size={14} /> Prev
+            <ChevronLeft size={14} className="icon-flip-rtl" /> {t('common:actions.previous')}
           </button>
           <span className="dashboard-source-pagination-label">
-            Page {currentPage + 1} of {totalPages}
+            {t('common:pagination.page', { page: formatNumber(currentPage + 1), total: formatNumber(totalPages) })}
           </span>
           <button
             type="button"
@@ -209,7 +229,7 @@ function SourceBreakdown({ items }) {
             onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
             disabled={currentPage >= totalPages - 1}
           >
-            Next <ChevronRight size={14} />
+            {t('common:actions.next')} <ChevronRight size={14} className="icon-flip-rtl" />
           </button>
         </div>
       ) : null}
@@ -217,7 +237,8 @@ function SourceBreakdown({ items }) {
   );
 }
 
-function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginationLabel = 'Attention list pagination' }) {
+function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginationLabel }) {
+  const { t } = useTranslation('dashboard');
   const [page, setPage] = useState(0);
 
   if (!items.length) {
@@ -241,17 +262,17 @@ function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginati
     <div className="dashboard-attention-list">
       <div className="report-insight-list">{pageItems.map(renderItem)}</div>
       {totalPages > 1 ? (
-        <div className="dashboard-source-pagination" role="navigation" aria-label={paginationLabel}>
+        <div className="dashboard-source-pagination" role="navigation" aria-label={paginationLabel || t('attention.paginationLabel')}>
           <button
             type="button"
             className="btn-secondary"
             onClick={() => setPage((prev) => Math.max(0, prev - 1))}
             disabled={currentPage === 0}
           >
-            <ChevronLeft size={14} /> Prev
+            <ChevronLeft size={14} className="icon-flip-rtl" /> {t('common:actions.previous')}
           </button>
           <span className="dashboard-source-pagination-label">
-            Page {currentPage + 1} of {totalPages}
+            {t('common:pagination.page', { page: formatNumber(currentPage + 1), total: formatNumber(totalPages) })}
           </span>
           <button
             type="button"
@@ -259,7 +280,7 @@ function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginati
             onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
             disabled={currentPage >= totalPages - 1}
           >
-            Next <ChevronRight size={14} />
+            {t('common:actions.next')} <ChevronRight size={14} className="icon-flip-rtl" />
           </button>
         </div>
       ) : null}
@@ -268,6 +289,7 @@ function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginati
 }
 
 export default function DashboardPage({ projects = [], projectId = null }) {
+  const { t } = useTranslation('dashboard');
   const [selectedId, setSelectedId] = useState(() => {
     if (projectId != null) return Number(projectId);
     return projects[0]?.id != null ? Number(projects[0].id) : null;
@@ -296,10 +318,10 @@ export default function DashboardPage({ projects = [], projectId = null }) {
     try {
       const res = await fetch(`/api/dashboard/summary?project_id=${id}`);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to load dashboard data.');
+      if (!res.ok) throw apiError(data, { status: res.status, fallback: i18n.t('dashboard:errors.loadFailed') });
       setSummary(data);
     } catch (err) {
-      setError(err.message || 'Failed to load dashboard data.');
+      setError(err?.message ? err : i18n.t('dashboard:errors.loadFailed'));
       setSummary(null);
     } finally {
       setLoading(false);
@@ -323,18 +345,16 @@ export default function DashboardPage({ projects = [], projectId = null }) {
         <div className="report-header-top">
           <div className="report-heading">
             <span className="report-kicker">
-              <LayoutDashboard size={13} /> Dashboard
+              <LayoutDashboard size={13} /> {t('header.kicker')}
             </span>
-            <h2 className="report-title">Overview</h2>
-            <p className="subtitle">
-              Collection health for one project at a time - pick a project to see what it has gathered and what needs a look.
-            </p>
+            <h2 className="report-title">{t('header.title')}</h2>
+            <p className="subtitle">{t('header.subtitle')}</p>
           </div>
 
           <div className="report-header-actions">
             <div className="report-project-control">
               <label className="report-project-control-label" htmlFor="dashboard-project-select">
-                <FolderKanban size={13} /> Project
+                <FolderKanban size={13} /> {t('header.projectLabel')}
               </label>
               <div className="report-project-select-wrap">
                 <FolderKanban size={16} aria-hidden="true" />
@@ -343,13 +363,16 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   className="filter-select report-project-select"
                   value={selectedId ?? ''}
                   onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-                  aria-label="Project"
+                  aria-label={t('header.projectLabel')}
                   disabled={!projects.length}
                 >
-                  {!projects.length ? <option value="">No projects yet</option> : null}
+                  {!projects.length ? <option value="">{t('noProjects.title')}</option> : null}
                   {projects.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} ({item.mode === 'competitor' ? 'competitor' : 'opinion'})
+                      {t('header.projectOption', {
+                        name: item.name,
+                        mode: t(item.mode === 'competitor' ? 'header.modes.competitor' : 'header.modes.opinion'),
+                      })}
                     </option>
                   ))}
                 </select>
@@ -361,7 +384,7 @@ export default function DashboardPage({ projects = [], projectId = null }) {
               onClick={() => loadSummary(selectedId)}
               disabled={loading || selectedId == null}
             >
-              <RefreshCw size={15} className={loading ? 'spin' : ''} /> Refresh
+              <RefreshCw size={15} className={loading ? 'spin' : ''} /> {t('common:actions.refresh')}
             </button>
           </div>
         </div>
@@ -372,12 +395,12 @@ export default function DashboardPage({ projects = [], projectId = null }) {
           <div className="admin-empty-state-icon">
             <FolderKanban size={20} />
           </div>
-          <strong>No projects yet</strong>
-          <p>Create a project to start collecting, then its metrics will show up here.</p>
-          <Link to="/projects" className="btn-secondary">Go to Projects</Link>
+          <strong>{t('noProjects.title')}</strong>
+          <p>{t('noProjects.message')}</p>
+          <Link to="/projects" className="btn-secondary">{t('noProjects.action')}</Link>
         </div>
       ) : error ? (
-        <ErrorNotice error={error} context="load this project's dashboard" onRetry={() => loadSummary(selectedId)} />
+        <ErrorNotice error={error} context={t('errorContext.loadDashboard')} onRetry={() => loadSummary(selectedId)} />
       ) : (
         <div className="report-body">
           <div className="admin-stats-grid dashboard-stats-grid">
@@ -386,8 +409,8 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <FileText size={18} />
               </div>
               <div>
-                <span>Total articles</span>
-                <strong>{loading && !summary ? '-' : (summary?.totals?.articles ?? 0).toLocaleString()}</strong>
+                <span>{t('stats.totalArticles')}</span>
+                <strong>{loading && !summary ? '-' : formatNumber(summary?.totals?.articles ?? 0)}</strong>
               </div>
             </div>
             <div className="admin-stat-card">
@@ -395,8 +418,8 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <Rss size={18} />
               </div>
               <div>
-                <span>Total sources</span>
-                <strong>{loading && !summary ? '-' : (summary?.totals?.sources ?? 0).toLocaleString()}</strong>
+                <span>{t('stats.totalSources')}</span>
+                <strong>{loading && !summary ? '-' : formatNumber(summary?.totals?.sources ?? 0)}</strong>
               </div>
             </div>
             <div className="admin-stat-card">
@@ -404,8 +427,8 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <History size={18} />
               </div>
               <div>
-                <span>Total pipeline runs</span>
-                <strong>{loading && !summary ? '-' : (summary?.totals?.runs ?? 0).toLocaleString()}</strong>
+                <span>{t('stats.totalRuns')}</span>
+                <strong>{loading && !summary ? '-' : formatNumber(summary?.totals?.runs ?? 0)}</strong>
               </div>
             </div>
             {isCompetitorMode ? (
@@ -414,8 +437,8 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   <Users size={18} />
                 </div>
                 <div>
-                  <span>Competitors tracked</span>
-                  <strong>{loading && !summary ? '-' : (summary?.totals?.competitors ?? 0).toLocaleString()}</strong>
+                  <span>{t('stats.competitorsTracked')}</span>
+                  <strong>{loading && !summary ? '-' : formatNumber(summary?.totals?.competitors ?? 0)}</strong>
                 </div>
               </div>
             ) : null}
@@ -427,9 +450,9 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <span className="report-section-icon">
                   <TrendingUp size={16} />
                 </span>
-                <h3 className="report-section-title">Articles per pipeline run</h3>
+                <h3 className="report-section-title">{t('runsChart.title')}</h3>
               </div>
-              <p className="report-section-caption">How many articles each scrape run saved, oldest to most recent.</p>
+              <p className="report-section-caption">{t('runsChart.caption')}</p>
             </div>
             <RunsChart runs={summary?.runs || []} />
           </div>
@@ -440,11 +463,9 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                 <span className="report-section-icon">
                   <Layers3 size={16} />
                 </span>
-                <h3 className="report-section-title">Articles by platform</h3>
+                <h3 className="report-section-title">{t('platformBreakdown.title')}</h3>
               </div>
-              <p className="report-section-caption">
-                How each configured collection platform contributes to this project's articles.
-              </p>
+              <p className="report-section-caption">{t('platformBreakdown.caption')}</p>
             </div>
             <PlatformBreakdown
               items={summary?.articles_by_platform || []}
@@ -459,9 +480,9 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   <span className="report-section-icon">
                     <Rss size={16} />
                   </span>
-                  <h3 className="report-section-title">Articles by source</h3>
+                  <h3 className="report-section-title">{t('sourceBreakdown.title')}</h3>
                 </div>
-                <p className="report-section-caption">Which sources have contributed the most articles.</p>
+                <p className="report-section-caption">{t('sourceBreakdown.caption')}</p>
               </div>
               <SourceBreakdown items={summary?.articles_by_source || []} key={selectedId} />
             </div>
@@ -472,38 +493,41 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   <span className="report-section-icon" style={{ background: 'rgba(255, 71, 87, 0.14)', color: '#b42318' }}>
                     <ShieldAlert size={16} />
                   </span>
-                  <h3 className="report-section-title">Sources needing attention</h3>
+                  <h3 className="report-section-title">{t('sourceAttention.title')}</h3>
                 </div>
-                <p className="report-section-caption">Sources that were blocked, errored, or returned nothing on the last run.</p>
+                <p className="report-section-caption">{t('sourceAttention.caption')}</p>
               </div>
               <AttentionList
                 key={selectedId}
                 items={summary?.sources_needing_attention || []}
-                healthyLabel="All sources came back healthy on the last run"
+                healthyLabel={t('sourceAttention.healthy')}
                 pageSize={ATTENTION_PAGE_SIZE}
-                paginationLabel="Sources needing attention pagination"
+                paginationLabel={t('sourceAttention.paginationLabel')}
                 renderItem={(item) => {
-                  const issue = item.issue || {
-                    title: 'Source needs attention',
-                    message: item.reason,
-                    action: 'Review the source configuration and try again.',
+                  const fallbackMessage = translateFetchNote(item.reason);
+                  const issue = item.issue ? translateSourceIssue(item.issue) : {
+                    title: t('sourceAttention.fallbackTitle'),
+                    message: fallbackMessage || item.reason,
+                    action: t('sourceAttention.fallbackAction'),
                     severity: 'warning',
                     technical_detail: item.reason,
+                    untranslated: !fallbackMessage,
                   };
+                  const textDir = issue.untranslated ? 'auto' : undefined;
                   return (
                   <div className={`report-insight-card ${issue.severity === 'error' ? 'tone-negative' : 'tone-warning'}`} key={item.source_url || item.source}>
                     <div className="report-insight-card-top">
                       <div className="report-insight-card-copy">
-                        <p className="report-insight-card-text">{item.source}</p>
-                        <strong className="dashboard-attention-title">{issue.title}</strong>
-                        <span className="dashboard-attention-reason">{issue.message}</span>
-                        <span className="dashboard-attention-action">{issue.action}</span>
+                        <p className="report-insight-card-text" dir="auto">{item.source}</p>
+                        <strong className="dashboard-attention-title" dir={textDir}>{issue.title}</strong>
+                        <span className="dashboard-attention-reason" dir={textDir}>{issue.message}</span>
+                        <span className="dashboard-attention-action" dir={textDir}>{issue.action}</span>
                         <div className="dashboard-attention-controls">
-                          <Link className="dashboard-attention-link" to="/sources">Review sources</Link>
+                          <Link className="dashboard-attention-link" to="/sources">{t('sourceAttention.reviewSources')}</Link>
                           {issue.technical_detail ? (
                             <details className="dashboard-attention-details">
-                              <summary>Technical details</summary>
-                              <p>{issue.technical_detail}</p>
+                              <summary>{t('common:errors.technicalDetails')}</summary>
+                              <p dir="ltr">{issue.technical_detail}</p>
                             </details>
                           ) : null}
                         </div>
@@ -523,24 +547,32 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   <span className="report-section-icon" style={{ background: 'rgba(255, 71, 87, 0.14)', color: '#b42318' }}>
                     <ShieldAlert size={16} />
                   </span>
-                  <h3 className="report-section-title">Competitors needing attention</h3>
+                  <h3 className="report-section-title">{t('competitorAttention.title')}</h3>
                 </div>
-                <p className="report-section-caption">Tracked competitors whose linked sources failed or returned 0 articles on the last run.</p>
+                <p className="report-section-caption">{t('competitorAttention.caption')}</p>
               </div>
               <AttentionList
                 items={summary?.competitors_needing_attention || []}
-                healthyLabel="All tracked competitors' sources came back healthy on the last run"
+                healthyLabel={t('competitorAttention.healthy')}
+                paginationLabel={t('competitorAttention.paginationLabel')}
                 renderItem={(competitor) => (
                   <div className="report-insight-card tone-negative" key={competitor.id}>
                     <div className="report-insight-card-top">
                       <div className="report-insight-card-copy">
-                        <p className="report-insight-card-text">{competitor.name}</p>
+                        <p className="report-insight-card-text" dir="auto">{competitor.name}</p>
                         <div className="report-insight-card-tags">
-                          {competitor.sources.map((source, index) => (
-                            <span className="report-insight-card-tag muted" key={`${competitor.id}-${index}`}>
-                              {source.platform}: {source.issue?.title || source.reason}
-                            </span>
-                          ))}
+                          {competitor.sources.map((source, index) => {
+                            const issue = translateSourceIssue(source.issue);
+                            const reason = issue?.title || translateFetchNote(source.reason) || source.reason;
+                            return (
+                              <span className="report-insight-card-tag muted" key={`${competitor.id}-${index}`}>
+                                {t('competitorAttention.sourceIssue', {
+                                  platform: t(`platforms.${source.platform}`, { defaultValue: source.platform }),
+                                  reason,
+                                })}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>

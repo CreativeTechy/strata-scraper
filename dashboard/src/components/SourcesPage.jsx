@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import { useAuth } from '../auth/useAuth.js';
+import { formatNumber } from '../i18n/format.js';
 import {
   Rss,
   Plus,
@@ -39,22 +41,24 @@ const emptyDraft = {
 // crawled) as a "web" source instead (see backend/app/core/settings.py's
 // _infer_source_type/_resolve_source_type, which reassigns any entered URL
 // to its real platform type regardless of what was picked here).
+// Values are stable API codes; display labels come from sources:types.<value>
+// at render time (sourceTypeLabel below).
 const SOURCE_TYPE_OPTIONS = [
-  { value: 'rss', label: 'RSS' },
-  { value: 'web', label: 'Web' },
-  { value: 'hashtag', label: 'Hashtag' },
-  { value: 'keyword', label: 'Keyword' },
-  { value: 'username', label: 'X Account' },
-  { value: 'tweet', label: 'Single Post' },
-  { value: 'reddit', label: 'Reddit' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'threads', label: 'Threads' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
+  { value: 'rss' },
+  { value: 'web' },
+  { value: 'hashtag' },
+  { value: 'keyword' },
+  { value: 'username' },
+  { value: 'tweet' },
+  { value: 'reddit' },
+  { value: 'telegram' },
+  { value: 'linkedin' },
+  { value: 'threads' },
+  { value: 'facebook' },
+  { value: 'instagram' },
 ];
 
-const SOURCE_TYPE_TABS = [{ value: 'all', label: 'All' }, ...SOURCE_TYPE_OPTIONS];
+const SOURCE_TYPE_TABS = [{ value: 'all' }, ...SOURCE_TYPE_OPTIONS];
 
 const TERM_SOURCE_TYPES = new Set(['hashtag', 'keyword', 'username']);
 
@@ -78,28 +82,29 @@ const TWITTER_SOURCE_TYPES = new Set(['hashtag', 'username', 'tweet']);
 // (SOURCE_TYPE_TABS above) keep every type separate, since filtering by
 // exact type still matters there.
 const SOURCE_TYPE_FORM_TABS = [
-  { value: 'rss', label: 'RSS' },
-  { value: 'web', label: 'Web' },
-  { value: 'keyword', label: 'Keyword' },
-  { value: 'twitter', label: 'Twitter/X' },
-  { value: 'reddit', label: 'Reddit' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'threads', label: 'Threads' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'instagram', label: 'Instagram' },
+  { value: 'rss' },
+  { value: 'web' },
+  { value: 'keyword' },
+  { value: 'twitter' },
+  { value: 'reddit' },
+  { value: 'telegram' },
+  { value: 'linkedin' },
+  { value: 'threads' },
+  { value: 'facebook' },
+  { value: 'instagram' },
 ];
 
 const TWITTER_SUB_TYPE_OPTIONS = [
-  { value: 'hashtag', label: 'Hashtag' },
-  { value: 'username', label: 'X Account' },
-  { value: 'tweet', label: 'Single Post' },
+  { value: 'hashtag' },
+  { value: 'username' },
+  { value: 'tweet' },
 ];
 
+// Translation keys (sources namespace), resolved at render time.
 const TERM_SOURCE_PLACEHOLDERS = {
-  hashtag: 'Hashtag, without # (e.g. EVSummit)',
-  username: 'X account, without @ (e.g. elonmusk)',
-  keyword: 'Keyword or phrase (e.g. electric vehicles)',
+  hashtag: 'form.termPlaceholders.hashtag',
+  username: 'form.termPlaceholders.username',
+  keyword: 'form.termPlaceholders.keyword',
 };
 
 // Reddit/Telegram/LinkedIn/tweet keep the URL field (unlike the term types
@@ -107,15 +112,21 @@ const TERM_SOURCE_PLACEHOLDERS = {
 // bare company/profile slug or search phrase, disambiguated by the kind
 // selector below) as well as full URLs. A tweet has no short form - the
 // full status URL is the only valid input.
+// Values are translation keys (sources namespace), resolved at render time.
 const URL_FIELD_PLACEHOLDERS = {
-  reddit: 'r/subreddit, u/username, a search term, or a reddit.com URL',
-  telegram: '@channelname, channelname, or https://t.me/channelname',
-  linkedin: 'Company/profile slug, a search phrase, or a linkedin.com URL',
-  tweet: 'Full tweet URL (e.g. https://x.com/elonmusk/status/1234567890)',
-  threads: 'Handle (without @), a search phrase, or a threads.com URL',
-  facebook: 'Page/group/profile slug, a search phrase, or a facebook.com URL',
-  instagram: 'Handle (without @), a hashtag, a search phrase, or an instagram.com URL',
+  reddit: 'form.urlPlaceholders.reddit',
+  telegram: 'form.urlPlaceholders.telegram',
+  linkedin: 'form.urlPlaceholders.linkedin',
+  tweet: 'form.urlPlaceholders.tweet',
+  threads: 'form.urlPlaceholders.threads',
+  facebook: 'form.urlPlaceholders.facebook',
+  instagram: 'form.urlPlaceholders.instagram',
 };
+
+// Types whose URL field only ever takes a URL/handle (always LTR); the others
+// also accept a free-text search phrase, which may be Arabic, so they use
+// dir="auto" instead.
+const URL_ONLY_SOURCE_TYPES = new Set(['rss', 'web', 'tweet', 'telegram']);
 
 function inferRedditKind(url) {
   let path = url || '';
@@ -188,9 +199,15 @@ function inferInstagramKind(url) {
   return 'profile';
 }
 
-function sourceTypeLabel(sourceType) {
-  const match = SOURCE_TYPE_OPTIONS.find((option) => option.value === (sourceType || 'rss'));
-  return match ? match.label : (sourceType || 'RSS');
+function sourceTypeLabel(t, sourceType) {
+  const type = sourceType || 'rss';
+  return t(`sources:types.${type}`, { defaultValue: type });
+}
+
+// First-strong isolate, so a URL/name interpolated into a sentence keeps its
+// own direction regardless of the UI language.
+function isolate(value) {
+  return `\u2068${value}\u2069`;
 }
 
 const PAGE_SIZE = 3;
@@ -222,6 +239,7 @@ export default function SourcesPage({
   onDeleteSource,
   isLoadingSources,
 }) {
+  const { t } = useTranslation('sources');
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams();
@@ -425,7 +443,7 @@ export default function SourcesPage({
       }
       navigate('/sources');
     } catch (error) {
-      setActionError(error?.message || 'Failed to save source.');
+      setActionError(error?.message ? error : t('form.saveFailed'));
     }
   };
 
@@ -447,7 +465,7 @@ export default function SourcesPage({
         navigate('/sources');
       }
     } catch (error) {
-      setActionError(error?.message || 'Failed to delete source.');
+      setActionError(error?.message ? error : t('list.deleteFailed'));
     }
   };
 
@@ -464,45 +482,43 @@ export default function SourcesPage({
   };
 
   if (isFormRoute) {
-    const heading = isEditRoute ? 'Edit Source' : 'Create Source';
-    const buttonLabel = isEditRoute ? 'Save Source' : 'Create Source';
+    const heading = isEditRoute ? t('form.editTitle') : t('form.createTitle');
+    const buttonLabel = isEditRoute ? t('form.saveButton') : t('form.createButton');
     return (
       <div className="admin-page-shell">
         <div className="admin-page-header">
           <div>
             <div className="admin-page-kicker">
-              <Rss size={14} /> Source library
+              <Rss size={14} /> {t('kicker')}
             </div>
             <h1 className="admin-page-title">{heading}</h1>
             <p className="admin-page-subtitle">
-              {isEditRoute
-                ? 'Update a tracked source and keep its project assignments in sync.'
-                : 'Add a new source, classify it, and assign it to the projects it should power.'}
+              {isEditRoute ? t('form.editSubtitle') : t('form.createSubtitle')}
             </p>
           </div>
           <div className="admin-page-toolbar">
             <div className="admin-page-toolbar-meta">
-              <span>Mode</span>
-              <strong>{isEditRoute ? 'Editing' : 'Creating'}</strong>
+              <span>{t('form.mode')}</span>
+              <strong>{isEditRoute ? t('form.modeEditing') : t('form.modeCreating')}</strong>
             </div>
             <div className="admin-page-toolbar-meta">
-              <span>Projects</span>
-              <strong>{draft.project_ids.length.toLocaleString()}</strong>
+              <span>{t('form.projects')}</span>
+              <strong>{formatNumber(draft.project_ids.length)}</strong>
             </div>
           </div>
         </div>
 
-        <ErrorNotice error={actionError} context="save this source" onDismiss={() => setActionError('')} />
+        <ErrorNotice error={actionError} context={t('errorContext.save')} onDismiss={() => setActionError('')} />
 
         <div className="glass-card admin-form-panel" style={{ maxWidth: 1080, margin: '0 auto' }}>
           <div className="panel-header-tight">
             <strong style={{ fontSize: '1rem' }}>{heading}</strong>
-            <span className="panel-chip">{isEditRoute ? 'Updating existing source' : 'Create a new source'}</span>
+            <span className="panel-chip">{isEditRoute ? t('form.chipEditing') : t('form.chipCreating')}</span>
           </div>
 
           <div style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Source type</span>
-            <div className="source-type-tabs" role="tablist" aria-label="Choose source type">
+            <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.sourceType')}</span>
+            <div className="source-type-tabs" role="tablist" aria-label={t('form.chooseSourceType')}>
               {SOURCE_TYPE_FORM_TABS.map((option) => {
                 const isActive =
                   option.value === 'twitter' ? TWITTER_SOURCE_TYPES.has(draft.source_type) : draft.source_type === option.value;
@@ -525,7 +541,7 @@ export default function SourcesPage({
                       }))
                     }
                   >
-                    {option.label}
+                    {t(`types.${option.value}`)}
                   </button>
                 );
               })}
@@ -533,7 +549,7 @@ export default function SourcesPage({
           </div>
           {TWITTER_SOURCE_TYPES.has(draft.source_type) && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Twitter/X source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.twitterKind')}</span>
               <select
                 className="filter-select"
                 value={draft.source_type}
@@ -541,7 +557,7 @@ export default function SourcesPage({
               >
                 {TWITTER_SUB_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(`types.${option.value}`)}
                   </option>
                 ))}
               </select>
@@ -549,104 +565,101 @@ export default function SourcesPage({
           )}
           {draft.source_type === 'reddit' && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Reddit source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.redditKind')}</span>
               <select
                 className="filter-select"
                 value={draft.reddit_kind}
                 onChange={(e) => setDraft((prev) => ({ ...prev, reddit_kind: e.target.value }))}
               >
-                <option value="subreddit">Subreddit</option>
-                <option value="user">User / profile</option>
-                <option value="search">Keyword / search (all of Reddit)</option>
-                <option value="subreddit_search">Keyword within a subreddit</option>
+                <option value="subreddit">{t('kinds.reddit.subreddit')}</option>
+                <option value="user">{t('kinds.reddit.user')}</option>
+                <option value="search">{t('kinds.reddit.search')}</option>
+                <option value="subreddit_search">{t('kinds.reddit.subreddit_search')}</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                {draft.reddit_kind === 'subreddit_search'
-                  ? 'Enter the subreddit and the keyword below, e.g. "lebanon protest" or "r/lebanon protest".'
-                  : 'Only used to interpret a bare word below (e.g. "ev" as a subreddit vs. a search term). Prefixed input (r/..., u/...) and full reddit.com URLs are unambiguous either way.'}
+                {draft.reddit_kind === 'subreddit_search' ? t('form.redditSubredditSearchHelp') : t('form.redditKindHelp')}
               </span>
             </label>
           )}
           {draft.source_type === 'linkedin' && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>LinkedIn source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.linkedinKind')}</span>
               <select
                 className="filter-select"
                 value={draft.linkedin_kind}
                 onChange={(e) => setDraft((prev) => ({ ...prev, linkedin_kind: e.target.value }))}
               >
-                <option value="company">Company page</option>
-                <option value="profile">Personal profile</option>
-                <option value="search">Keyword / hashtag search</option>
+                <option value="company">{t('kinds.linkedin.company')}</option>
+                <option value="profile">{t('kinds.linkedin.profile')}</option>
+                <option value="search">{t('kinds.linkedin.search')}</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                Requires APIFY API TOKEN
+                {t('form.requiresApify')}
               </span>
             </label>
           )}
           {draft.source_type === 'threads' && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Threads source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.threadsKind')}</span>
               <select
                 className="filter-select"
                 value={draft.threads_kind}
                 onChange={(e) => setDraft((prev) => ({ ...prev, threads_kind: e.target.value }))}
               >
-                <option value="profile">Profile</option>
-                <option value="search">Keyword / search</option>
+                <option value="profile">{t('kinds.threads.profile')}</option>
+                <option value="search">{t('kinds.threads.search')}</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                Requires APIFY API TOKEN
+                {t('form.requiresApify')}
               </span>
             </label>
           )}
           {draft.source_type === 'facebook' && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Facebook source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.facebookKind')}</span>
               <select
                 className="filter-select"
                 value={draft.facebook_kind}
                 onChange={(e) => setDraft((prev) => ({ ...prev, facebook_kind: e.target.value }))}
               >
-                <option value="page">Page</option>
-                <option value="group">Group</option>
-                <option value="profile">Personal profile</option>
-                <option value="search">Keyword / search</option>
+                <option value="page">{t('kinds.facebook.page')}</option>
+                <option value="group">{t('kinds.facebook.group')}</option>
+                <option value="profile">{t('kinds.facebook.profile')}</option>
+                <option value="search">{t('kinds.facebook.search')}</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                Only used to interpret a bare slug below (page vs. personal profile) - Facebook uses the same URL shape
-                for both. Groups, search, and full profile.php/people/... URLs are unambiguous either way. Requires
-                APIFY API TOKEN.
+                {t('form.facebookKindHelp')}
               </span>
             </label>
           )}
           {draft.source_type === 'instagram' && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Instagram source kind</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.instagramKind')}</span>
               <select
                 className="filter-select"
                 value={draft.instagram_kind}
                 onChange={(e) => setDraft((prev) => ({ ...prev, instagram_kind: e.target.value }))}
               >
-                <option value="profile">Profile</option>
-                <option value="hashtag">Hashtag</option>
-                <option value="search">Keyword / search</option>
+                <option value="profile">{t('kinds.instagram.profile')}</option>
+                <option value="hashtag">{t('kinds.instagram.hashtag')}</option>
+                <option value="search">{t('kinds.instagram.search')}</option>
               </select>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-light)' }}>
-                Requires APIFY API TOKEN
+                {t('form.requiresApify')}
               </span>
             </label>
           )}
           {!TERM_SOURCE_TYPES.has(draft.source_type) && (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>Source URL</span>
+              <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>{t('form.sourceUrl')}</span>
               <input
                 type="text"
                 className="source-input"
+                dir={URL_ONLY_SOURCE_TYPES.has(draft.source_type) ? 'ltr' : 'auto'}
                 placeholder={
                   draft.source_type === 'reddit' && draft.reddit_kind === 'subreddit_search'
-                    ? 'Subreddit and keyword (e.g. lebanon protest)'
-                    : URL_FIELD_PLACEHOLDERS[draft.source_type] || 'Source URL'
+                    ? t('form.urlPlaceholders.redditSubredditSearch')
+                    : t(URL_FIELD_PLACEHOLDERS[draft.source_type] || 'form.urlPlaceholders.default')
                 }
                 value={draft.url}
                 onChange={(e) => setDraft((prev) => ({ ...prev, url: e.target.value }))}
@@ -655,21 +668,22 @@ export default function SourcesPage({
           )}
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-light)' }}>
-              Display name{!TERM_SOURCE_TYPES.has(draft.source_type) && <span style={{ textTransform: 'none', letterSpacing: 0 }}> (optional)</span>}
+              {t('form.displayName')}{!TERM_SOURCE_TYPES.has(draft.source_type) && <span style={{ textTransform: 'none', letterSpacing: 0 }}>{t('form.optional')}</span>}
             </span>
             <input
               type="text"
               className="source-input"
-              placeholder={TERM_SOURCE_PLACEHOLDERS[draft.source_type] || 'Display name'}
+              dir={draft.source_type === 'username' ? 'ltr' : 'auto'}
+              placeholder={t(TERM_SOURCE_PLACEHOLDERS[draft.source_type] || 'form.termPlaceholders.default')}
               value={draft.name}
               onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
             />
           </label>
           <div className="source-toggle-row">
             <div className="source-toggle-copy">
-              <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-dark)' }}>Source status</strong>
+              <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-dark)' }}>{t('form.statusTitle')}</strong>
               <span style={{ display: 'block', marginTop: 4, fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                Disable this source to keep it in the library without using it in pipelines.
+                {t('form.statusHelp')}
               </span>
             </div>
             <button
@@ -683,15 +697,15 @@ export default function SourcesPage({
               }}
             >
               {draft.enabled ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-              {draft.enabled ? 'Enabled' : 'Disabled'}
+              {draft.enabled ? t('sourceStatus.enabled') : t('sourceStatus.disabled')}
             </button>
           </div>
 
           <div className="source-toggle-row">
             <div className="source-toggle-copy">
-              <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-dark)' }}>Source reach</strong>
+              <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-dark)' }}>{t('form.reachTitle')}</strong>
               <span style={{ display: 'block', marginTop: 4, fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                Limited sources stay out of the assignable list on project create/edit pages unless already attached to that project.
+                {t('form.reachHelp')}
               </span>
             </div>
             <button
@@ -705,18 +719,18 @@ export default function SourcesPage({
               }}
             >
               {draft.limited ? <ToggleLeft size={18} /> : <ToggleRight size={18} />}
-              {draft.limited ? 'Limited' : 'Global'}
+              {draft.limited ? t('reach.limited') : t('reach.global')}
             </button>
           </div>
 
           <div className="assign-sources-panel">
             <div className="assign-sources-header">
               <div>
-                <div className="assign-sources-kicker">Assign projects</div>
-                <strong className="assign-sources-title">Choose the projects this source should power</strong>
+                <div className="assign-sources-kicker">{t('form.assignKicker')}</div>
+                <strong className="assign-sources-title">{t('form.assignTitle')}</strong>
               </div>
               <div className="assign-sources-summary">
-                <span className="panel-chip">{draft.project_ids.length} selected</span>
+                <span className="panel-chip">{t('form.selectedCount', { count: draft.project_ids.length })}</span>
               </div>
             </div>
 
@@ -727,7 +741,8 @@ export default function SourcesPage({
                   type="text"
                   value={projectAssignQuery}
                   onChange={(e) => setProjectAssignQuery(e.target.value)}
-                  placeholder="Filter projects by name"
+                  dir="auto"
+                  placeholder={t('form.filterProjects')}
                 />
               </label>
             </div>
@@ -738,16 +753,16 @@ export default function SourcesPage({
                   <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
                     <Layers3 size={16} />
                   </div>
-                  <strong>No projects yet</strong>
-                  <span>Create a project first, then come back to assign this source.</span>
+                  <strong>{t('form.noProjectsTitle')}</strong>
+                  <span>{t('form.noProjectsHint')}</span>
                 </div>
               ) : visibleAssignableProjects.length === 0 ? (
                 <div className="admin-empty-state" style={{ padding: '16px 10px' }}>
                   <div className="admin-empty-state-icon" style={{ width: 36, height: 36 }}>
                     <Search size={16} />
                   </div>
-                  <strong>No matching projects</strong>
-                  <span>Try a different search term in this assignment box.</span>
+                  <strong>{t('form.noMatchingProjectsTitle')}</strong>
+                  <span>{t('form.noMatchingProjectsHint')}</span>
                 </div>
               ) : (
                 visibleAssignableProjects.map((project) => {
@@ -761,8 +776,10 @@ export default function SourcesPage({
                       />
                       <div className="assign-source-copy">
                         <div className="assign-source-topline">
-                          <strong className="assign-source-name">{project.name}</strong>
-                          <span className="panel-chip">{project.status || 'draft'}</span>
+                          <strong className="assign-source-name" dir="auto">{project.name}</strong>
+                          <span className="panel-chip">
+                            {t(`common:status.${project.status || 'draft'}`, { defaultValue: project.status || 'draft' })}
+                          </span>
                         </div>
                       </div>
                     </label>
@@ -785,17 +802,17 @@ export default function SourcesPage({
               )}
             </button>
             <button className="btn-secondary" type="button" onClick={handleCancel}>
-              <X size={18} /> Cancel
+              <X size={18} /> {t('common:actions.cancel')}
             </button>
           </div>
         </div>
 
         <ConfirmModal
           open={showCancelModal}
-          title="Discard changes?"
-          message="You have unsaved changes on this source. If you cancel now, all edits on this page will be lost."
-          confirmLabel="Discard changes"
-          cancelLabel="Keep editing"
+          title={t('form.discardTitle')}
+          message={t('form.discardMessage')}
+          confirmLabel={t('form.discardConfirm')}
+          cancelLabel={t('form.keepEditing')}
           onClose={() => setShowCancelModal(false)}
           onConfirm={discardChanges}
         />
@@ -809,31 +826,31 @@ export default function SourcesPage({
       <div className="admin-page-header">
         <div>
           <div className="admin-page-kicker">
-            <Rss size={14} /> Source library
+            <Rss size={14} /> {t('kicker')}
           </div>
-          <h1 className="admin-page-title">Source Manager</h1>
+          <h1 className="admin-page-title">{t('list.title')}</h1>
           <p className="admin-page-subtitle">
-            Curate the source pool, assign sources to one or more projects, and keep enabled sources easy to scan.
+            {t('list.subtitle')}
           </p>
         </div>
         <div className="admin-page-toolbar">
           <div className="admin-page-toolbar-meta">
-            <span>Source</span>
-            <strong>{sourcesSource || 'supabase'}</strong>
+            <span>{t('list.dataSource')}</span>
+            <strong className="ltr-isolate">{sourcesSource || 'supabase'}</strong>
           </div>
           <div className="admin-page-toolbar-meta">
-            <span>Search</span>
-            <strong>{visibleSources.length.toLocaleString()} matches</strong>
+            <span>{t('list.search')}</span>
+            <strong>{t('list.matches', { count: visibleSources.length, formatted: formatNumber(visibleSources.length) })}</strong>
           </div>
           {canEdit && (
             <Link to="/sources/new" className="btn-primary" style={{ textDecoration: 'none' }}>
-              <Plus size={16} /> Add Source
+              <Plus size={16} /> {t('list.addSource')}
             </Link>
           )}
         </div>
       </div>
 
-      <ErrorNotice error={actionError} context="manage sources" onDismiss={() => setActionError('')} />
+      <ErrorNotice error={actionError} context={t('errorContext.manage')} onDismiss={() => setActionError('')} />
 
       <div className="admin-stats-grid">
         <div className="admin-stat-card">
@@ -841,8 +858,8 @@ export default function SourcesPage({
             <Layers3 size={18} />
           </div>
           <div>
-            <span>Total sources</span>
-            <strong>{stats.total.toLocaleString()}</strong>
+            <span>{t('list.stats.total')}</span>
+            <strong>{formatNumber(stats.total)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -850,8 +867,8 @@ export default function SourcesPage({
             <CheckCircle2 size={18} />
           </div>
           <div>
-            <span>Enabled</span>
-            <strong>{stats.enabled.toLocaleString()}</strong>
+            <span>{t('list.stats.enabled')}</span>
+            <strong>{formatNumber(stats.enabled)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -859,8 +876,8 @@ export default function SourcesPage({
             <Link2 size={18} />
           </div>
           <div>
-            <span>Assigned</span>
-            <strong>{stats.assigned.toLocaleString()}</strong>
+            <span>{t('list.stats.assigned')}</span>
+            <strong>{formatNumber(stats.assigned)}</strong>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -868,13 +885,13 @@ export default function SourcesPage({
             <Rss size={18} />
           </div>
           <div>
-            <span>RSS sources</span>
-            <strong>{stats.rss.toLocaleString()}</strong>
+            <span>{t('list.stats.rss')}</span>
+            <strong>{formatNumber(stats.rss)}</strong>
           </div>
         </div>
       </div>
 
-      <div className="source-type-tabs" role="tablist" aria-label="Filter sources by type">
+      <div className="source-type-tabs" role="tablist" aria-label={t('list.filterByType')}>
         {SOURCE_TYPE_TABS.map((tab) => {
           const isActive = typeFilter === tab.value;
           return (
@@ -886,8 +903,8 @@ export default function SourcesPage({
               className={`source-type-tab ${isActive ? 'active' : ''}`}
               onClick={() => setTypeFilter(tab.value)}
             >
-              {tab.label}
-              <span className="source-type-tab-count">{sourceTypeTabCounts[tab.value] || 0}</span>
+              {tab.value === 'all' ? t('common:status.all') : t(`types.${tab.value}`)}
+              <span className="source-type-tab-count">{formatNumber(sourceTypeTabCounts[tab.value] || 0)}</span>
             </button>
           );
         })}
@@ -900,31 +917,32 @@ export default function SourcesPage({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search sources, URLs, or project names"
+            dir="auto"
+            placeholder={t('list.searchPlaceholder')}
           />
         </label>
 
         <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">All sources</option>
-          <option value="enabled">Enabled</option>
-          <option value="disabled">Disabled</option>
-          <option value="assigned">Assigned</option>
-          <option value="unassigned">Unassigned</option>
+          <option value="all">{t('list.statusFilter.all')}</option>
+          <option value="enabled">{t('list.statusFilter.enabled')}</option>
+          <option value="disabled">{t('list.statusFilter.disabled')}</option>
+          <option value="assigned">{t('list.statusFilter.assigned')}</option>
+          <option value="unassigned">{t('list.statusFilter.unassigned')}</option>
         </select>
 
         <select className="filter-select" value={reachFilter} onChange={(e) => setReachFilter(e.target.value)}>
-          <option value="all">Global &amp; limited</option>
-          <option value="global">Global</option>
-          <option value="limited">Limited</option>
+          <option value="all">{t('list.reachFilter.all')}</option>
+          <option value="global">{t('list.reachFilter.global')}</option>
+          <option value="limited">{t('list.reachFilter.limited')}</option>
         </select>
       </div>
 
       <div className="glass-card admin-list-panel">
         <div className="panel-header-tight">
-          <strong style={{ fontSize: '1rem' }}>Tracked Sources</strong>
+          <strong style={{ fontSize: '1rem' }}>{t('list.trackedSources')}</strong>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {isLoadingSources && <span style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>Loading...</span>}
-            <span className="panel-chip">{visibleSources.length} visible</span>
+            {isLoadingSources && <span style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>{t('common:status.loading')}</span>}
+            <span className="panel-chip">{t('list.visibleCount', { count: visibleSources.length, formatted: formatNumber(visibleSources.length) })}</span>
           </div>
         </div>
 
@@ -934,11 +952,11 @@ export default function SourcesPage({
               <div className="admin-empty-state-icon">
                 <Rss size={18} />
               </div>
-              <strong>No sources yet</strong>
-              <span>Add your first source, then attach it to one or more projects.</span>
+              <strong>{t('list.emptyTitle')}</strong>
+              <span>{t('list.emptyHint')}</span>
               {canEdit && (
                 <Link to="/sources/new" className="btn-primary" style={{ marginTop: 8, textDecoration: 'none' }}>
-                  <Plus size={16} /> Add Source
+                  <Plus size={16} /> {t('list.addSource')}
                 </Link>
               )}
             </div>
@@ -957,17 +975,17 @@ export default function SourcesPage({
                 <div className="admin-item-top">
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-                      <strong className="admin-item-title">{source.name || source.url?.replace('https://www.', '')}</strong>
+                      <strong className="admin-item-title" dir="auto">{source.name || source.url?.replace('https://www.', '')}</strong>
                       <span className={`panel-chip ${source.enabled ? 'success' : 'muted'}`}>
-                        {source.enabled ? 'Enabled' : 'Disabled'}
+                        {source.enabled ? t('sourceStatus.enabled') : t('sourceStatus.disabled')}
                       </span>
-                      {source.limited && <span className="panel-chip warning">Limited</span>}
+                      {source.limited && <span className="panel-chip warning">{t('reach.limited')}</span>}
                     </div>
-                    <div className="admin-item-url">{source.url}</div>
+                    <div className="admin-item-url ltr-isolate">{source.url}</div>
                     <div className="admin-item-meta">
-                      <span>{sourceTypeLabel(source.source_type)}</span>
+                      <span>{sourceTypeLabel(t, source.source_type)}</span>
                       <span>
-                        {sourceProjects.length} project{sourceProjects.length === 1 ? '' : 's'}
+                        {t('list.projectCount', { count: sourceProjects.length })}
                       </span>
                     </div>
                   </div>
@@ -979,14 +997,14 @@ export default function SourcesPage({
                         to={`/sources/${source.id}/edit`}
                         style={{ padding: '8px 10px', fontSize: '0.8rem', textDecoration: 'none' }}
                       >
-                        <Pencil size={14} /> Edit
+                        <Pencil size={14} /> {t('common:actions.edit')}
                       </Link>
                       <button
                         className="btn-secondary"
                         onClick={() => setDeleteTarget(source)}
                         style={{ padding: '8px 10px', fontSize: '0.8rem', color: '#ff4757' }}
                       >
-                        <Trash2 size={14} /> Delete
+                        <Trash2 size={14} /> {t('common:actions.delete')}
                       </button>
                     </div>
                   )}
@@ -994,12 +1012,12 @@ export default function SourcesPage({
                 <div className="admin-item-chips">
                   {sourceProjects.length ? (
                     sourceProjects.slice(0, 4).map((project) => (
-                      <span key={project.id} className="admin-tag">
+                      <span key={project.id} className="admin-tag" dir="auto">
                         {project.name}
                       </span>
                     ))
                   ) : (
-                    <span className="admin-tag muted">Unassigned</span>
+                    <span className="admin-tag muted">{t('list.unassigned')}</span>
                   )}
                 </div>
               </motion.div>
@@ -1011,8 +1029,8 @@ export default function SourcesPage({
               <div className="admin-empty-state-icon">
                 <Search size={18} />
               </div>
-              <strong>No matching sources</strong>
-              <span>Try a different search term or status filter.</span>
+              <strong>{t('list.noMatchesTitle')}</strong>
+              <span>{t('list.noMatchesHint')}</span>
             </div>
           )}
         </div>
@@ -1020,7 +1038,11 @@ export default function SourcesPage({
         {visibleSources.length > 0 && (
           <div className="source-pagination">
             <div className="source-pagination-info">
-              Showing {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, visibleSources.length)} of {visibleSources.length}
+              {t('common:pagination.showing', {
+                from: formatNumber((safePage - 1) * PAGE_SIZE + 1),
+                to: formatNumber(Math.min(safePage * PAGE_SIZE, visibleSources.length)),
+                total: formatNumber(visibleSources.length),
+              })}
             </div>
             <div className="source-pagination-controls">
               <button
@@ -1029,10 +1051,10 @@ export default function SourcesPage({
                 disabled={safePage <= 1}
                 style={{ padding: '8px 10px', fontSize: '0.8rem' }}
               >
-                Previous
+                {t('common:actions.previous')}
               </button>
               <span className="panel-chip">
-                Page {safePage} of {totalPages}
+                {t('common:pagination.page', { page: formatNumber(safePage), total: formatNumber(totalPages) })}
               </span>
               <button
                 className="btn-secondary"
@@ -1040,7 +1062,7 @@ export default function SourcesPage({
                 disabled={safePage >= totalPages}
                 style={{ padding: '8px 10px', fontSize: '0.8rem' }}
               >
-                Next
+                {t('common:actions.next')}
               </button>
             </div>
           </div>
@@ -1048,10 +1070,10 @@ export default function SourcesPage({
 
         <ConfirmModal
           open={Boolean(deleteTarget)}
-          title={`Delete source "${deleteTarget?.name || deleteTarget?.url || ''}"?`}
-          message="This will permanently remove the source and detach it from any linked projects."
-          confirmLabel="Delete source"
-          cancelLabel="Keep source"
+          title={t('list.deleteTitle', { name: isolate(deleteTarget?.name || deleteTarget?.url || '') })}
+          message={t('list.deleteMessage')}
+          confirmLabel={t('list.deleteConfirm')}
+          cancelLabel={t('list.keepSource')}
           confirmButtonStyle={{
             background: 'linear-gradient(135deg, #ff4757, #e03131)',
             boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',

@@ -1,0 +1,233 @@
+{
+  "kicker": {
+    "accessControl": "Access control",
+    "userManagement": "User management",
+    "projectLinkage": "Project linkage"
+  },
+  "roleDescriptions": {
+    "admin": "Full access to every part of the app.",
+    "editor": "Manage projects and sources; view articles and pipeline runs.",
+    "operator": "Run and stop the pipeline; view and clear articles.",
+    "viewer": "Read-only access to projects, sources, articles, and pipeline runs."
+  },
+  "userStatus": {
+    "active": "Active",
+    "disabled": "Disabled"
+  },
+  "projectStatus": {
+    "draft": "Draft",
+    "active": "Active",
+    "archived": "Archived"
+  },
+  "permissionGroups": {
+    "articles": "Articles",
+    "pipeline": "Pipeline",
+    "projects": "Projects",
+    "roles": "Roles",
+    "sources": "Sources",
+    "users": "Users",
+    "competitors": "Competitors"
+  },
+  "permissions": {
+    "projects": {
+      "view": "View projects",
+      "create": "Create projects",
+      "update": "Edit projects",
+      "delete": "Delete projects",
+      "link_users": "Manage which dashboard users are linked to a project"
+    },
+    "sources": {
+      "view": "View sources",
+      "create": "Create sources",
+      "update": "Edit sources",
+      "delete": "Delete sources"
+    },
+    "articles": {
+      "view": "View articles",
+      "delete": "Delete all stored articles",
+      "import": "Import articles from a JSONL export"
+    },
+    "pipeline": {
+      "view": "View pipeline runs",
+      "run": "Trigger the scraper pipeline",
+      "stop": "Stop a running pipeline"
+    },
+    "users": {
+      "view": "View dashboard users",
+      "create": "Create dashboard users",
+      "update": "Edit dashboard users (role/status)",
+      "delete": "Delete dashboard users"
+    },
+    "roles": {
+      "view": "View roles and their permissions",
+      "create": "Create new roles",
+      "update": "Edit roles and their permission assignments",
+      "delete": "Delete roles"
+    },
+    "competitors": {
+      "view": "View competitor studies, competitors, and findings",
+      "manage": "Create and edit the business profile and competitors",
+      "analyze": "Run competitor discovery and generate analysis"
+    }
+  },
+  "errorContext": {
+    "manageUsers": "manage users",
+    "manageRoles": "manage roles",
+    "loadPermissions": "load permissions",
+    "loadRole": "load this role",
+    "saveRole": "save this role",
+    "updateLinkedUsers": "update linked users"
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Create and manage dashboard accounts.",
+    "totalUsers": "Total users",
+    "fields": {
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "role": "Role"
+    },
+    "create": "Create user",
+    "creating": "Creating…",
+    "columns": {
+      "username": "Username",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "loading": "Loading users…",
+    "emptyTitle": "No users yet",
+    "emptyBody": "Create the first dashboard account using the form above.",
+    "youSuffix": "(you)",
+    "disable": "Disable",
+    "enable": "Enable",
+    "cannotDeleteSelf": "You cannot delete your own account.",
+    "deleteTitle": "Delete user \"<name>{{username}}</name>\"?",
+    "deleteMessage": "This permanently removes the user account and signs them out of any active sessions.",
+    "deleteConfirm": "Delete user",
+    "keep": "Keep user",
+    "loadFailed": "Failed to load users.",
+    "createFailed": "Failed to create user.",
+    "updateFailed": "Failed to update user.",
+    "deleteFailed": "Failed to delete user."
+  },
+  "roles": {
+    "title": "Roles & Permissions",
+    "subtitle": "Roles are named permission sets assigned to users.",
+    "totalRoles": "Total roles",
+    "newRole": "New role",
+    "columns": {
+      "role": "Role",
+      "description": "Description",
+      "permissions": "Permissions",
+      "actions": "Actions"
+    },
+    "loading": "Loading roles…",
+    "emptyTitle": "No roles yet",
+    "emptyBodyCanCreate": "Create a role to start assigning permission sets to users.",
+    "emptyBody": "No roles have been created yet.",
+    "system": "System",
+    "fullAccess": "Full access",
+    "permissionCount_one": "{{count}} permission",
+    "permissionCount_other": "{{count}} permissions",
+    "systemCannotDelete": "System roles cannot be deleted.",
+    "viewOnly": "View only",
+    "deleteTitle": "Delete role \"<name>{{name}}</name>\"?",
+    "deleteMessage": "This permanently removes the role. Deletion is blocked while any user is still assigned to it - move those users to another role first.",
+    "deleteConfirm": "Delete role",
+    "keep": "Keep role",
+    "loadFailed": "Failed to load roles.",
+    "deleteFailed": "Failed to delete role."
+  },
+  "roleForm": {
+    "nameLabel": "Role name",
+    "namePlaceholder": "e.g. Content Reviewer",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What is this role for?",
+    "fullAccessNote": "This role automatically has every permission and can't be restricted.",
+    "permissionsLabel": "Permissions",
+    "deselectAll": "Deselect all"
+  },
+  "roleCreate": {
+    "title": "New role",
+    "subtitle": "Name the role and choose which permissions it grants.",
+    "loading": "Loading permissions…",
+    "submit": "Create role",
+    "loadFailed": "Failed to load permissions.",
+    "createFailed": "Failed to create role."
+  },
+  "roleEdit": {
+    "title": "Edit role",
+    "titleWithName": "Edit role: <name>{{name}}</name>",
+    "subtitle": "Rename the role or adjust the permissions it grants.",
+    "loading": "Loading role…",
+    "notFound": "Role not found",
+    "backToRoles": "Back to Roles",
+    "loadRolesFailed": "Failed to load roles.",
+    "loadPermissionsFailed": "Failed to load permissions.",
+    "updateFailed": "Failed to update role."
+  },
+  "linkage": {
+    "notFoundTitle": "Project not found",
+    "notFoundBody": "It may have been removed, or you may not have access to it.",
+    "backToList": "Back to Project Linkage",
+    "noEmail": "No email on file",
+    "list": {
+      "title": "Project Linkage",
+      "subtitle": "See which dashboard users are linked to each project. Open a project to review its linked users, or edit the linkage directly.",
+      "projects": "Projects",
+      "matches": "Matches",
+      "totalProjects": "Total projects",
+      "dashboardUsers": "Dashboard users",
+      "searchPlaceholder": "Search projects by name",
+      "allStatuses": "All statuses",
+      "loadingUsers": "Loading users…",
+      "allLinkedUsers": "All linked users",
+      "panelTitle": "Projects",
+      "loading": "Loading…",
+      "visibleCount": "{{count}} visible",
+      "emptyTitle": "No projects yet",
+      "emptyBody": "Create a project first, then manage its linked users here.",
+      "linkedUsers_one": "{{count}} linked user",
+      "linkedUsers_other": "{{count}} linked users",
+      "noMatchesTitle": "No matching projects",
+      "noMatchesBody": "Try another search term or adjust the filters."
+    },
+    "detail": {
+      "subtitle": "Review the dashboard users linked to this project.",
+      "status": "Status",
+      "linkedUsers": "Linked users",
+      "editLinkage": "Edit linkage",
+      "detailsTitle": "Project details",
+      "start": "Start",
+      "end": "End",
+      "location": "Location",
+      "audience": "Audience",
+      "notSet": "Not set",
+      "noAudience": "No audience specified",
+      "description": "Description",
+      "noDescription": "No description has been added for this project yet.",
+      "linkedUsersTitle": "Linked users",
+      "linkedCount": "{{count}} linked",
+      "noUsersTitle": "No users linked",
+      "noUsersBody": "Use Edit linkage to add dashboard users to this project."
+    },
+    "edit": {
+      "title": "Edit linkage: <name>{{name}}</name>",
+      "subtitle": "Add or remove the dashboard users linked to this project.",
+      "selected": "Selected",
+      "panelKicker": "Linked users",
+      "panelTitle": "Choose dashboard users linked to this project",
+      "selectedCount": "{{count}} selected",
+      "searchPlaceholder": "Filter users by username, email, or role",
+      "noUsersTitle": "No dashboard users yet",
+      "noUsersBody": "Create dashboard users first, then link them to this project.",
+      "noMatchesTitle": "No matching users",
+      "noMatchesBody": "Try a different search term.",
+      "save": "Save linkage",
+      "saveFailed": "Failed to update linked users."
+    }
+  }
+}

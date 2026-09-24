@@ -1,0 +1,220 @@
+{
+  "page": {
+    "title": "New competitor study",
+    "intro": "Strata reads your website to understand your market, then lets you add competitors yourself — sources you enter are trusted right away. AI suggestions are available if you want a head start, but nothing about tracking a competitor requires them."
+  },
+  "steps": {
+    "business": "Your business",
+    "marketContext": "Market context",
+    "culturalAnalysis": "Cultural analysis",
+    "competitors": "Competitors",
+    "channels": "Channels",
+    "schedule": "Schedule",
+    "backTo": "Back to {{step}}"
+  },
+  "stages": {
+    "discovery": {
+      "compareProfile": "Comparing your profile against the market",
+      "nameCandidates": "Naming candidate competitors",
+      "filterDuplicates": "Filtering out duplicates and unlikely matches",
+      "rankBySize": "Ranking them by size"
+    },
+    "cultural": {
+      "readContext": "Reading your market context",
+      "weighFit": "Weighing cultural fit against your target countries",
+      "workOutFactors": "Working out benefits, difficulties, and success factors",
+      "writeSummary": "Writing the summary"
+    },
+    "channels": {
+      "checkFeeds": "Checking each competitor’s site for a feed",
+      "searchAccounts": "Searching the web for their real accounts and hashtags",
+      "askModel": "Asking the model for X, LinkedIn, Threads, Facebook, and Instagram accounts, hashtags, and keywords to monitor",
+      "searchReviews": "Searching for review and discussion pages",
+      "linkSources": "Linking valid channels as sources"
+    }
+  },
+  "discoveryLog": {
+    "stillWorking": " (still working, {{duration}})"
+  },
+  "listEditor": {
+    "remove": "Remove {{item}}"
+  },
+  "countryPicker": {
+    "searchPlaceholder": "Search countries…",
+    "remove": "Remove {{country}}"
+  },
+  "study": {
+    "name": "Study name",
+    "nameHint": "defaults to your business name",
+    "namePlaceholder": "Q3 competitor study",
+    "defaultName": "{{name}} - competitor study",
+    "untitled": "Untitled competitor study"
+  },
+  "business": {
+    "title": "Tell us about your business",
+    "hint": "The website matters most — we read it to work out which market you are in and how you position yourself. Everything after this is judged against that, so a real site gives much better competitors than a description alone.",
+    "label": "Business",
+    "createNew": "Create new",
+    "chooseExisting": "Choose existing",
+    "searchPlaceholder": "Search a business you've studied before…",
+    "loadingPast": "Loading past businesses…",
+    "noPast": "No previous business profiles yet — switch to “Create new” above.",
+    "reusing": "Reusing <strong>{{name}}</strong>’s market context — no re-scraping or AI wait needed. You can still edit it on the next step.",
+    "targetCountries": "Target countries",
+    "targetCountriesCarriedHint": "carried over from that business — edit for this study",
+    "targetCountriesHint": "optional — leave blank to search globally",
+    "name": "Business name",
+    "namePlaceholder": "Northwind Analytics",
+    "website": "Website",
+    "websiteHint": "strongly recommended",
+    "description": "Anything else",
+    "optional": "optional",
+    "descriptionPlaceholder": "What you sell, who buys it, which markets you care about.",
+    "footReuse": "Reusing a saved profile skips the website read entirely.",
+    "footRead": "Reading your site takes about 20-40 seconds — or skip that and write the context yourself.",
+    "continueExisting": "Continue with this business",
+    "writeManually": "Write manually",
+    "readingSite": "Reading your site…",
+    "readWithAi": "Read my site with AI"
+  },
+  "context": {
+    "readPages_one": "Read {{count}} page from your site ({{chars}} characters). Check the context below — competitors are found from it.",
+    "readPages_other": "Read {{count}} pages from your site ({{chars}} characters). Check the context below — competitors are found from it.",
+    "title": "What we understood",
+    "hint": "Edit anything that is off. This is the description competitors get matched against and that every “how does this affect us” judgement is measured by.",
+    "rerun": "Re-run analysis",
+    "industry": "Industry",
+    "market": "Market you compete in",
+    "positioning": "Positioning",
+    "offerings": "What you offer",
+    "offeringsPlaceholder": "demand forecasting",
+    "audience": "Who buys it",
+    "audiencePlaceholder": "operations directors",
+    "differentiators": "What sets you apart",
+    "differentiatorsHint": "used to judge competitor moves",
+    "differentiatorsPlaceholder": "implementation in under 30 days",
+    "summary": "Market context",
+    "continueCultural": "Continue to cultural analysis",
+    "continueCompetitors": "Continue to competitors"
+  },
+  "cultural": {
+    "title": "How will you fit in?",
+    "hint": "Optional — an AI assessment of how well your business fits the culture(s) you’re targeting: what would help you succeed, the benefits of competing there, the difficulties you’d likely face, and other insights worth knowing. Skip this and continue any time.",
+    "analyzing": "Analyzing…",
+    "run": "Run analysis",
+    "summary": "Summary",
+    "successFactors": "Success factors",
+    "benefits": "Benefits",
+    "challenges": "Challenges",
+    "insights": "Other insights",
+    "skip": "Skip and continue"
+  },
+  "competitors": {
+    "addTitle": "Add your competitors",
+    "addHint": "Add the companies you compete with directly. Sources you enter here are trusted immediately and start scraping right away.",
+    "suggestTitle": "Not sure who else to add?",
+    "suggestHint": "Optional — AI compares your profile against the market and suggests competitors to review. Track the ones you want, and their channels are found automatically.",
+    "suggesting": "Suggesting…",
+    "suggest": "Suggest competitors with AI",
+    "rejectedSummary_one": "{{count}} suggestion dropped during checking",
+    "rejectedSummary_other": "{{count}} suggestions dropped during checking",
+    "listTitle": "Your competitors",
+    "trackedSummary": "<strong>{{tracked}}</strong> tracked. Channels are found and used immediately once a competitor is tracked, manual or AI-suggested.",
+    "trackingAll": "Tracking all…",
+    "trackAll": "Track all ({{total}})",
+    "emptyTitle": "No competitors yet",
+    "emptyHint": "Add one above, or suggest some with AI.",
+    "origin": {
+      "manual": "Manual",
+      "ai": "AI suggested"
+    },
+    "basedInTitle": "Where this company is headquartered",
+    "basedIn": "Based in {{country}}",
+    "competesInTitle": "Where this competitor actually competes with your business",
+    "competesIn": "Competes in {{countries}}",
+    "unverifiedTitle": "Tracked, but a live web check couldn't confirm this company exists — worth a manual look.",
+    "unverified": "Couldn’t verify",
+    "hideSources": "Hide sources",
+    "sources": "Sources",
+    "tracking": "Tracking",
+    "track": "Track",
+    "loadingSources": "Loading sources…",
+    "findingChannels": "Finding channels…",
+    "continueWith_one": "Continue with {{count}} competitor",
+    "continueWith_other": "Continue with {{count}} competitors"
+  },
+  "sizeTiers": {
+    "enterprise": "Enterprise",
+    "mid_market": "Mid-market",
+    "smb": "SMB",
+    "startup": "Startup",
+    "unknown": "Unknown size"
+  },
+  "platforms": {
+    "rss": "RSS",
+    "web": "Web",
+    "hashtag": "Hashtag",
+    "keyword": "Keyword",
+    "username": "X Account",
+    "tweet": "Single Post",
+    "reddit": "Reddit",
+    "telegram": "Telegram",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "facebook": "Facebook",
+    "instagram": "Instagram"
+  },
+  "validationStatus": {
+    "pending": "pending",
+    "valid": "valid",
+    "rejected": "rejected"
+  },
+  "channels": {
+    "title": "Review channels",
+    "hint": "Every channel found for your tracked competitors is listed below and already included — discard any that aren’t actually theirs, or add one yourself if something’s missing.",
+    "finding": "Finding…",
+    "findMore": "Find more channels ({{total}})",
+    "emptyTitle": "No tracked competitors",
+    "emptyHint": "Go back and track at least one competitor first.",
+    "loading": "Loading channels…",
+    "none": "No channels found yet.",
+    "notTheirs": "Not theirs"
+  },
+  "schedule": {
+    "title": "Keep it current",
+    "hint_one": "{{count}} competitor ready to track. Re-scrape their sources on a schedule, using the same pipeline scheduler as the rest of Strata.",
+    "hint_other": "{{count}} competitors ready to track. Re-scrape their sources on a schedule, using the same pipeline scheduler as the rest of Strata.",
+    "auto": "Scrape competitors automatically",
+    "every": "Every",
+    "window": "Data retrieval window",
+    "windowHintScheduled": "optional — end date follows your repeat schedule when start is set",
+    "to": "to",
+    "windowExplainScheduled": "Optional — scopes which article publish dates get pulled in, kept {{window}} wide to match “{{interval}}” above when a start date is set. Leave the start date blank to pull in articles from any date instead.",
+    "windowExplain": "Optional — scopes which article publish dates get pulled in. Leave blank to pull in articles from any date.",
+    "windowDays_one": "{{count}} day",
+    "windowDays_other": "{{count}} days",
+    "interval": {
+      "minutes_one": "every minute",
+      "minutes_other": "every {{count}} minutes",
+      "hours_one": "every hour",
+      "hours_other": "every {{count}} hours",
+      "days_one": "every day",
+      "days_other": "every {{count}} days"
+    },
+    "openWorkspace": "Open workspace"
+  },
+  "errors": {
+    "contextNotGenerated": "The site was read but the market context could not be generated. Fill it in below and continue.",
+    "profileLoadFailed": "Could not load that business profile.",
+    "discoveryFailed": "Competitor discovery failed.",
+    "trackAllPartial_one": "Tracked {{tracked}} of {{count}} competitor — {{failed}} failed.",
+    "trackAllPartial_other": "Tracked {{tracked}} of {{count}} competitors — {{failed}} failed.",
+    "websiteUnreadable": "The website could not be read.",
+    "analysisNotGenerated": "The analysis could not be generated."
+  },
+  "errorContext": {
+    "setup": "complete competitor setup",
+    "readWebsite": "read your website",
+    "generateAnalysis": "generate this analysis"
+  }
+}
