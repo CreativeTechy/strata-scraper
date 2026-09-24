@@ -155,10 +155,11 @@ export default function CompetitorEditPage() {
         description: profileDraft.description,
         target_countries: profileDraft.target_countries,
       });
-      setProfileDraft((prev) => ({ ...prev, ...(result.profile || {}) }));
       if (!result.ai_derived) {
         setSaveError(t('edit.context.notGenerated'));
+        return;
       }
+      setProfileDraft((prev) => ({ ...prev, ...(result.profile || {}) }));
     } catch (caught) {
       setSaveError(caught);
     } finally {

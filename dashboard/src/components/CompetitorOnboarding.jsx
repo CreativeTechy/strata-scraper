@@ -599,11 +599,12 @@ export default function CompetitorOnboarding() {
     setContextBusy(true);
     try {
       const result = await buildProfile(studyId, { ...business, target_countries: targetCountries });
-      setProfile(result.profile);
       setScrape(result.scrape);
       if (!result.ai_derived) {
         setError(t('errors.contextNotGenerated'));
+        return;
       }
+      setProfile(result.profile);
     } catch (caught) {
       setError(caught);
     } finally {

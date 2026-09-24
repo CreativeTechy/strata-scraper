@@ -42,11 +42,16 @@ function classify(code, lower) {
 }
 
 // Messages built client-side with t() are already in the UI language: either
-// flagged via localizedError(), or plain strings that aren't pure ASCII (an
-// English server message always is; an Arabic one never is).
+// flagged via localizedError(), or containing letters from the active script.
+// Non-ASCII punctuation alone is not evidence that English server text was
+// translated.
 function isLocalized(input, raw) {
   if (input && typeof input === 'object' && input.localized) return true;
-  return typeof raw === 'string' && /[\u0080-\uFFFF]/.test(raw);
+  if (typeof raw !== 'string') return false;
+  if (i18n.resolvedLanguage === 'ar') {
+    return /[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06FA-\u06FF]/.test(raw);
+  }
+  return false;
 }
 
 export function userFacingError(input, { context } = {}) {

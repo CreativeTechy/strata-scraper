@@ -7,6 +7,8 @@ unsupported or absent locale has one predictable fallback.
 
 from __future__ import annotations
 
+import unicodedata
+
 SUPPORTED_OUTPUT_LANGUAGES = {"en": "English", "ar": "Arabic"}
 DEFAULT_OUTPUT_LANGUAGE = "en"
 
@@ -34,11 +36,12 @@ def resolve_output_language(value: str | None) -> str:
 def text_matches_output_language(value: object, language: str | None) -> bool:
     """Check every generated prose field against the requested script.
 
-    Machine-only values can legitimately contain no prose, so an empty value
-    is accepted. Checking each nested string independently prevents one long
-    translated field from hiding another field written in the wrong language.
-    All Unicode letters count toward the denominator, so text written entirely
-    in an unsupported script cannot pass as language-neutral.
+    An empty value is accepted because callers may have optional prose fields.
+    A non-empty value with no letters is rejected: punctuation or digits are
+    not meaningful generated prose. Checking each nested string independently
+    prevents one long translated field from hiding another field written in
+    the wrong language. All Unicode letters count toward the denominator, so
+    text written in an unsupported script cannot pass as language-neutral.
     """
     def prose_fields(item: object):
         if isinstance(item, dict):
@@ -56,15 +59,16 @@ def text_matches_output_language(value: object, language: str | None) -> bool:
     for text in prose_fields(value):
         alphabetic_count = sum(character.isalpha() for character in text)
         if not alphabetic_count:
-            continue
-        if target == "ar":
-            target_count = sum("\u0600" <= character <= "\u06ff" for character in text)
-        else:
-            target_count = sum(
-                ("A" <= character <= "Z") or ("a" <= character <= "z")
-                for character in text
-            )
-        if target_count / alphabetic_count < 0.2:
+            return False
+        script_name = "ARABIC" if target == "ar" else "LATIN"
+        target_count = sum(
+            character.isalpha()
+            and script_name in unicodedata.name(character, "")
+            for character in text
+        )
+        # Generated prose should predominantly use the requested script while
+        # still allowing embedded official names such as Starbucks or TikTok.
+        if target_count / alphabetic_count < 0.5:
             return False
     return True
 

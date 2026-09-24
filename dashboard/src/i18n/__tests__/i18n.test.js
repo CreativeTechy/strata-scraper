@@ -172,6 +172,14 @@ describe('API errors', () => {
     expect(issue.technicalDetail).toBe('Some untranslated server sentence');
   });
 
+  it('does not mistake English punctuation for localized Arabic text', async () => {
+    await i18n.changeLanguage('ar');
+    const raw = 'The provider’s response failed — try again.';
+    const issue = userFacingError(raw, { context: 'تحميل النتائج' });
+    expect(issue.message).toBe('تعذّر تحميل النتائج.');
+    expect(issue.technicalDetail).toBe(raw);
+  });
+
   it('keeps uncoded English validation text out of an Arabic notice body', async () => {
     await i18n.changeLanguage('ar');
     const issue = userFacingError(new Error('Value must be valid'), { context: 'حفظ المشروع' });

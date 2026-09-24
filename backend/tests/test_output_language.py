@@ -38,6 +38,20 @@ class OutputLanguageTests(unittest.TestCase):
         self.assertFalse(text_matches_output_language("这是中文摘要", "ar"))
         self.assertFalse(text_matches_output_language("这是中文摘要", "en"))
 
+    def test_script_check_does_not_count_arabic_digits_as_letters(self):
+        self.assertFalse(text_matches_output_language("English text ١٢٣٤٥٦٧٨٩٠", "ar"))
+
+    def test_script_check_requires_requested_script_to_be_the_majority(self):
+        self.assertFalse(text_matches_output_language(
+            "This is an English summary about coffee shops. ملخص عربي عن القهوة", "ar"
+        ))
+
+    def test_script_check_rejects_nonempty_text_without_letters(self):
+        self.assertFalse(text_matches_output_language("12345", "ar"))
+
+    def test_english_script_check_accepts_accented_latin_letters(self):
+        self.assertTrue(text_matches_output_language("Café résumé", "en"))
+
     def test_instruction_preserves_machine_values(self):
         instruction = output_language_instruction("ar")
         self.assertIn("Arabic", instruction)
@@ -69,6 +83,34 @@ class OutputLanguageTests(unittest.TestCase):
         result = business_profile_store.derive_profile("Acme", "", "", "site text", "ar")
         self.assertEqual(result["context_summary"], "ملخص عربي")
         self.assertEqual(chat.call_count, 2)
+
+    @patch("services.competitors.business_profile_store.chat_completion")
+    def test_business_profile_validates_descriptive_offerings_and_keywords(self, chat):
+        chat.side_effect = [
+            json.dumps({
+                "name": "Acme", "context_summary": "ملخص عربي واضح",
+                "offerings": ["Coffee drinks and sandwiches"],
+                "keywords": ["coffee shops"],
+            }),
+            json.dumps({
+                "name": "Acme", "context_summary": "ملخص عربي واضح",
+                "offerings": ["مشروبات القهوة والسندويشات"],
+                "keywords": ["مقاهي القهوة"],
+            }),
+        ]
+        result = business_profile_store.derive_profile("Acme", "", "", "site text", "ar")
+        self.assertEqual(result["offerings"], ["مشروبات القهوة والسندويشات"])
+        self.assertEqual(chat.call_count, 2)
+
+    @patch("services.competitors.business_profile_store.chat_completion")
+    def test_business_profile_preserves_official_product_names(self, chat):
+        chat.return_value = json.dumps({
+            "name": "Starbucks", "context_summary": "ملخص عربي واضح عن النشاط",
+            "offerings": ["Pumpkin Spice Latte"], "keywords": ["Starbucks"],
+        })
+        result = business_profile_store.derive_profile("Starbucks", "", "", "site text", "ar")
+        self.assertEqual(result["offerings"], ["Pumpkin Spice Latte"])
+        self.assertEqual(chat.call_count, 1)
 
     @patch("services.competitors.business_profile_store.chat_completion")
     def test_business_profile_rejects_empty_model_output(self, chat):
@@ -127,6 +169,15 @@ class OutputLanguageTests(unittest.TestCase):
     @patch("services.competitors.cultural_analysis_store.chat_completion")
     def test_cultural_analysis_rejects_empty_model_output(self, chat):
         chat.return_value = "{}"
+        result = cultural_analysis_store.derive_cultural_analysis(
+            {"name": "Acme", "market": "Coffee"}, ["LB"], "ar"
+        )
+        self.assertEqual(result, {})
+        self.assertEqual(chat.call_count, 2)
+
+    @patch("services.competitors.cultural_analysis_store.chat_completion")
+    def test_cultural_analysis_rejects_numeric_summary(self, chat):
+        chat.return_value = json.dumps({"summary": "12345"})
         result = cultural_analysis_store.derive_cultural_analysis(
             {"name": "Acme", "market": "Coffee"}, ["LB"], "ar"
         )

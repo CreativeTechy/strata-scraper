@@ -179,6 +179,37 @@ def _as_list(value, limit: int = 12) -> list[str]:
     return out
 
 
+def _looks_like_official_name(value: str, business_name: str) -> bool:
+    """Return True for a short Latin identifier that should stay unchanged.
+
+    Descriptive phrases still need translation. This exemption is deliberately
+    narrow: the exact business name, one brand-style token, or a short phrase
+    whose words are all title-cased (for example, ``Pumpkin Spice Latte``).
+    """
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if text.casefold() == str(business_name or "").strip().casefold():
+        return True
+    words = [word for word in text.replace("&", " ").split() if word]
+    if not words or len(words) > 5 or not all(any(ch.isalpha() for ch in word) for word in words):
+        return False
+    if len(words) == 1:
+        word = words[0]
+        return word[0].isupper() or any(ch.isupper() for ch in word[1:])
+    return all(word[0].isupper() for word in words)
+
+
+def _localized_profile_prose(result: dict, business_name: str) -> list[object]:
+    prose: list[object] = [result[key] for key in LOCALIZED_PROFILE_FIELDS]
+    for key in ("offerings", "keywords"):
+        prose.extend(
+            value for value in result[key]
+            if not _looks_like_official_name(value, business_name)
+        )
+    return prose
+
+
 def derive_profile(
     name: str, website: str, description: str, scraped_text: str, output_language: str = "en"
 ) -> dict:
@@ -224,7 +255,7 @@ def derive_profile(
             "keywords": _as_list(parsed.get("keywords"), limit=20),
             "context_summary": str(parsed.get("context_summary") or "").strip(),
         }
-        prose = [result[key] for key in LOCALIZED_PROFILE_FIELDS]
+        prose = _localized_profile_prose(result, result["name"] or name)
         if result["context_summary"] and text_matches_output_language(prose, output_language):
             return result
         if attempt == 0:
