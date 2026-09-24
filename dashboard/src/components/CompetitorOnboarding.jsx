@@ -201,7 +201,7 @@ export function StageList({ stages }) {
   );
 }
 
-export function ListEditor({ label, hint, values, onChange, placeholder }) {
+export function ListEditor({ label, hint, values, onChange, placeholder, dir = 'auto' }) {
   const { t } = useTranslation('competitorOnboarding');
   const [draft, setDraft] = useState('');
   const items = Array.isArray(values) ? values : [];
@@ -224,8 +224,8 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
       </label>
       <div className="cs-pills" style={{ marginBottom: items.length ? 9 : 0 }}>
         {items.map((item) => (
-          <span key={item} className="cs-pill">
-            <bdi>{item}</bdi>
+          <span key={item} className="cs-pill" dir={dir}>
+            <bdi dir={dir}>{item}</bdi>
             <button
               type="button"
               onClick={() => onChange(items.filter((value) => value !== item))}
@@ -240,7 +240,7 @@ export function ListEditor({ label, hint, values, onChange, placeholder }) {
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           className="cs-input"
-          dir="auto"
+          dir={dir}
           value={draft}
           placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
@@ -1183,35 +1183,38 @@ export default function CompetitorOnboarding() {
             <div className="cs-grid-2">
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-industry">{t('context.industry')}</label>
-                <input id="cs-industry" className="cs-input" dir="auto" value={profile.industry || ''}
+                <input id="cs-industry" className="cs-input" dir={generatedTextDirection(profile.generated_language)} value={profile.industry || ''}
                   onChange={(event) => setProfile({ ...profile, industry: event.target.value })} />
               </div>
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-market">{t('context.market')}</label>
-                <input id="cs-market" className="cs-input" dir="auto" value={profile.market || ''}
+                <input id="cs-market" className="cs-input" dir={generatedTextDirection(profile.generated_language)} value={profile.market || ''}
                   onChange={(event) => setProfile({ ...profile, market: event.target.value })} />
               </div>
             </div>
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="cs-positioning">{t('context.positioning')}</label>
-              <input id="cs-positioning" className="cs-input" dir="auto" value={profile.positioning || ''}
+              <input id="cs-positioning" className="cs-input" dir={generatedTextDirection(profile.generated_language)} value={profile.positioning || ''}
                 onChange={(event) => setProfile({ ...profile, positioning: event.target.value })} />
             </div>
 
             <ListEditor label={t('context.offerings')} values={profile.offerings}
+              dir={generatedTextDirection(profile.generated_language)}
               placeholder={t('context.offeringsPlaceholder')}
               onChange={(offerings) => setProfile({ ...profile, offerings })} />
             <ListEditor label={t('context.audience')} values={profile.audience}
+              dir={generatedTextDirection(profile.generated_language)}
               placeholder={t('context.audiencePlaceholder')}
               onChange={(audience) => setProfile({ ...profile, audience })} />
             <ListEditor label={t('context.differentiators')} hint={t('context.differentiatorsHint')}
+              dir={generatedTextDirection(profile.generated_language)}
               values={profile.differentiators} placeholder={t('context.differentiatorsPlaceholder')}
               onChange={(differentiators) => setProfile({ ...profile, differentiators })} />
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="cs-context">{t('context.summary')}</label>
-              <textarea id="cs-context" className="cs-textarea" dir="auto" style={{ minHeight: 110 }}
+              <textarea id="cs-context" className="cs-textarea" dir={generatedTextDirection(profile.generated_language)} style={{ minHeight: 110 }}
                 value={profile.context_summary || ''}
                 onChange={(event) => setProfile({ ...profile, context_summary: event.target.value })} />
             </div>

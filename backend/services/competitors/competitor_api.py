@@ -215,7 +215,9 @@ def update_profile(project_id: int, payload: dict, user: dict = Depends(require_
         raise HTTPException(status_code=400, detail="target_countries must be a list of ISO country codes.")
     existing = business_profile_store.get_profile(project_id) or {}
     merged = {**existing, **payload}
-    profile = business_profile_store.upsert_profile(project_id, merged)
+    profile = business_profile_store.upsert_profile(
+        project_id, merged, prompt_version=existing.get("prompt_version")
+    )
     if not profile:
         raise HTTPException(status_code=400, detail="Could not save the profile.")
     return {"profile": profile}
@@ -243,11 +245,12 @@ def run_cultural_analysis(
     """
     _project_or_404(project_id)
     try:
-        return {
-            "cultural_analysis": cultural_analysis_store.build_analysis(
-                project_id, resolve_output_language(accept_language)
-            )
-        }
+        analysis = cultural_analysis_store.build_analysis(
+            project_id, resolve_output_language(accept_language)
+        )
+        if analysis.get("regeneration_failed"):
+            raise HTTPException(status_code=502, detail=analysis["error"])
+        return {"cultural_analysis": analysis}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

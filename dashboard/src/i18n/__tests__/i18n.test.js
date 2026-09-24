@@ -10,6 +10,8 @@ import { userFacingError, friendlyRunMessage } from '../../errors/userFacingErro
 import { apiError } from '../../errors/apiError.js';
 import { REPEAT_UNIT_OPTIONS } from '../../constants/schedule.js';
 import { apiRequestHeaders } from '../../auth/apiFetch.js';
+import { translateFetchNote, translateSourceIssue } from '../../lib/sourceIssue.js';
+import { resources } from '../resources.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -77,6 +79,18 @@ describe('translation behavior', () => {
   it('translates display labels while keeping stable values', () => {
     expect(REPEAT_UNIT_OPTIONS.map((option) => option.value)).toEqual(['minutes', 'hours', 'days']);
     expect(REPEAT_UNIT_OPTIONS[0].label).toBe('دقائق');
+  });
+
+  it('keeps social platform names consistent between screens', () => {
+    const keys = ['instagram', 'facebook', 'linkedin', 'threads', 'telegram', 'reddit', 'x'];
+    for (const language of ['en', 'ar']) {
+      for (const key of keys) {
+        expect(resources[language].competitors.platforms[key])
+          .toBe(resources[language].competitorOnboarding.platforms[key]);
+        expect(resources[language].dashboard.platforms[key])
+          .toBe(resources[language].competitors.platforms[key]);
+      }
+    }
   });
 
   it('sends the active language without dropping existing request headers', () => {
@@ -156,6 +170,24 @@ describe('API errors', () => {
     const issue = userFacingError('Some untranslated server sentence', { context: 'تحميل المقالات' });
     expect(issue.message).toBe('تعذّر تحميل المقالات.');
     expect(issue.technicalDetail).toBe('Some untranslated server sentence');
+  });
+
+  it('keeps uncoded English validation text out of an Arabic notice body', async () => {
+    await i18n.changeLanguage('ar');
+    const issue = userFacingError(new Error('Value must be valid'), { context: 'حفظ المشروع' });
+    expect(issue.message).toBe('تعذّر حفظ المشروع.');
+    expect(issue.technicalDetail).toBe('Value must be valid');
+  });
+
+  it('localizes unknown source issues while preserving technical details', async () => {
+    await i18n.changeLanguage('ar');
+    const issue = translateSourceIssue({
+      code: 'provider_changed', title: 'Provider changed', message: 'Unexpected response shape',
+    });
+    expect(issue.untranslated).toBe(false);
+    expect(issue.title).not.toBe('Provider changed');
+    expect(issue.technical_detail).toContain('Unexpected response shape');
+    expect(translateFetchNote('A new raw backend failure')).not.toContain('raw backend');
   });
 
   it('translates pipeline run summaries with plurals', async () => {

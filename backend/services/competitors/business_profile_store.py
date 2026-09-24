@@ -30,6 +30,14 @@ from prompt_loader import load_prompt
 from services.competitors.countries import country_label, validate_countries
 
 PROMPT_VERSION = "competitor-profile-2026-09-24-localized"
+GENERATED_PROFILE_FIELDS = (
+    "industry", "market", "geography", "positioning", "offerings", "audience",
+    "differentiators", "keywords", "context_summary",
+)
+LOCALIZED_PROFILE_FIELDS = (
+    "industry", "market", "geography", "positioning", "audience",
+    "differentiators", "context_summary",
+)
 
 # A handful of pages is plenty: the home page says what the company does, and
 # about/product/pricing pages say who it is for and how it positions itself.
@@ -216,8 +224,8 @@ def derive_profile(
             "keywords": _as_list(parsed.get("keywords"), limit=20),
             "context_summary": str(parsed.get("context_summary") or "").strip(),
         }
-        prose = {key: value for key, value in result.items() if key != "name"}
-        if text_matches_output_language(prose, output_language):
+        prose = [result[key] for key in LOCALIZED_PROFILE_FIELDS]
+        if result["context_summary"] and text_matches_output_language(prose, output_language):
             return result
         if attempt == 0:
             messages.extend([
@@ -249,7 +257,9 @@ def get_profile(project_id: int) -> dict | None:
     )
 
 
-def upsert_profile(project_id: int, values: dict) -> dict | None:
+def upsert_profile(
+    project_id: int, values: dict, *, prompt_version: str | None = None
+) -> dict | None:
     """Insert or update the profile for a project."""
     from psycopg.types.json import Jsonb
 
@@ -277,7 +287,7 @@ def upsert_profile(project_id: int, values: dict) -> dict | None:
             resolve_output_language(values.get("generated_language"))
             if values.get("generated_language") else None
         ),
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": str(prompt_version or PROMPT_VERSION),
     }
 
     fields = list(payload)
@@ -308,6 +318,7 @@ def build_profile(project_id: int, values: dict, output_language: str = "en") ->
         "pages": [], "text": "", "chars": 0, "status": "skipped",
         "error": "No website supplied.",
     }
+    existing = get_profile(project_id) or {}
     derived = derive_profile(name, website, description, scrape["text"], output_language)
 
     from app.core import settings as config
@@ -318,21 +329,24 @@ def build_profile(project_id: int, values: dict, output_language: str = "en") ->
         "website": website,
         "description": description,
         "target_countries": validate_countries(values.get("target_countries")),
-        **{key: derived.get(key) for key in (
-            "industry", "market", "geography", "positioning",
-            "offerings", "audience", "differentiators", "keywords",
-            "context_summary",
-        )},
+        **{
+            key: derived.get(key) if derived else existing.get(key)
+            for key in GENERATED_PROFILE_FIELDS
+        },
         "scrape_status": scrape["status"],
         "scrape_error": scrape["error"],
         "scraped_pages": len(scrape["pages"]),
         "scraped_chars": scrape["chars"],
         "scraped_at": datetime.now(timezone.utc) if scrape["pages"] else None,
-        "analysis_model": config.LLM_CHAT_MODEL if derived else None,
-        "generated_language": output_language if derived else None,
+        "analysis_model": config.LLM_CHAT_MODEL if derived else existing.get("analysis_model"),
+        "generated_language": output_language if derived else existing.get("generated_language"),
     }
 
-    saved = upsert_profile(project_id, merged)
+    saved = upsert_profile(
+        project_id,
+        merged,
+        prompt_version=PROMPT_VERSION if derived else existing.get("prompt_version"),
+    )
     return {
         "profile": saved,
         "scrape": {

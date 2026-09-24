@@ -99,13 +99,13 @@ export function userFacingError(input, { context } = {}) {
       // A validation message is itself the useful part ("Password must be at
       // least 8 characters"): show the translated one, or the server's text
       // when the UI is English / no translation exists and it isn't technical.
-      const message = translated || (!technical ? raw : '') || result.message;
+      const message = translated || (english && !technical ? raw : '') || result.message;
       return {
         ...result,
         title: t('common:errors.validation.title'),
         message,
         action: t('common:errors.validation.action'),
-        technicalDetail: technical ? raw : '',
+        technicalDetail: (technical || (!english && raw && !translated)) ? raw : '',
       };
     }
     case 'generic':

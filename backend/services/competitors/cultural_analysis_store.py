@@ -83,7 +83,7 @@ def derive_cultural_analysis(
             "challenges": _as_list(parsed.get("challenges")),
             "insights": _as_list(parsed.get("insights")),
         }
-        if text_matches_output_language(result, output_language):
+        if result["summary"] and text_matches_output_language(result, output_language):
             return result
         if attempt == 0:
             messages.extend([
@@ -163,18 +163,30 @@ def build_analysis(project_id: int, output_language: str = "en") -> dict:
         raise ValueError("Select target countries on the business profile first.")
 
     output_language = resolve_output_language(output_language)
+    existing = get_analysis(project_id)
     derived = derive_cultural_analysis(profile, target_countries, output_language)
+
+    # A transient model failure must not destroy a previously useful analysis.
+    # Return the failure to the current request while leaving the saved row intact.
+    if not derived:
+        return {
+            **(existing or {}),
+            "status": "failed",
+            "target_countries": target_countries,
+            "error": "The model did not return a usable analysis.",
+            "regeneration_failed": True,
+        }
 
     from app.core import settings as config
     from datetime import datetime, timezone
 
     saved = upsert_analysis(project_id, {
-        "status": "success" if derived else "failed",
+        "status": "success",
         "target_countries": target_countries,
         **derived,
-        "error": None if derived else "The model did not return a usable analysis.",
-        "analysis_model": config.LLM_CHAT_MODEL if derived else None,
-        "generated_language": output_language if derived else None,
-        "generated_at": datetime.now(timezone.utc) if derived else None,
+        "error": None,
+        "analysis_model": config.LLM_CHAT_MODEL,
+        "generated_language": output_language,
+        "generated_at": datetime.now(timezone.utc),
     })
     return saved

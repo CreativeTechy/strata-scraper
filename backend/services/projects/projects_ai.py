@@ -229,7 +229,9 @@ def suggest_project_metadata(name, description, output_language="en"):
     keywords = _normalize_items(payload.get("keywords") or [], prefix="", limit=8)
     usernames = _normalize_usernames(payload.get("usernames") or [], limit=5)
 
-    if not text_matches_output_language([target_audience, *keywords], output_language):
+    # Official product and brand terms may legitimately use another script;
+    # the descriptive audience field must still use the requested language.
+    if not text_matches_output_language(target_audience, output_language):
         return fallback
 
     return {

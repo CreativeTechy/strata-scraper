@@ -299,7 +299,7 @@ def _ask_for_competitors(
             for value in (entry.get("description"), entry.get("why_competitor"))
             if value
         ]
-        if text_matches_output_language(prose, output_language):
+        if prose and text_matches_output_language(prose, output_language):
             break
         if attempt == 0:
             messages.extend([
@@ -898,8 +898,6 @@ def discover_accounts(
     for entry in candidates:
         platform = str(entry.get("platform") or "").strip().lower()
         handle = str(entry.get("handle") or "").strip()
-        if platform == "keyword" and not text_matches_output_language(handle, output_language):
-            continue
         # `keyword` has no canonical URL of its own — the model is asked to
         # give the search phrase in `handle`, and the real (Google News RSS
         # search) URL is derived from it, the same way a manually-added
