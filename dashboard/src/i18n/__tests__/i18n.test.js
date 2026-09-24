@@ -5,6 +5,7 @@ import { countryName, formatDate, formatNumber, isRtl, languageName } from '../f
 import { userFacingError, friendlyRunMessage } from '../../errors/userFacingError.js';
 import { apiError } from '../../errors/apiError.js';
 import { REPEAT_UNIT_OPTIONS } from '../../constants/schedule.js';
+import { apiRequestHeaders } from '../../auth/apiFetch.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -72,6 +73,15 @@ describe('translation behavior', () => {
   it('translates display labels while keeping stable values', () => {
     expect(REPEAT_UNIT_OPTIONS.map((option) => option.value)).toEqual(['minutes', 'hours', 'days']);
     expect(REPEAT_UNIT_OPTIONS[0].label).toBe('دقائق');
+  });
+
+  it('sends the active language without dropping existing request headers', () => {
+    const headers = apiRequestHeaders('/api/projects/suggest', {
+      headers: { 'Content-Type': 'application/json' },
+    }, 'POST', 'csrf-token');
+    expect(headers.get('Accept-Language')).toBe('ar');
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('X-CSRF-Token')).toBe('csrf-token');
   });
 
   it('localizes language and country names', () => {

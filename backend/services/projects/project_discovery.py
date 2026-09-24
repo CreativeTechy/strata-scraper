@@ -17,6 +17,7 @@ import requests
 from parsel import Selector
 
 from app.core import settings as config
+from app.core.language import output_language_instruction, resolve_output_language
 from integrations.extraction.feeds import discover_feed_urls
 from llm_client import chat_completion
 from services.sources.sources_store import _default_name, create_source
@@ -349,11 +350,12 @@ def _extract_json_blob(text):
     return match.group(0).strip() if match else ""
 
 
-def _ai_source_suggestions(project):
+def _ai_source_suggestions(project, output_language="en"):
     if not config.LLM_API_KEY:
         return []
 
     project_context = _project_context(project)
+    output_language = resolve_output_language(output_language)
     prompt = (
         "You are helping discover sources that capture ordinary people's OPINIONS and REVIEWS about the "
         "subject of a project (a brand, product, place, person, or topic) - not official/marketing pages "
@@ -372,6 +374,7 @@ def _ai_source_suggestions(project):
         "generic search-engine result pages, and avoid the subject's own official/corporate site.\n"
         "If you return a domain, make it the specific review or community page's domain, not just a "
         "homepage. If you return rss, make it the actual feed URL.\n\n"
+        f"{output_language_instruction(output_language)}\n\n"
         f"Project context:\n{project_context or '(none)'}\n"
     )
 
@@ -559,12 +562,12 @@ def _resolve_source(item):
     return resolved
 
 
-def discover_project_links(project):
+def discover_project_links(project, output_language="en"):
     """Ask the configured AI model for project sources, validate them, and create reusable source records."""
     if not isinstance(project, dict):
         return {"suggested_sources": [], "source_ids": [], "sources": [], "resolved_urls": []}
 
-    suggestions = _ai_source_suggestions(project)
+    suggestions = _ai_source_suggestions(project, resolve_output_language(output_language))
     resolved_sources = []
     seen_urls = set()
     usernames = _clean_terms(project.get("usernames"))

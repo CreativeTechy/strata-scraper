@@ -28,7 +28,7 @@
     "channels": {
       "checkFeeds": "جارٍ البحث عن خلاصة في موقع كل منافس",
       "searchAccounts": "جارٍ البحث في الويب عن حساباتهم ووسومهم الحقيقية",
-      "askModel": "جارٍ سؤال النموذج عن حسابات X وLinkedIn وThreads وFacebook وInstagram والوسوم والكلمات المفتاحية التي يجب رصدها",
+      "askModel": "جارٍ سؤال النموذج عن حسابات إكس ولينكدإن وثريدز وفيسبوك وإنستغرام والوسوم والكلمات المفتاحية التي يجب رصدها",
       "searchReviews": "جارٍ البحث عن صفحات المراجعات والنقاشات",
       "linkSources": "جارٍ ربط القنوات الصالحة كمصادر"
     }
@@ -98,6 +98,7 @@
     "differentiatorsHint": "يُستخدم للحكم على تحركات المنافسين",
     "differentiatorsPlaceholder": "التنفيذ في أقل من 30 يومًا",
     "summary": "سياق السوق",
+    "languageMismatch": "أُنشئ سياق السوق المحفوظ بلغة أخرى. أعد التحليل لإنشاء المحتوى باللغة الحالية.",
     "continueCultural": "المتابعة إلى التحليل الثقافي",
     "continueCompetitors": "المتابعة إلى المنافسين"
   },
@@ -111,6 +112,7 @@
     "benefits": "المزايا",
     "challenges": "التحديات",
     "insights": "رؤى أخرى",
+    "languageMismatch": "أُنشئ هذا التحليل المحفوظ بلغة أخرى. أعد تشغيله لإنشاء المحتوى باللغة الحالية.",
     "skip": "التخطي والمتابعة"
   },
   "competitors": {
@@ -167,14 +169,14 @@
     "web": "الويب",
     "hashtag": "وسم",
     "keyword": "كلمة مفتاحية",
-    "username": "حساب X",
+    "username": "حساب إكس",
     "tweet": "منشور واحد",
-    "reddit": "Reddit",
-    "telegram": "Telegram",
-    "linkedin": "LinkedIn",
-    "threads": "Threads",
-    "facebook": "Facebook",
-    "instagram": "Instagram"
+    "reddit": "ريديت",
+    "telegram": "تيليغرام",
+    "linkedin": "لينكدإن",
+    "threads": "ثريدز",
+    "facebook": "فيسبوك",
+    "instagram": "إنستغرام"
   },
   "validationStatus": {
     "pending": "قيد المراجعة",

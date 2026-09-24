@@ -30,7 +30,7 @@ import '../styles/Competitors.css';
 const STUDY_STATUS_OPTIONS = ['draft', 'active', 'archived'];
 
 export default function CompetitorEditPage() {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
   const { studyId } = useParams();
   const navigate = useNavigate();
 
@@ -260,6 +260,13 @@ export default function CompetitorEditPage() {
             <StageList stages={SCRAPE_STAGES} />
           </div>
         ) : null}
+
+        {!contextBusy && profileDraft?.generated_language
+          && profileDraft.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+            <div className="cs-alert cs-alert-warn" role="status" style={{ marginTop: 14 }}>
+              {t('edit.context.languageMismatch')}
+            </div>
+          ) : null}
 
         {profileDraft ? (
           <>

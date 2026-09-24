@@ -43,6 +43,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 from app.core import settings as config
+from app.core.language import output_language_instruction, resolve_output_language
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import COUNTRIES, country_label, validate_countries
@@ -52,7 +53,7 @@ from services.projects.project_discovery import (
 )
 from services.sources.sources_store import _derive_term_url
 
-PROMPT_VERSION = "competitor-discovery-2026-08-07"
+PROMPT_VERSION = "competitor-discovery-2026-09-24-localized"
 
 SIZE_TIERS = ("enterprise", "mid_market", "smb", "startup", "unknown")
 TIER_WEIGHT = {"enterprise": 0, "mid_market": 1, "smb": 2, "startup": 3, "unknown": 4}
@@ -93,6 +94,7 @@ MAX_ACCOUNTS_PER_PLATFORM = {
 # MAX_ACCOUNTS_PER_PLATFORM's keyword cap above (that cap exists to bound a
 # verbose model response, not these deterministic, always-wanted phrases).
 AUTO_KEYWORD_SUFFIXES = ("branches", "reviews", "news", "complaints", "promotions")
+AUTO_KEYWORD_SUFFIXES_AR = ("فروع", "مراجعات", "أخبار", "شكاوى", "عروض")
 
 # Hosts that are never a company's own site, so never a competitor "website".
 NON_COMPANY_HOSTS = {
@@ -231,6 +233,7 @@ def _ask_for_competitors(
     target_countries: list[str] | None = None,
     scope: str = "all",
     grounding: str = "",
+    output_language: str = "en",
 ) -> list[dict]:
     """One discovery LLM call.
 
@@ -266,7 +269,10 @@ def _ask_for_competitors(
     try:
         raw = chat_completion(
             messages=[
-                {"role": "system", "content": DISCOVERY_SYSTEM_PROMPT},
+                {"role": "system", "content": (
+                    f"{DISCOVERY_SYSTEM_PROMPT}\n\n"
+                    f"{output_language_instruction(output_language)}"
+                )},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
@@ -361,11 +367,13 @@ def verify_competitor(name: str, website: str | None, log=None) -> dict:
 
 def discover_competitors(
     profile: dict, limit: int = MAX_COMPETITORS, corroborate: bool = True, log=None,
+    output_language: str = "en",
 ) -> dict:
     """Return `{competitors: [...], rejected: [...]}`, ranked largest first."""
     from services.competitors.business_profile_store import profile_context
 
     log = log or (lambda _msg: None)
+    output_language = resolve_output_language(output_language)
     context = profile_context(profile)
     if not context:
         return {"competitors": [], "rejected": [], "error": "No business profile to compare against."}
@@ -389,21 +397,25 @@ def discover_competitors(
             local_future = pool.submit(
                 _ask_for_competitors, context, own_domain, local_limit,
                 target_countries, "local", grounding,
+                output_language,
             )
             global_future = pool.submit(
                 _ask_for_competitors, context, own_domain, global_limit,
                 target_countries, "global", grounding,
+                output_language,
             )
         suggestions = (local_future.result() or []) + (global_future.result() or [])
     else:
         log("Asking the model for competitor candidates...")
         suggestions = _ask_for_competitors(
-            context, own_domain, capped, None, "all", grounding,
+            context, own_domain, capped, None, "all", grounding, output_language,
         )
 
     if not suggestions and target_countries:
         log("No in-country candidates; retrying without the country restriction...")
-        suggestions = _ask_for_competitors(context, own_domain, capped, None, "all", grounding)
+        suggestions = _ask_for_competitors(
+            context, own_domain, capped, None, "all", grounding, output_language
+        )
         filter_countries = []
     if not suggestions:
         return {"competitors": [], "rejected": [], "error": "The model returned no competitors."}
@@ -553,6 +565,7 @@ def discover_competitors(
                 "site_reachable": check["reachable"],
             },
             "discovery_source": "ai",
+            "generated_language": output_language,
         })
 
     # Final ordering: tier first (an enterprise outranks a startup regardless of
@@ -700,6 +713,7 @@ def _review_candidates(name: str, log=None) -> list[dict]:
 
 def _ask_for_accounts(
     name: str, website: str, target_countries: list[str] | None = None, grounding: str = "",
+    output_language: str = "en",
 ) -> list[dict]:
     directive = ""
     if target_countries:
@@ -717,7 +731,10 @@ def _ask_for_accounts(
     try:
         raw = chat_completion(
             messages=[
-                {"role": "system", "content": ACCOUNTS_SYSTEM_PROMPT},
+                {"role": "system", "content": (
+                    f"{ACCOUNTS_SYSTEM_PROMPT}\n\n"
+                    f"{output_language_instruction(output_language)}"
+                )},
                 {"role": "user", "content": f"Company: {name}\nWebsite: {website or 'unknown'}{directive}"},
             ],
             temperature=0.0,
@@ -790,6 +807,7 @@ def _foreign_region_hit(handle: str, url: str, target_countries: list[str] | Non
 
 def discover_accounts(
     name: str, website: str | None, target_countries: list[str] | None = None, log=None,
+    output_language: str = "en",
 ) -> list[dict]:
     """Owned channels for one competitor, pre-approved (`validation_status: "valid"`)
     so they're linked as scrape sources immediately - no manual confirmation step.
@@ -800,6 +818,7 @@ def discover_accounts(
     than linked as a source that won't benefit this study.
     """
     log = log or (lambda _msg: None)
+    output_language = resolve_output_language(output_language)
     site = str(website or "").strip()
     accounts: list[dict] = []
     seen: set[str] = set()
@@ -823,7 +842,9 @@ def discover_accounts(
     log(f"{name}: asking the model for channels — X, LinkedIn, Threads, Facebook, "
         f"Instagram accounts, hashtags, and keywords to monitor...")
     candidates = [
-        entry for entry in _ask_for_accounts(name, site, target_countries, grounding) if isinstance(entry, dict)
+        entry for entry in _ask_for_accounts(
+            name, site, target_countries, grounding, output_language
+        ) if isinstance(entry, dict)
     ]
     # Review/discussion pages are found directly from search hits, not asked
     # of the model — see _review_candidates. They join the same list so the
@@ -882,7 +903,8 @@ def discover_accounts(
 
     # Guaranteed keyword coverage on top of whatever the model suggested -
     # see AUTO_KEYWORD_SUFFIXES above.
-    for suffix in AUTO_KEYWORD_SUFFIXES:
+    suffixes = AUTO_KEYWORD_SUFFIXES_AR if output_language == "ar" else AUTO_KEYWORD_SUFFIXES
+    for suffix in suffixes:
         term = f"{name} {suffix}"
         url = _derive_term_url("keyword", term)
         if not url or url.lower() in seen:
@@ -919,8 +941,13 @@ _discovery_runs = JobRegistry("Queued for competitor discovery.")
 ACTIVE_DISCOVERY_STATUSES = ACTIVE_STATUSES
 
 
-def create_discovery_run(project_id: int) -> str:
-    return _discovery_runs.create(project_id, discovered=0, rejected=[])
+def create_discovery_run(project_id: int, output_language: str = "en") -> str:
+    return _discovery_runs.create(
+        project_id,
+        discovered=0,
+        rejected=[],
+        output_language=resolve_output_language(output_language),
+    )
 
 
 def get_discovery_run(run_id: str) -> dict | None:
@@ -937,6 +964,7 @@ _append_log = _discovery_runs.append_log
 
 def _discover_accounts_concurrently(
     targets: list[dict], target_countries: list[str] | None = None, log=None,
+    output_language: str = "en",
 ) -> dict[int, list[dict]]:
     """Run discover_accounts() for each `{id, name, website}` target in parallel.
 
@@ -949,13 +977,17 @@ def _discover_accounts_concurrently(
         futures = {
             target["id"]: pool.submit(
                 discover_accounts, target["name"], target.get("website"), target_countries, log,
+                output_language,
             )
             for target in targets
         }
     return {target_id: future.result() for target_id, future in futures.items()}
 
 
-def run_discovery_job(run_id: str, project_id: int, profile: dict, limit: int, with_accounts: bool) -> None:
+def run_discovery_job(
+    run_id: str, project_id: int, profile: dict, limit: int, with_accounts: bool,
+    output_language: str = "en",
+) -> None:
     """Background counterpart of the old synchronous discover() endpoint body.
 
     Phase 1 only — no live web corroboration. That check now runs per
@@ -968,7 +1000,10 @@ def run_discovery_job(run_id: str, project_id: int, profile: dict, limit: int, w
     _update_discovery_run(run_id, status="running", stage="discovering",
                           message="Asking the model for competitors...")
     try:
-        result = discover_competitors(profile, limit=limit, corroborate=False, log=log)
+        result = discover_competitors(
+            profile, limit=limit, corroborate=False, log=log,
+            output_language=output_language,
+        )
         if result.get("error") and not result.get("competitors"):
             _update_discovery_run(run_id, status="failed", stage="error",
                                   message=result["error"], error=result["error"])
@@ -981,7 +1016,10 @@ def run_discovery_job(run_id: str, project_id: int, profile: dict, limit: int, w
             _update_discovery_run(run_id, stage="accounts",
                                   message=f"Resolving accounts for {len(records)} competitors...")
             target_countries = validate_countries(profile.get("target_countries"))
-            accounts_by_id = _discover_accounts_concurrently(records, target_countries=target_countries, log=log)
+            accounts_by_id = _discover_accounts_concurrently(
+                records, target_countries=target_countries, log=log,
+                output_language=output_language,
+            )
 
         for record in records:
             for account in accounts_by_id.get(record["id"], []):
@@ -998,7 +1036,9 @@ def run_discovery_job(run_id: str, project_id: int, profile: dict, limit: int, w
                               message="Competitor discovery crashed.", error=str(exc))
 
 
-def run_accounts_discovery_job(run_id: str, project_id: int, targets: list[dict]) -> None:
+def run_accounts_discovery_job(
+    run_id: str, project_id: int, targets: list[dict], output_language: str = "en"
+) -> None:
     """Phase 3: find channels for a given set of already-tracked competitors.
 
     `targets` is `[{id, name, website}, ...]` — the caller decides which competitors
@@ -1014,7 +1054,10 @@ def run_accounts_discovery_job(run_id: str, project_id: int, targets: list[dict]
     try:
         profile = get_profile(project_id) or {}
         target_countries = validate_countries(profile.get("target_countries"))
-        accounts_by_id = _discover_accounts_concurrently(targets, target_countries=target_countries, log=log)
+        accounts_by_id = _discover_accounts_concurrently(
+            targets, target_countries=target_countries, log=log,
+            output_language=output_language,
+        )
         discovered = 0
         for target in targets:
             for account in accounts_by_id.get(target["id"], []):

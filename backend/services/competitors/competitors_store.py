@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 from psycopg.types.json import Jsonb
 
 from app.core import db
+from app.core.language import resolve_output_language
 from services.competitors.countries import COUNTRIES, validate_countries
 from services.sources.sources_store import (
     _derive_facebook_url,
@@ -42,7 +43,7 @@ COMPETITOR_COLUMNS = """
     id, project_id, name, website, domain, description, country,
     operates_in_countries, aliases, size_tier, size_rank, size_signals,
     relevance_score, status, discovery_source, discovery_query,
-    last_scraped_at, last_analyzed_at, created_at, updated_at
+    generated_language, last_scraped_at, last_analyzed_at, created_at, updated_at
 """
 
 MAX_ALIASES = 12
@@ -249,6 +250,10 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
         "status": str(values.get("status") or "suggested").strip().lower(),
         "discovery_source": str(values.get("discovery_source") or "ai").strip().lower(),
         "discovery_query": str(values.get("discovery_query") or "").strip() or None,
+        "generated_language": (
+            resolve_output_language(values.get("generated_language"))
+            if values.get("generated_language") else None
+        ),
     }
 
     fields = list(payload)
@@ -260,7 +265,7 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
     # Each field below states what "no new information" looks like for it.
     KEEP_IF_ABSENT = (
         "website", "domain", "description", "country", "size_rank",
-        "relevance_score", "discovery_query",
+        "relevance_score", "discovery_query", "generated_language",
     )
     assignments_by_field = {
         # The user's decision to track outranks a later model suggestion.

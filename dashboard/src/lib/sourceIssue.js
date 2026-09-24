@@ -72,13 +72,6 @@ const FETCH_NOTE_PATTERNS = [
   { pattern: /^APIFY_API_TOKEN not set - (\w+) sources require Apify/i, key: 'apifyMissing', platform: 1 },
 ];
 
-const PLATFORM_NAMES = {
-  linkedin: 'LinkedIn',
-  threads: 'Threads',
-  facebook: 'Facebook',
-  instagram: 'Instagram',
-};
-
 export function translateFetchNote(note) {
   const text = String(note || '').trim();
   if (!text) return null;
@@ -89,7 +82,7 @@ export function translateFetchNote(note) {
     if (entry.status) params.status = match[entry.status] === 'None' ? '?' : match[entry.status];
     if (entry.platform) {
       const raw = match[entry.platform].toLowerCase();
-      params.platform = PLATFORM_NAMES[raw] || match[entry.platform];
+      params.platform = i18n.t(`sources:types.${raw}`, { defaultValue: match[entry.platform] });
     }
     return i18n.t(`pipeline:fetchNotes.${entry.key}`, params);
   }

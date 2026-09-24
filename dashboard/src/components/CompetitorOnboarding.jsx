@@ -346,7 +346,7 @@ function intervalToDays(value, unit) {
 }
 
 export default function CompetitorOnboarding() {
-  const { t } = useTranslation('competitorOnboarding');
+  const { t, i18n } = useTranslation('competitorOnboarding');
   const navigate = useNavigate();
   const [step, setStep] = useState(2);
   const [error, setError] = useState('');
@@ -1170,6 +1170,13 @@ export default function CompetitorOnboarding() {
               </div>
             ) : null}
 
+            {!contextBusy && profile.generated_language
+              && profile.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+                <div className="cs-alert cs-alert-warn" role="status" style={{ marginTop: 14 }}>
+                  {t('context.languageMismatch')}
+                </div>
+              ) : null}
+
             <div className="cs-grid-2">
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-industry">{t('context.industry')}</label>
@@ -1241,6 +1248,12 @@ export default function CompetitorOnboarding() {
           {!culturalBusy && culturalAnalysis ? (
             culturalAnalysis.status === 'success' ? (
               <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {culturalAnalysis.generated_language
+                  && culturalAnalysis.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+                    <div className="cs-alert cs-alert-warn" role="status">
+                      {t('cultural.languageMismatch')}
+                    </div>
+                  ) : null}
                 <div className="cs-field" style={{ marginBottom: 0 }}>
                   <label className="cs-label">{t('cultural.summary')}</label>
                   <p dir="auto" style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }}>{culturalAnalysis.summary}</p>

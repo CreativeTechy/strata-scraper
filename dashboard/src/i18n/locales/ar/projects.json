@@ -4,15 +4,15 @@
     "web": "ويب",
     "hashtag": "وسم",
     "keyword": "كلمة مفتاحية",
-    "username": "حساب X",
+    "username": "حساب إكس",
     "tweet": "منشور واحد",
-    "reddit": "Reddit",
-    "telegram": "Telegram",
-    "linkedin": "LinkedIn",
-    "threads": "Threads",
-    "facebook": "Facebook",
-    "instagram": "Instagram",
-    "twitter": "Twitter/X"
+    "reddit": "ريديت",
+    "telegram": "تيليغرام",
+    "linkedin": "لينكدإن",
+    "threads": "ثريدز",
+    "facebook": "فيسبوك",
+    "instagram": "إنستغرام",
+    "twitter": "إكس"
   },
   "statuses": {
     "draft": "مسودة",
@@ -266,36 +266,36 @@
       "title": "إنشاء مصدر جديد",
       "typeLabel": "نوع المصدر",
       "chooseType": "اختر نوع المصدر",
-      "twitterKind": "نوع مصدر Twitter/X",
-      "redditKind": "نوع مصدر Reddit",
+      "twitterKind": "نوع مصدر إكس",
+      "redditKind": "نوع مصدر ريديت",
       "redditKinds": {
         "subreddit": "مجتمع (Subreddit)",
         "user": "مستخدم / ملف شخصي",
-        "search": "كلمة مفتاحية / بحث (في كل Reddit)",
+        "search": "كلمة مفتاحية / بحث (في كل ريديت)",
         "subreddit_search": "كلمة مفتاحية داخل مجتمع فرعي (Subreddit)"
       },
       "redditHint": "يُستخدم فقط لتفسير كلمة مجردة أدناه (مثل \"ev\" كمجتمع أو كعبارة بحث). أما الإدخال المسبوق ببادئة (r/... أو u/...) وروابط reddit.com الكاملة فلا لبس فيها في كل الأحوال.",
-      "linkedinKind": "نوع مصدر LinkedIn",
+      "linkedinKind": "نوع مصدر لينكدإن",
       "linkedinKinds": {
         "company": "صفحة شركة",
         "profile": "ملف شخصي",
         "search": "بحث بكلمة مفتاحية / وسم"
       },
       "linkedinHint": "يُستخدم فقط لتفسير معرّف مختصر أو عبارة أدناه (مثل \"google\" كصفحة شركة أو كعبارة بحث). أما رابط linkedin.com الكامل فلا لبس فيه في كل الأحوال. يتطلب APIFY_API_TOKEN.",
-      "threadsKind": "نوع مصدر Threads",
+      "threadsKind": "نوع مصدر ثريدز",
       "threadsKinds": {
         "profile": "ملف شخصي",
         "search": "كلمة مفتاحية / بحث"
       },
-      "facebookKind": "نوع مصدر Facebook",
+      "facebookKind": "نوع مصدر فيسبوك",
       "facebookKinds": {
         "page": "صفحة",
         "group": "مجموعة",
         "profile": "ملف شخصي",
         "search": "كلمة مفتاحية / بحث"
       },
-      "facebookHint": "يُستخدم فقط لتفسير معرّف مختصر أدناه (صفحة أو ملف شخصي)، إذ يستخدم Facebook الشكل نفسه للرابط في الحالتين. أما المجموعات والبحث وروابط profile.php/people/... الكاملة فلا لبس فيها في كل الأحوال. يتطلب APIFY_API_TOKEN.",
-      "instagramKind": "نوع مصدر Instagram",
+      "facebookHint": "يُستخدم فقط لتفسير معرّف مختصر أدناه (صفحة أو ملف شخصي)، إذ يستخدم فيسبوك الشكل نفسه للرابط في الحالتين. أما المجموعات والبحث وروابط profile.php/people/... الكاملة فلا لبس فيها في كل الأحوال. يتطلب APIFY_API_TOKEN.",
+      "instagramKind": "نوع مصدر إنستغرام",
       "instagramKinds": {
         "profile": "ملف شخصي",
         "hashtag": "وسم",

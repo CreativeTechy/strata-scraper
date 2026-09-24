@@ -4,14 +4,14 @@
     "web": "الويب",
     "hashtag": "وسم",
     "keyword": "كلمة مفتاحية",
-    "username": "حساب X",
+    "username": "حساب إكس",
     "tweet": "منشور واحد",
-    "reddit": "Reddit",
-    "telegram": "Telegram",
-    "linkedin": "LinkedIn",
-    "threads": "Threads",
-    "facebook": "Facebook",
-    "instagram": "Instagram",
+    "reddit": "ريديت",
+    "telegram": "تيليغرام",
+    "linkedin": "لينكدإن",
+    "threads": "ثريدز",
+    "facebook": "فيسبوك",
+    "instagram": "إنستغرام",
     "unknown": "غير معروف"
   },
   "sourceKinds": {
@@ -164,6 +164,7 @@
       "benefits": "المزايا",
       "challenges": "التحديات",
       "insights": "رؤى أخرى",
+      "languageMismatch": "أُنشئ هذا التحليل المحفوظ بلغة أخرى. أعد تشغيله لإنشاء المحتوى باللغة الحالية.",
       "failed": "تعذّر إنشاء التحليل.",
       "notYet": "لم يُحلَّل بعد — شغّله من هنا أو من معالج الدراسة."
     }
@@ -198,7 +199,8 @@
       "differentiators": "ما يميّزك",
       "differentiatorsHint": "يُستخدم للحكم على تحركات المنافسين",
       "differentiatorsPlaceholder": "التنفيذ في أقل من 30 يومًا",
-      "marketContext": "سياق السوق"
+      "marketContext": "سياق السوق",
+      "languageMismatch": "أُنشئ سياق السوق المحفوظ بلغة أخرى. أعد التحليل لإنشاء المحتوى باللغة الحالية."
     },
     "schedule": {
       "title": "جدولة التتبّع",

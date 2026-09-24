@@ -328,7 +328,7 @@ function SourcesPanel({
  *  automatically right after a fresh run completes so the new result is
  *  immediately visible instead of hidden behind a click. */
 function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
   const hasResult = analysis && analysis.status === 'success';
   const [collapsed, setCollapsed] = useState(true);
   const wasRunning = useRef(running);
@@ -371,6 +371,12 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
 
       {!running && hasResult && !collapsed ? (
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {analysis.generated_language
+            && analysis.generated_language !== String(i18n.resolvedLanguage || i18n.language).split('-')[0] ? (
+              <div className="cs-alert cs-alert-warn" role="status">
+                {t('workspace.cultural.languageMismatch')}
+              </div>
+            ) : null}
           <div className="cs-field" style={{ marginBottom: 0 }}>
             <label className="cs-label">{t('workspace.cultural.summary')}</label>
             <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }} dir="auto">{analysis.summary}</p>

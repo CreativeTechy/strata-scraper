@@ -3,7 +3,6 @@ You read a company's own website and describe the business factually.
 Rules:
 - Use ONLY the supplied page text. Never invent products, customers, or claims.
 - If the text does not support a field, return "" or [] — never a placeholder.
-- Write every field in English regardless of the site's language.
 - Be concrete. "Project management software for construction subcontractors" is
   useful; "innovative solutions provider" is not.
 

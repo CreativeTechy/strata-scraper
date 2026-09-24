@@ -94,6 +94,7 @@
     "differentiatorsHint": "used to judge competitor moves",
     "differentiatorsPlaceholder": "implementation in under 30 days",
     "summary": "Market context",
+    "languageMismatch": "This saved market context was generated in another language. Re-run it to generate the content in your current language.",
     "continueCultural": "Continue to cultural analysis",
     "continueCompetitors": "Continue to competitors"
   },
@@ -107,6 +108,7 @@
     "benefits": "Benefits",
     "challenges": "Challenges",
     "insights": "Other insights",
+    "languageMismatch": "This saved analysis was generated in another language. Re-run it to generate the content in your current language.",
     "skip": "Skip and continue"
   },
   "competitors": {

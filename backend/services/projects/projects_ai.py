@@ -7,6 +7,7 @@ import re
 from collections import Counter
 
 from app.core import settings as config
+from app.core.language import output_language_instruction, resolve_output_language
 from llm_client import chat_completion
 
 STOPWORDS = {
@@ -148,12 +149,19 @@ def _keyword_candidates(name, description):
     return [word for word, _ in counts.most_common(12)]
 
 
-def _fallback_metadata(name, description):
+def _fallback_metadata(name, description, output_language="en"):
     keywords = _keyword_candidates(name, description)
     hashtags = _normalize_items([name] + keywords[:4], prefix="#", limit=5)
     usernames = _normalize_usernames([name] + keywords[:4], limit=4)
     target_audience = ""
-    if keywords:
+    if resolve_output_language(output_language) == "ar":
+        if keywords:
+            target_audience = f"المهتمون بـ {keywords[0].replace('-', ' ')} وآخر المستجدات ذات الصلة"
+        elif name:
+            target_audience = f"المتابعون لـ {name}"
+        else:
+            target_audience = "القراء والمتخصصون المتابعون للموضوع"
+    elif keywords:
         target_audience = f"People interested in {keywords[0].replace('-', ' ')} and related updates"
     elif name:
         target_audience = f"People following {name}"
@@ -169,12 +177,13 @@ def _fallback_metadata(name, description):
     }
 
 
-def suggest_project_metadata(name, description):
+def suggest_project_metadata(name, description, output_language="en"):
     """Return suggested target audience, hashtags, keywords, and usernames for a project."""
     name = _clean_text(name)
     description = _clean_text(description)
+    output_language = resolve_output_language(output_language)
 
-    fallback = _fallback_metadata(name, description)
+    fallback = _fallback_metadata(name, description, output_language)
     if not config.LLM_API_KEY or not name:
         return fallback
 
@@ -188,7 +197,8 @@ def suggest_project_metadata(name, description):
         "- Normalize usernames to X/Twitter profile handles, not full URLs.\n"
         "- Return 3 to 6 hashtags and 4 to 8 keywords.\n"
         "- Return 0 to 5 usernames.\n"
-        "- Target audience should be a short plain-English phrase.\n"
+        "- Target audience should be a short plain-language phrase.\n"
+        f"- {output_language_instruction(output_language)}\n"
         "- Do not include markdown or commentary.\n\n"
         f"Project name: {name}\n"
         f"Project description: {description or '(none)'}\n"

@@ -20,11 +20,12 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from app.core import db
+from app.core.language import output_language_instruction, resolve_output_language
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import country_label, validate_countries
 
-PROMPT_VERSION = "competitor-profile-2026-07-27"
+PROMPT_VERSION = "competitor-profile-2026-09-24-localized"
 
 # A handful of pages is plenty: the home page says what the company does, and
 # about/product/pricing pages say who it is for and how it positions itself.
@@ -166,7 +167,9 @@ def _as_list(value, limit: int = 12) -> list[str]:
     return out
 
 
-def derive_profile(name: str, website: str, description: str, scraped_text: str) -> dict:
+def derive_profile(
+    name: str, website: str, description: str, scraped_text: str, output_language: str = "en"
+) -> dict:
     """Turn scraped site text into structured market context via the LLM."""
     supplied = json.dumps(
         {"name": name or "", "website": website or "", "description": description or ""}
@@ -179,7 +182,9 @@ def derive_profile(name: str, website: str, description: str, scraped_text: str)
     try:
         raw = chat_completion(
             messages=[
-                {"role": "system", "content": PROFILE_SYSTEM_PROMPT},
+                {"role": "system", "content": (
+                    f"{PROFILE_SYSTEM_PROMPT}\n\n{output_language_instruction(output_language)}"
+                )},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
@@ -215,7 +220,8 @@ PROFILE_COLUMNS = """
     id, project_id, name, website, description, industry, market, geography,
     target_countries, positioning, offerings, audience, differentiators, keywords,
     scrape_status, scrape_error, scraped_pages, scraped_chars, scraped_at,
-    context_summary, analysis_model, prompt_version, created_at, updated_at
+    context_summary, analysis_model, prompt_version, generated_language,
+    created_at, updated_at
 """
 
 
@@ -250,6 +256,10 @@ def upsert_profile(project_id: int, values: dict) -> dict | None:
         "scraped_at": values.get("scraped_at"),
         "context_summary": (str(values.get("context_summary") or "").strip() or None),
         "analysis_model": (str(values.get("analysis_model") or "").strip() or None),
+        "generated_language": (
+            resolve_output_language(values.get("generated_language"))
+            if values.get("generated_language") else None
+        ),
         "prompt_version": PROMPT_VERSION,
     }
 
@@ -266,7 +276,7 @@ def upsert_profile(project_id: int, values: dict) -> dict | None:
     )
 
 
-def build_profile(project_id: int, values: dict) -> dict:
+def build_profile(project_id: int, values: dict, output_language: str = "en") -> dict:
     """Scrape the website, derive market context, and persist. Returns the profile.
 
     The scrape outcome is always recorded, so onboarding can say "we read 5 pages"
@@ -275,12 +285,13 @@ def build_profile(project_id: int, values: dict) -> dict:
     name = str(values.get("name") or "").strip()
     website = str(values.get("website") or "").strip()
     description = str(values.get("description") or "").strip()
+    output_language = resolve_output_language(output_language)
 
     scrape = scrape_website(website) if website else {
         "pages": [], "text": "", "chars": 0, "status": "skipped",
         "error": "No website supplied.",
     }
-    derived = derive_profile(name, website, description, scrape["text"])
+    derived = derive_profile(name, website, description, scrape["text"], output_language)
 
     from app.core import settings as config
     from datetime import datetime, timezone
@@ -301,6 +312,7 @@ def build_profile(project_id: int, values: dict) -> dict:
         "scraped_chars": scrape["chars"],
         "scraped_at": datetime.now(timezone.utc) if scrape["pages"] else None,
         "analysis_model": config.LLM_CHAT_MODEL if derived else None,
+        "generated_language": output_language if derived else None,
     }
 
     saved = upsert_profile(project_id, merged)

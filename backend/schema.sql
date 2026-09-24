@@ -642,6 +642,9 @@ create table if not exists public.business_profiles (
     embedded_at      timestamptz,
     analysis_model   text,
     prompt_version   text,
+    -- Locale requested when the generated profile fields were last derived.
+    -- NULL means a legacy or entirely manual profile whose language is unknown.
+    generated_language text,
     created_at       timestamptz not null default now(),
     updated_at       timestamptz not null default now(),
     constraint business_profiles_scrape_status_check
@@ -699,6 +702,7 @@ create table if not exists public.competitors (
     status                text not null default 'suggested',
     discovery_source      text not null default 'ai',
     discovery_query       text,
+    generated_language    text,
     last_scraped_at       timestamptz,
     last_analyzed_at      timestamptz,
     embedding_json        jsonb default '[]'::jsonb,
