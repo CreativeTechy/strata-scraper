@@ -42,14 +42,15 @@ function classify(code, lower) {
 }
 
 // Messages built client-side with t() are already in the UI language: either
-// flagged via localizedError(), or containing letters from the active script.
-// Non-ASCII punctuation alone is not evidence that English server text was
-// translated.
+// flagged via localizedError(), or predominantly written in the active script.
+// One Arabic name inside an English server error is not enough.
 function isLocalized(input, raw) {
   if (input && typeof input === 'object' && input.localized) return true;
   if (typeof raw !== 'string') return false;
   if (i18n.resolvedLanguage === 'ar') {
-    return /[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06FA-\u06FF]/.test(raw);
+    const arabicLetters = raw.match(/[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06FA-\u06FF]/g)?.length || 0;
+    const latinLetters = raw.match(/\p{Script=Latin}/gu)?.length || 0;
+    return arabicLetters > 0 && arabicLetters >= latinLetters;
   }
   return false;
 }

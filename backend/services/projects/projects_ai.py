@@ -157,11 +157,25 @@ def _keyword_candidates(name, description):
 
 
 def _fallback_metadata(name, description, output_language="en"):
-    keywords = _keyword_candidates(name, description)
+    language = resolve_output_language(output_language)
+    keyword_candidates = _keyword_candidates(name, description)
+    if language == "ar":
+        # Keep the project name as an official term, but do not turn English
+        # description words into supposedly localized search keywords when the
+        # model is unavailable or returns the wrong language.
+        keywords = []
+        for value in [name, *keyword_candidates]:
+            text = _clean_text(value)
+            if not text or text in keywords:
+                continue
+            if text.casefold() == name.casefold() or text_matches_output_language(text, language):
+                keywords.append(text)
+    else:
+        keywords = keyword_candidates
     hashtags = _normalize_items([name] + keywords[:4], prefix="#", limit=5)
     usernames = _normalize_usernames([name] + keywords[:4], limit=4)
     target_audience = ""
-    if resolve_output_language(output_language) == "ar":
+    if language == "ar":
         if keywords:
             target_audience = f"المهتمون بـ {keywords[0].replace('-', ' ')} وآخر المستجدات ذات الصلة"
         elif name:
@@ -182,6 +196,21 @@ def _fallback_metadata(name, description, output_language="en"):
         "profile_urls": _username_profile_urls(usernames),
         "source": "heuristic",
     }
+
+
+def _keyword_is_official_identifier(value: str, project_name: str) -> bool:
+    text = _clean_text(value)
+    if not text:
+        return False
+    if text.casefold() == _clean_text(project_name).casefold():
+        return True
+    if " " in text:
+        return False
+    return (
+        any(character.isupper() for character in text[1:])
+        or (text.isupper() and 1 < len(text) <= 10)
+        or any(character.isdigit() for character in text)
+    )
 
 
 def suggest_project_metadata(name, description, output_language="en"):
@@ -229,9 +258,11 @@ def suggest_project_metadata(name, description, output_language="en"):
     keywords = _normalize_items(payload.get("keywords") or [], prefix="", limit=8)
     usernames = _normalize_usernames(payload.get("usernames") or [], limit=5)
 
-    # Official product and brand terms may legitimately use another script;
-    # the descriptive audience field must still use the requested language.
-    if not text_matches_output_language(target_audience, output_language):
+    localized_values = [target_audience, *(
+        keyword for keyword in keywords
+        if not _keyword_is_official_identifier(keyword, name)
+    )]
+    if not text_matches_output_language(localized_values, output_language):
         return fallback
 
     return {

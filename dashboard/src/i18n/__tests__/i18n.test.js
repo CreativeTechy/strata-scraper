@@ -180,6 +180,14 @@ describe('API errors', () => {
     expect(issue.technicalDetail).toBe(raw);
   });
 
+  it('does not mistake an Arabic project name inside an English error for localized text', async () => {
+    await i18n.changeLanguage('ar');
+    const raw = 'Could not load مشروع Coffee dashboard';
+    const issue = userFacingError(raw, { context: 'تحميل المشروع' });
+    expect(issue.message).toBe('تعذّر تحميل المشروع.');
+    expect(issue.technicalDetail).toBe(raw);
+  });
+
   it('keeps uncoded English validation text out of an Arabic notice body', async () => {
     await i18n.changeLanguage('ar');
     const issue = userFacingError(new Error('Value must be valid'), { context: 'حفظ المشروع' });

@@ -179,12 +179,16 @@ def _as_list(value, limit: int = 12) -> list[str]:
     return out
 
 
-def _looks_like_official_name(value: str, business_name: str) -> bool:
+def _looks_like_official_name(
+    value: str, business_name: str, reference_text: str = ""
+) -> bool:
     """Return True for a short Latin identifier that should stay unchanged.
 
     Descriptive phrases still need translation. This exemption is deliberately
-    narrow: the exact business name, one brand-style token, or a short phrase
-    whose words are all title-cased (for example, ``Pumpkin Spice Latte``).
+    narrow: the exact business name, one unmistakable brand-style token, or a
+    title-cased multiword phrase found verbatim in the supplied website text.
+    Capitalization alone does not make ordinary labels such as ``Coffee`` or
+    ``Customer Support`` official names.
     """
     text = str(value or "").strip()
     if not text:
@@ -196,16 +200,22 @@ def _looks_like_official_name(value: str, business_name: str) -> bool:
         return False
     if len(words) == 1:
         word = words[0]
-        return word[0].isupper() or any(ch.isupper() for ch in word[1:])
-    return all(word[0].isupper() for word in words)
+        return (
+            any(ch.isupper() for ch in word[1:])
+            or (word.isupper() and 1 < len(word) <= 10)
+            or any(ch.isdigit() for ch in word)
+        )
+    return text in reference_text and all(word[0].isupper() for word in words)
 
 
-def _localized_profile_prose(result: dict, business_name: str) -> list[object]:
+def _localized_profile_prose(
+    result: dict, business_name: str, reference_text: str = ""
+) -> list[object]:
     prose: list[object] = [result[key] for key in LOCALIZED_PROFILE_FIELDS]
     for key in ("offerings", "keywords"):
         prose.extend(
             value for value in result[key]
-            if not _looks_like_official_name(value, business_name)
+            if not _looks_like_official_name(value, business_name, reference_text)
         )
     return prose
 
@@ -255,7 +265,9 @@ def derive_profile(
             "keywords": _as_list(parsed.get("keywords"), limit=20),
             "context_summary": str(parsed.get("context_summary") or "").strip(),
         }
-        prose = _localized_profile_prose(result, result["name"] or name)
+        prose = _localized_profile_prose(
+            result, result["name"] or name, f"{description}\n{scraped_text}"
+        )
         if result["context_summary"] and text_matches_output_language(prose, output_language):
             return result
         if attempt == 0:

@@ -108,9 +108,21 @@ class OutputLanguageTests(unittest.TestCase):
             "name": "Starbucks", "context_summary": "ملخص عربي واضح عن النشاط",
             "offerings": ["Pumpkin Spice Latte"], "keywords": ["Starbucks"],
         })
-        result = business_profile_store.derive_profile("Starbucks", "", "", "site text", "ar")
+        result = business_profile_store.derive_profile(
+            "Starbucks", "", "", "Try our Pumpkin Spice Latte this fall.", "ar"
+        )
         self.assertEqual(result["offerings"], ["Pumpkin Spice Latte"])
         self.assertEqual(chat.call_count, 1)
+
+    @patch("services.competitors.business_profile_store.chat_completion")
+    def test_business_profile_does_not_treat_title_case_labels_as_official(self, chat):
+        chat.return_value = json.dumps({
+            "name": "Acme", "context_summary": "ملخص عربي واضح عن النشاط",
+            "offerings": ["Customer Support"], "keywords": ["Coffee Shops"],
+        })
+        result = business_profile_store.derive_profile("Acme", "", "", "site text", "ar")
+        self.assertEqual(result, {})
+        self.assertEqual(chat.call_count, 2)
 
     @patch("services.competitors.business_profile_store.chat_completion")
     def test_business_profile_rejects_empty_model_output(self, chat):
@@ -230,6 +242,24 @@ class OutputLanguageTests(unittest.TestCase):
         self.assertIn("Arabic", prompt)
         self.assertNotIn("plain-English", prompt)
         self.assertEqual(result["target_audience"], "الجمهور")
+
+    @patch("services.projects.projects_ai.chat_completion")
+    def test_arabic_project_suggestions_reject_english_descriptive_keywords(self, chat):
+        chat.return_value = json.dumps({
+            "target_audience": "محبو القهوة والمشروبات الساخنة",
+            "hashtags": [], "keywords": ["coffee shops", "hot drinks"], "usernames": [],
+        })
+        with patch.object(projects_ai.config, "LLM_API_KEY", "test-key"):
+            result = projects_ai.suggest_project_metadata("Acme", "coffee business", "ar")
+        self.assertEqual(result["source"], "heuristic")
+        self.assertNotIn("coffee shops", result["keywords"])
+        self.assertNotIn("hot drinks", result["keywords"])
+
+    def test_arabic_project_fallback_keeps_name_but_drops_english_description_terms(self):
+        result = projects_ai._fallback_metadata("Acme", "coffee business updates", "ar")
+        self.assertIn("Acme", result["keywords"])
+        self.assertNotIn("coffee", result["keywords"])
+        self.assertNotIn("business", result["keywords"])
 
     def test_background_run_captures_requested_language(self):
         run_id = competitor_discovery.create_discovery_run(17, "ar-LB")
