@@ -100,28 +100,25 @@ export default function ProjectDetailPage({
   const canLinkUsers = hasPermission('projects.link_users');
   const { t: tArticles } = useTranslation('articles');
   const canRemoveArticles = hasPermission('articles.delete');
-  const [removeArticlesOpen, setRemoveArticlesOpen] = useState(false);
+  const [removeArticlesProjectId, setRemoveArticlesProjectId] = useState(null);
   const [articlesReloadKey, setArticlesReloadKey] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [sourcesPage, setSourcesPage] = useState(1);
   const [activeSourceTab, setActiveSourceTab] = useState('all');
   const [articleStats, setArticleStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [seenProjectId, setSeenProjectId] = useState(null);
 
   const project = useMemo(
     () => projects.find((item) => Number(item.id) === Number(params.projectId)) || null,
     [projects, params.projectId]
   );
 
-  // Reset source pagination/tab when navigating to a different project. Adjusting state
-  // during render (rather than in an effect) avoids an extra render on every navigation.
-  if (project?.id !== seenProjectId) {
-    setSeenProjectId(project?.id ?? null);
-    setRemoveArticlesOpen(false);
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- route changes reset both controls together */
     setSourcesPage(1);
     setActiveSourceTab('all');
-  }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [project?.id]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -611,15 +608,15 @@ export default function ProjectDetailPage({
           <h2 id="project-danger-zone-title">{tArticles('removeProject.dangerZoneTitle')}</h2>
           <div className="danger-zone-row">
             <div><strong>{tArticles('removeProject.dangerZoneAction')}</strong><p>{tArticles('removeProject.dangerZoneBody')}</p></div>
-            <button type="button" className="btn-secondary" onClick={() => setRemoveArticlesOpen(true)}>
+            <button type="button" className="btn-secondary" onClick={() => setRemoveArticlesProjectId(project.id)}>
               <Trash2 size={16} /> {tArticles('removeProject.openButton')}
             </button>
           </div>
         </section>
       )}
-      {removeArticlesOpen && (
-        <RemoveProjectArticlesDialog open project={project} onClose={() => setRemoveArticlesOpen(false)}
-          onRemoved={() => { setRemoveArticlesOpen(false); setArticlesReloadKey((value) => value + 1); }} />
+      {removeArticlesProjectId === project.id && (
+        <RemoveProjectArticlesDialog open project={project} onClose={() => setRemoveArticlesProjectId(null)}
+          onRemoved={() => { setRemoveArticlesProjectId(null); setArticlesReloadKey((value) => value + 1); }} />
       )}
 
       <ConfirmModal
