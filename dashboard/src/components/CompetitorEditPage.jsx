@@ -21,6 +21,7 @@ import {
 } from '../competitorApi.js';
 import { SCRAPE_STAGES } from '../constants/competitorStages.js';
 import { REPEAT_UNIT_OPTIONS } from '../constants/schedule.js';
+import { generatedLanguageNeedsRefresh, generatedTextDirection } from '../i18n/format.js';
 import { CountryPicker, ListEditor, StageList } from './CompetitorOnboarding.jsx';
 import ErrorNotice from './ErrorNotice';
 import { WeekdayPicker } from './ProjectsPage.jsx';
@@ -30,7 +31,7 @@ import '../styles/Competitors.css';
 const STUDY_STATUS_OPTIONS = ['draft', 'active', 'archived'];
 
 export default function CompetitorEditPage() {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
   const { studyId } = useParams();
   const navigate = useNavigate();
 
@@ -88,6 +89,9 @@ export default function CompetitorEditPage() {
           audience: loadedProfile?.audience || [],
           differentiators: loadedProfile?.differentiators || [],
           context_summary: loadedProfile?.context_summary || '',
+          analysis_model: loadedProfile?.analysis_model || null,
+          prompt_version: loadedProfile?.prompt_version || null,
+          generated_language: loadedProfile?.generated_language || null,
         });
         setScheduleDraft({
           repeat_enabled: Boolean(loadedSchedule.repeat_enabled),
@@ -151,6 +155,10 @@ export default function CompetitorEditPage() {
         description: profileDraft.description,
         target_countries: profileDraft.target_countries,
       });
+      if (!result.ai_derived) {
+        setSaveError(t('edit.context.notGenerated'));
+        return;
+      }
       setProfileDraft((prev) => ({ ...prev, ...(result.profile || {}) }));
     } catch (caught) {
       setSaveError(caught);
@@ -261,6 +269,12 @@ export default function CompetitorEditPage() {
           </div>
         ) : null}
 
+        {!contextBusy && generatedLanguageNeedsRefresh(profileDraft, i18n.resolvedLanguage || i18n.language) ? (
+            <div className="cs-alert cs-alert-warn" role="status" style={{ marginTop: 14 }}>
+              {t('edit.context.languageMismatch')}
+            </div>
+          ) : null}
+
         {profileDraft ? (
           <>
             <div className="cs-grid-2">
@@ -288,12 +302,12 @@ export default function CompetitorEditPage() {
             <div className="cs-grid-2">
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-p-industry">{t('edit.context.industry')}</label>
-                <input id="cs-p-industry" className="cs-input" dir="auto" value={profileDraft.industry}
+                <input id="cs-p-industry" className="cs-input" dir={generatedTextDirection(profileDraft.generated_language)} value={profileDraft.industry}
                   onChange={(event) => setProfileDraft({ ...profileDraft, industry: event.target.value })} />
               </div>
               <div className="cs-field">
                 <label className="cs-label" htmlFor="cs-p-market">{t('edit.context.market')}</label>
-                <input id="cs-p-market" className="cs-input" dir="auto" value={profileDraft.market}
+                <input id="cs-p-market" className="cs-input" dir={generatedTextDirection(profileDraft.generated_language)} value={profileDraft.market}
                   onChange={(event) => setProfileDraft({ ...profileDraft, market: event.target.value })} />
               </div>
             </div>
@@ -307,23 +321,26 @@ export default function CompetitorEditPage() {
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="cs-p-positioning">{t('edit.context.positioning')}</label>
-              <input id="cs-p-positioning" className="cs-input" dir="auto" value={profileDraft.positioning}
+              <input id="cs-p-positioning" className="cs-input" dir={generatedTextDirection(profileDraft.generated_language)} value={profileDraft.positioning}
                 onChange={(event) => setProfileDraft({ ...profileDraft, positioning: event.target.value })} />
             </div>
 
             <ListEditor label={t('edit.context.offerings')} values={profileDraft.offerings}
+              dir={generatedTextDirection(profileDraft.generated_language)}
               placeholder={t('edit.context.offeringsPlaceholder')}
               onChange={(offerings) => setProfileDraft({ ...profileDraft, offerings })} />
             <ListEditor label={t('edit.context.audience')} values={profileDraft.audience}
+              dir={generatedTextDirection(profileDraft.generated_language)}
               placeholder={t('edit.context.audiencePlaceholder')}
               onChange={(audience) => setProfileDraft({ ...profileDraft, audience })} />
             <ListEditor label={t('edit.context.differentiators')} hint={t('edit.context.differentiatorsHint')}
+              dir={generatedTextDirection(profileDraft.generated_language)}
               values={profileDraft.differentiators} placeholder={t('edit.context.differentiatorsPlaceholder')}
               onChange={(differentiators) => setProfileDraft({ ...profileDraft, differentiators })} />
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="cs-p-context">{t('edit.context.marketContext')}</label>
-              <textarea id="cs-p-context" className="cs-textarea" dir="auto" style={{ minHeight: 110 }}
+              <textarea id="cs-p-context" className="cs-textarea" dir={generatedTextDirection(profileDraft.generated_language)} style={{ minHeight: 110 }}
                 value={profileDraft.context_summary}
                 onChange={(event) => setProfileDraft({ ...profileDraft, context_summary: event.target.value })} />
             </div>

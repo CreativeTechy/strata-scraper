@@ -322,6 +322,7 @@
     "httpError": "HTTP {{status}} - the source's page could not be fetched.",
     "telegramUnavailable": "Telegram channel unavailable (private, not a channel, or missing).",
     "tweetUnavailable": "Could not fetch this tweet (deleted, private/protected, or fxtwitter.com is unavailable).",
-    "apifyMissing": "{{platform}} sources require Apify, and the Apify API token is not set."
+    "apifyMissing": "{{platform}} sources require Apify, and the Apify API token is not set.",
+    "unknown": "The source could not be fetched. Review the technical details."
   }
 }

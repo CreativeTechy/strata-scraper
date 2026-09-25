@@ -42,11 +42,17 @@ function classify(code, lower) {
 }
 
 // Messages built client-side with t() are already in the UI language: either
-// flagged via localizedError(), or plain strings that aren't pure ASCII (an
-// English server message always is; an Arabic one never is).
+// flagged via localizedError(), or predominantly written in the active script.
+// One Arabic name inside an English server error is not enough.
 function isLocalized(input, raw) {
   if (input && typeof input === 'object' && input.localized) return true;
-  return typeof raw === 'string' && /[\u0080-\uFFFF]/.test(raw);
+  if (typeof raw !== 'string') return false;
+  if (i18n.resolvedLanguage === 'ar') {
+    const arabicLetters = raw.match(/[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06FA-\u06FF]/g)?.length || 0;
+    const latinLetters = raw.match(/\p{Script=Latin}/gu)?.length || 0;
+    return arabicLetters > 0 && arabicLetters >= latinLetters;
+  }
+  return false;
 }
 
 export function userFacingError(input, { context } = {}) {
@@ -99,13 +105,13 @@ export function userFacingError(input, { context } = {}) {
       // A validation message is itself the useful part ("Password must be at
       // least 8 characters"): show the translated one, or the server's text
       // when the UI is English / no translation exists and it isn't technical.
-      const message = translated || (!technical ? raw : '') || result.message;
+      const message = translated || (english && !technical ? raw : '') || result.message;
       return {
         ...result,
         title: t('common:errors.validation.title'),
         message,
         action: t('common:errors.validation.action'),
-        technicalDetail: technical ? raw : '',
+        technicalDetail: (technical || (!english && raw && !translated)) ? raw : '',
       };
     }
     case 'generic':

@@ -20,8 +20,9 @@ gateway timeout.
 from __future__ import annotations
 
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
+from app.core.language import resolve_output_language
 from services.competitors import business_profile_store
 from services.competitors import competitor_discovery
 from services.competitors import competitors_store
@@ -182,7 +183,12 @@ def get_profile(project_id: int, user: dict = Depends(require_permission("compet
 
 
 @router.post("/studies/{project_id}/profile")
-def build_profile(project_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
+def build_profile(
+    project_id: int,
+    payload: dict,
+    user: dict = Depends(require_permission("competitors.manage")),
+    accept_language: str | None = Header(default=None),
+):
     """Scrape the business's website and derive its market context.
 
     Returns the scrape outcome alongside the profile so the UI can say how many
@@ -195,7 +201,9 @@ def build_profile(project_id: int, payload: dict, user: dict = Depends(require_p
         raise HTTPException(status_code=400, detail="A business name is required.")
     if payload.get("target_countries") is not None and not isinstance(payload["target_countries"], list):
         raise HTTPException(status_code=400, detail="target_countries must be a list of ISO country codes.")
-    return business_profile_store.build_profile(project_id, payload)
+    return business_profile_store.build_profile(
+        project_id, payload, resolve_output_language(accept_language)
+    )
 
 
 @router.put("/studies/{project_id}/profile")
@@ -207,7 +215,9 @@ def update_profile(project_id: int, payload: dict, user: dict = Depends(require_
         raise HTTPException(status_code=400, detail="target_countries must be a list of ISO country codes.")
     existing = business_profile_store.get_profile(project_id) or {}
     merged = {**existing, **payload}
-    profile = business_profile_store.upsert_profile(project_id, merged)
+    profile = business_profile_store.upsert_profile(
+        project_id, merged, prompt_version=existing.get("prompt_version")
+    )
     if not profile:
         raise HTTPException(status_code=400, detail="Could not save the profile.")
     return {"profile": profile}
@@ -223,7 +233,11 @@ def get_cultural_analysis(project_id: int, user: dict = Depends(require_permissi
 
 
 @router.post("/studies/{project_id}/cultural-analysis")
-def run_cultural_analysis(project_id: int, user: dict = Depends(require_permission("competitors.analyze"))):
+def run_cultural_analysis(
+    project_id: int,
+    user: dict = Depends(require_permission("competitors.analyze")),
+    accept_language: str | None = Header(default=None),
+):
     """Assess how well the business fits the culture(s) it's targeting.
 
     Requires a business profile with target countries already set — there is
@@ -231,7 +245,12 @@ def run_cultural_analysis(project_id: int, user: dict = Depends(require_permissi
     """
     _project_or_404(project_id)
     try:
-        return {"cultural_analysis": cultural_analysis_store.build_analysis(project_id)}
+        analysis = cultural_analysis_store.build_analysis(
+            project_id, resolve_output_language(accept_language)
+        )
+        if analysis.get("regeneration_failed"):
+            raise HTTPException(status_code=502, detail=analysis["error"])
+        return {"cultural_analysis": analysis}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -245,6 +264,7 @@ def discover(
     background_tasks: BackgroundTasks,
     payload: dict = None,
     user: dict = Depends(require_permission("competitors.analyze")),
+    accept_language: str | None = Header(default=None),
 ):
     """Queue competitor discovery as a background job and return immediately.
 
@@ -265,13 +285,24 @@ def discover(
 
     active = competitor_discovery.get_active_discovery_run(project_id)
     if active:
-        return {"run_id": active["run_id"], "status": active["status"]}
+        return {
+            "run_id": active["run_id"],
+            "status": active["status"],
+            "output_language": active.get("output_language"),
+        }
 
-    run_id = competitor_discovery.create_discovery_run(project_id)
+    output_language = resolve_output_language(accept_language)
+    run_id = competitor_discovery.create_discovery_run(project_id, output_language)
     background_tasks.add_task(
-        competitor_discovery.run_discovery_job, run_id, project_id, profile, limit, with_accounts
+        competitor_discovery.run_discovery_job,
+        run_id, project_id, profile, limit, with_accounts, output_language,
     )
-    return {"run_id": run_id, "status": "queued", "model": competitor_discovery.discovery_model()}
+    return {
+        "run_id": run_id,
+        "status": "queued",
+        "model": competitor_discovery.discovery_model(),
+        "output_language": output_language,
+    }
 
 
 @router.get("/studies/{project_id}/discover/{run_id}")
@@ -288,6 +319,7 @@ def discover_accounts_bulk(
     project_id: int,
     background_tasks: BackgroundTasks,
     user: dict = Depends(require_permission("competitors.analyze")),
+    accept_language: str | None = Header(default=None),
 ):
     """Phase 3: find channels for every tracked competitor that doesn't have one yet.
 
@@ -306,19 +338,34 @@ def discover_accounts_bulk(
 
     active = competitor_discovery.get_active_discovery_run(project_id)
     if active:
-        return {"run_id": active["run_id"], "status": active["status"]}
+        return {
+            "run_id": active["run_id"],
+            "status": active["status"],
+            "output_language": active.get("output_language"),
+        }
 
-    run_id = competitor_discovery.create_discovery_run(project_id)
-    background_tasks.add_task(competitor_discovery.run_accounts_discovery_job, run_id, project_id, targets)
-    return {"run_id": run_id, "status": "queued"}
+    output_language = resolve_output_language(accept_language)
+    run_id = competitor_discovery.create_discovery_run(project_id, output_language)
+    background_tasks.add_task(
+        competitor_discovery.run_accounts_discovery_job,
+        run_id, project_id, targets, output_language,
+    )
+    return {"run_id": run_id, "status": "queued", "output_language": output_language}
 
 
 @router.post("/competitors/{competitor_id}/accounts/discover")
-def discover_competitor_accounts(competitor_id: int, user: dict = Depends(require_permission("competitors.analyze"))):
+def discover_competitor_accounts(
+    competitor_id: int,
+    user: dict = Depends(require_permission("competitors.analyze")),
+    accept_language: str | None = Header(default=None),
+):
     competitor = _competitor_or_404(competitor_id)
     profile = business_profile_store.get_profile(competitor["project_id"]) or {}
     target_countries = validate_countries(profile.get("target_countries"))
-    found = competitor_discovery.discover_accounts(competitor["name"], competitor.get("website"), target_countries)
+    found = competitor_discovery.discover_accounts(
+        competitor["name"], competitor.get("website"), target_countries,
+        output_language=resolve_output_language(accept_language),
+    )
     for account in found:
         competitors_store.upsert_account(competitor_id, account)
     return {"accounts": competitors_store.list_accounts(competitor_id)}

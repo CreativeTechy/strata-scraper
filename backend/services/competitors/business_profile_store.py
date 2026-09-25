@@ -20,11 +20,24 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from app.core import db
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import LLMError, chat_completion
 from prompt_loader import load_prompt
 from services.competitors.countries import country_label, validate_countries
 
-PROMPT_VERSION = "competitor-profile-2026-07-27"
+PROMPT_VERSION = "competitor-profile-2026-09-24-localized"
+GENERATED_PROFILE_FIELDS = (
+    "industry", "market", "geography", "positioning", "offerings", "audience",
+    "differentiators", "keywords", "context_summary",
+)
+LOCALIZED_PROFILE_FIELDS = (
+    "industry", "market", "geography", "positioning", "audience",
+    "differentiators", "context_summary",
+)
 
 # A handful of pages is plenty: the home page says what the company does, and
 # about/product/pricing pages say who it is for and how it positions itself.
@@ -166,7 +179,73 @@ def _as_list(value, limit: int = 12) -> list[str]:
     return out
 
 
-def derive_profile(name: str, website: str, description: str, scraped_text: str) -> dict:
+def _looks_like_official_name(
+    value: str, business_name: str, reference_text: str = ""
+) -> bool:
+    """Return True for an identifier that should stay unchanged rather than
+    being translated or held to the output language's script.
+
+    Descriptive phrases still need translation. This exemption is deliberately
+    narrow: the exact business name, a verbatim match against the supplied
+    website/description text (in any script - Arabic has no letter case, so an
+    Arabic official name can only be recognized this way, not via the
+    Latin-only capitalization heuristics below), one unmistakable brand-style
+    Latin token, or a title-cased multiword Latin phrase found verbatim in that
+    text. Capitalization alone does not make ordinary labels such as
+    ``Coffee`` or ``Customer Support`` official names.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if text.casefold() == str(business_name or "").strip().casefold():
+        return True
+    if reference_text and text in reference_text:
+        return True
+    words = [word for word in text.replace("&", " ").split() if word]
+    if not words or len(words) > 5 or not all(any(ch.isalpha() for ch in word) for word in words):
+        return False
+    if len(words) == 1:
+        word = words[0]
+        return (
+            any(ch.isupper() for ch in word[1:])
+            or (word.isupper() and 1 < len(word) <= 10)
+            or any(ch.isdigit() for ch in word)
+        )
+    # A multiword phrase not found verbatim above (already checked) is never
+    # treated as an official name on capitalization alone - "Customer
+    # Support"/"Coffee Shops" are ordinary title-cased English labels, not
+    # identifiers.
+    return False
+
+
+def _localized_profile_prose(result: dict) -> list[object]:
+    """The scalar prose fields whose language gates a retry/failure.
+
+    ``offerings``/``keywords`` are validated and filtered per item instead
+    (see ``_filter_localized_list``) - they're list fields where a single
+    wrong-language or foreign-script entry (an official name in Arabic, say)
+    should not discard the whole profile.
+    """
+    return [result[key] for key in LOCALIZED_PROFILE_FIELDS]
+
+
+def _filter_localized_list(
+    values: list, business_name: str, reference_text: str, output_language: str
+) -> list:
+    """Keep an official identifier as-is; drop a descriptive item in the wrong
+    language instead of failing the whole profile over it."""
+    kept = []
+    for value in values:
+        if _looks_like_official_name(value, business_name, reference_text):
+            kept.append(value)
+        elif text_matches_output_language(value, output_language):
+            kept.append(value)
+    return kept
+
+
+def derive_profile(
+    name: str, website: str, description: str, scraped_text: str, output_language: str = "en"
+) -> dict:
     """Turn scraped site text into structured market context via the LLM."""
     supplied = json.dumps(
         {"name": name or "", "website": website or "", "description": description or ""}
@@ -176,36 +255,58 @@ def derive_profile(name: str, website: str, description: str, scraped_text: str)
         f"Text extracted from their website:\n{scraped_text or '(none — rely on what the user told us)'}"
     )
 
-    try:
-        raw = chat_completion(
-            messages=[
-                {"role": "system", "content": PROFILE_SYSTEM_PROMPT},
+    messages = [
+                {"role": "system", "content": (
+                    f"{PROFILE_SYSTEM_PROMPT}\n\n{output_language_instruction(output_language)}"
+                )},
                 {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=4000,
-            timeout=90,
-        )
-        parsed = json.loads(_strip_fences(raw))
-    except (LLMError, json.JSONDecodeError, ValueError) as exc:
-        print(f"  business profile derivation failed: {exc}")
-        return {}
+    ]
+    for attempt in range(2):
+        try:
+            raw = chat_completion(
+                messages=messages,
+                temperature=0.1,
+                max_tokens=4000,
+                timeout=90,
+            )
+            parsed = json.loads(_strip_fences(raw))
+        except (LLMError, json.JSONDecodeError, ValueError) as exc:
+            print(f"  business profile derivation failed: {exc}")
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
 
-    if not isinstance(parsed, dict):
-        return {}
-
-    return {
-        "name": str(parsed.get("name") or name or "").strip(),
-        "industry": str(parsed.get("industry") or "").strip(),
-        "market": str(parsed.get("market") or "").strip(),
-        "geography": str(parsed.get("geography") or "").strip(),
-        "positioning": str(parsed.get("positioning") or "").strip(),
-        "offerings": _as_list(parsed.get("offerings")),
-        "audience": _as_list(parsed.get("audience")),
-        "differentiators": _as_list(parsed.get("differentiators")),
-        "keywords": _as_list(parsed.get("keywords"), limit=20),
-        "context_summary": str(parsed.get("context_summary") or "").strip(),
-    }
+        result = {
+            "name": str(parsed.get("name") or name or "").strip(),
+            "industry": str(parsed.get("industry") or "").strip(),
+            "market": str(parsed.get("market") or "").strip(),
+            "geography": str(parsed.get("geography") or "").strip(),
+            "positioning": str(parsed.get("positioning") or "").strip(),
+            "offerings": _as_list(parsed.get("offerings")),
+            "audience": _as_list(parsed.get("audience")),
+            "differentiators": _as_list(parsed.get("differentiators")),
+            "keywords": _as_list(parsed.get("keywords"), limit=20),
+            "context_summary": str(parsed.get("context_summary") or "").strip(),
+        }
+        prose = _localized_profile_prose(result)
+        if result["context_summary"] and text_matches_output_language(prose, output_language):
+            reference_text = f"{description}\n{scraped_text}"
+            result["offerings"] = _filter_localized_list(
+                result["offerings"], result["name"] or name, reference_text, output_language
+            )
+            result["keywords"] = _filter_localized_list(
+                result["keywords"], result["name"] or name, reference_text, output_language
+            )
+            return result
+        if attempt == 0:
+            messages.extend([
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": (
+                    "The prose is not in the requested output language. Return the same JSON "
+                    f"again, following this rule exactly: {output_language_instruction(output_language)}"
+                )},
+            ])
+    return {}
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +316,8 @@ PROFILE_COLUMNS = """
     id, project_id, name, website, description, industry, market, geography,
     target_countries, positioning, offerings, audience, differentiators, keywords,
     scrape_status, scrape_error, scraped_pages, scraped_chars, scraped_at,
-    context_summary, analysis_model, prompt_version, created_at, updated_at
+    context_summary, analysis_model, prompt_version, generated_language,
+    created_at, updated_at
 """
 
 
@@ -226,7 +328,9 @@ def get_profile(project_id: int) -> dict | None:
     )
 
 
-def upsert_profile(project_id: int, values: dict) -> dict | None:
+def upsert_profile(
+    project_id: int, values: dict, *, prompt_version: str | None = None
+) -> dict | None:
     """Insert or update the profile for a project."""
     from psycopg.types.json import Jsonb
 
@@ -250,7 +354,11 @@ def upsert_profile(project_id: int, values: dict) -> dict | None:
         "scraped_at": values.get("scraped_at"),
         "context_summary": (str(values.get("context_summary") or "").strip() or None),
         "analysis_model": (str(values.get("analysis_model") or "").strip() or None),
-        "prompt_version": PROMPT_VERSION,
+        "generated_language": (
+            resolve_output_language(values.get("generated_language"))
+            if values.get("generated_language") else None
+        ),
+        "prompt_version": str(prompt_version or PROMPT_VERSION),
     }
 
     fields = list(payload)
@@ -266,7 +374,7 @@ def upsert_profile(project_id: int, values: dict) -> dict | None:
     )
 
 
-def build_profile(project_id: int, values: dict) -> dict:
+def build_profile(project_id: int, values: dict, output_language: str = "en") -> dict:
     """Scrape the website, derive market context, and persist. Returns the profile.
 
     The scrape outcome is always recorded, so onboarding can say "we read 5 pages"
@@ -275,12 +383,14 @@ def build_profile(project_id: int, values: dict) -> dict:
     name = str(values.get("name") or "").strip()
     website = str(values.get("website") or "").strip()
     description = str(values.get("description") or "").strip()
+    output_language = resolve_output_language(output_language)
 
     scrape = scrape_website(website) if website else {
         "pages": [], "text": "", "chars": 0, "status": "skipped",
         "error": "No website supplied.",
     }
-    derived = derive_profile(name, website, description, scrape["text"])
+    existing = get_profile(project_id) or {}
+    derived = derive_profile(name, website, description, scrape["text"], output_language)
 
     from app.core import settings as config
     from datetime import datetime, timezone
@@ -290,20 +400,24 @@ def build_profile(project_id: int, values: dict) -> dict:
         "website": website,
         "description": description,
         "target_countries": validate_countries(values.get("target_countries")),
-        **{key: derived.get(key) for key in (
-            "industry", "market", "geography", "positioning",
-            "offerings", "audience", "differentiators", "keywords",
-            "context_summary",
-        )},
+        **{
+            key: derived.get(key) if derived else existing.get(key)
+            for key in GENERATED_PROFILE_FIELDS
+        },
         "scrape_status": scrape["status"],
         "scrape_error": scrape["error"],
         "scraped_pages": len(scrape["pages"]),
         "scraped_chars": scrape["chars"],
         "scraped_at": datetime.now(timezone.utc) if scrape["pages"] else None,
-        "analysis_model": config.LLM_CHAT_MODEL if derived else None,
+        "analysis_model": config.LLM_CHAT_MODEL if derived else existing.get("analysis_model"),
+        "generated_language": output_language if derived else existing.get("generated_language"),
     }
 
-    saved = upsert_profile(project_id, merged)
+    saved = upsert_profile(
+        project_id,
+        merged,
+        prompt_version=PROMPT_VERSION if derived else existing.get("prompt_version"),
+    )
     return {
         "profile": saved,
         "scrape": {

@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import i18n from '../index.js';
 import { LANGUAGE_STORAGE_KEY, readStoredLanguage, resolveLanguage, storeLanguage } from '../config.js';
-import { countryName, formatDate, formatNumber, isRtl, languageName } from '../format.js';
+import {
+  countryName, formatDate, formatNumber, generatedLanguageNeedsRefresh,
+  generatedTextDirection, isRtl, languageName,
+} from '../format.js';
+import { translateDiscoveryLog, translateRejectionReason } from '../competitorText.js';
 import { userFacingError, friendlyRunMessage } from '../../errors/userFacingError.js';
 import { apiError } from '../../errors/apiError.js';
 import { REPEAT_UNIT_OPTIONS } from '../../constants/schedule.js';
+import { apiRequestHeaders } from '../../auth/apiFetch.js';
+import { translateFetchNote, translateSourceIssue } from '../../lib/sourceIssue.js';
+import { resources } from '../resources.js';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -74,6 +81,27 @@ describe('translation behavior', () => {
     expect(REPEAT_UNIT_OPTIONS[0].label).toBe('دقائق');
   });
 
+  it('keeps social platform names consistent between screens', () => {
+    const keys = ['instagram', 'facebook', 'linkedin', 'threads', 'telegram', 'reddit', 'x'];
+    for (const language of ['en', 'ar']) {
+      for (const key of keys) {
+        expect(resources[language].competitors.platforms[key])
+          .toBe(resources[language].competitorOnboarding.platforms[key]);
+        expect(resources[language].dashboard.platforms[key])
+          .toBe(resources[language].competitors.platforms[key]);
+      }
+    }
+  });
+
+  it('sends the active language without dropping existing request headers', () => {
+    const headers = apiRequestHeaders('/api/projects/suggest', {
+      headers: { 'Content-Type': 'application/json' },
+    }, 'POST', 'csrf-token');
+    expect(headers.get('Accept-Language')).toBe('ar');
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('X-CSRF-Token')).toBe('csrf-token');
+  });
+
   it('localizes language and country names', () => {
     expect(languageName('en')).not.toBe('English');
     expect(countryName('SA')).not.toBe('Saudi Arabia');
@@ -83,6 +111,26 @@ describe('translation behavior', () => {
   it('formats numbers with Latin digits', () => {
     expect(formatNumber(12345)).toMatch(/12.345/);
     expect(formatDate('not a date', undefined, 'raw')).toBe('raw');
+  });
+
+  it('uses generated-language metadata for direction and legacy warnings', () => {
+    expect(generatedTextDirection('ar')).toBe('rtl');
+    expect(generatedTextDirection('en')).toBe('ltr');
+    expect(generatedLanguageNeedsRefresh({ analysis_model: 'model', generated_language: null }, 'ar')).toBe(true);
+    expect(generatedLanguageNeedsRefresh({ discovery_source: 'manual' }, 'ar')).toBe(false);
+  });
+
+  it('translates discovery logs and structured rejection reasons', () => {
+    const t = i18n.getFixedT('ar', 'competitorOnboarding');
+    const log = translateDiscoveryLog({ message: 'Acme: found 3 channels.' }, t);
+    expect(log.translated).toBe(true);
+    expect(log.text).toContain('Acme');
+    expect(log.text).toContain('3');
+    const reason = translateRejectionReason({
+      reason_code: 'outsideCountries', reason_params: { country: 'LB' },
+    }, t);
+    expect(reason).not.toContain('outsideCountries');
+    expect(reason).not.toContain('LB');
   });
 });
 
@@ -122,6 +170,40 @@ describe('API errors', () => {
     const issue = userFacingError('Some untranslated server sentence', { context: 'تحميل المقالات' });
     expect(issue.message).toBe('تعذّر تحميل المقالات.');
     expect(issue.technicalDetail).toBe('Some untranslated server sentence');
+  });
+
+  it('does not mistake English punctuation for localized Arabic text', async () => {
+    await i18n.changeLanguage('ar');
+    const raw = 'The provider’s response failed — try again.';
+    const issue = userFacingError(raw, { context: 'تحميل النتائج' });
+    expect(issue.message).toBe('تعذّر تحميل النتائج.');
+    expect(issue.technicalDetail).toBe(raw);
+  });
+
+  it('does not mistake an Arabic project name inside an English error for localized text', async () => {
+    await i18n.changeLanguage('ar');
+    const raw = 'Could not load مشروع Coffee dashboard';
+    const issue = userFacingError(raw, { context: 'تحميل المشروع' });
+    expect(issue.message).toBe('تعذّر تحميل المشروع.');
+    expect(issue.technicalDetail).toBe(raw);
+  });
+
+  it('keeps uncoded English validation text out of an Arabic notice body', async () => {
+    await i18n.changeLanguage('ar');
+    const issue = userFacingError(new Error('Value must be valid'), { context: 'حفظ المشروع' });
+    expect(issue.message).toBe('تعذّر حفظ المشروع.');
+    expect(issue.technicalDetail).toBe('Value must be valid');
+  });
+
+  it('localizes unknown source issues while preserving technical details', async () => {
+    await i18n.changeLanguage('ar');
+    const issue = translateSourceIssue({
+      code: 'provider_changed', title: 'Provider changed', message: 'Unexpected response shape',
+    });
+    expect(issue.untranslated).toBe(false);
+    expect(issue.title).not.toBe('Provider changed');
+    expect(issue.technical_detail).toContain('Unexpected response shape');
+    expect(translateFetchNote('A new raw backend failure')).not.toContain('raw backend');
   });
 
   it('translates pipeline run summaries with plurals', async () => {

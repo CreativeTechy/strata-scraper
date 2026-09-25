@@ -24,7 +24,10 @@ import {
 } from '../competitorApi.js';
 import { countryLabel } from '../constants/countries.js';
 import { apiError } from '../errors/apiError.js';
-import { formatList, formatNumber, formatPercent } from '../i18n/format.js';
+import {
+  formatList, formatNumber, formatPercent, generatedLanguageNeedsRefresh,
+  generatedTextDirection,
+} from '../i18n/format.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
@@ -328,7 +331,7 @@ function SourcesPanel({
  *  automatically right after a fresh run completes so the new result is
  *  immediately visible instead of hidden behind a click. */
 function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
   const hasResult = analysis && analysis.status === 'success';
   const [collapsed, setCollapsed] = useState(true);
   const wasRunning = useRef(running);
@@ -371,9 +374,14 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
 
       {!running && hasResult && !collapsed ? (
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {generatedLanguageNeedsRefresh(analysis, i18n.resolvedLanguage || i18n.language) ? (
+              <div className="cs-alert cs-alert-warn" role="status">
+                {t('workspace.cultural.languageMismatch')}
+              </div>
+            ) : null}
           <div className="cs-field" style={{ marginBottom: 0 }}>
             <label className="cs-label">{t('workspace.cultural.summary')}</label>
-            <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }} dir="auto">{analysis.summary}</p>
+            <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.55 }} dir={generatedTextDirection(analysis.generated_language)}>{analysis.summary}</p>
           </div>
           {[
             ['successFactors', analysis.success_factors],
@@ -385,7 +393,7 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
               <div key={labelKey} className="cs-field" style={{ marginBottom: 0 }}>
                 <label className="cs-label">{t(`workspace.cultural.${labelKey}`)}</label>
                 <ul style={{ margin: 0, paddingInlineStart: 20, fontSize: '0.86rem', lineHeight: 1.6 }}>
-                  {items.map((item, index) => <li key={index} dir="auto">{item}</li>)}
+                  {items.map((item, index) => <li key={index} dir={generatedTextDirection(analysis.generated_language)}>{item}</li>)}
                 </ul>
               </div>
             ) : null

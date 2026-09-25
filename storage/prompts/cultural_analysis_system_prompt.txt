@@ -13,8 +13,6 @@ Rules:
   market as a whole, but call out a specific country by name inside a list
   item wherever a point applies to it but not the others.
 - If the text does not support a field, return "" or [] — never a placeholder.
-- Write everything in English regardless of the countries' languages.
-
 Return ONLY this JSON object, no markdown and no commentary:
 {
   "summary": "3-5 sentences on how well this business fits the culture(s) it is targeting, overall",

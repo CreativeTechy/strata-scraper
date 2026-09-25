@@ -1,3 +1,5 @@
+import i18n from '../i18n/index.js';
+
 const CSRF_COOKIE_NAME = 'strata_csrf';
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -16,6 +18,17 @@ function isSameOriginApiRequest(input) {
   }
 }
 
+export function apiRequestHeaders(input, init = {}, method = 'GET', csrfToken = '') {
+  const headers = new Headers(
+    init.headers || (typeof input !== 'string' ? input?.headers : undefined),
+  );
+  headers.set('Accept-Language', i18n.resolvedLanguage || i18n.language || 'en');
+  if (csrfToken && UNSAFE_METHODS.has(method.toUpperCase())) {
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+  return headers;
+}
+
 // Installs a one-time wrapper around window.fetch so every existing fetch()
 // call site in the dashboard gets CSRF-protected mutations and a global
 // 401 -> "you were logged out" signal, without editing each call site.
@@ -29,17 +42,9 @@ export function installApiInterceptor() {
     const method = (init.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
 
     let nextInit = init;
-    if (UNSAFE_METHODS.has(method) && isSameOriginApiRequest(input)) {
+    if (isSameOriginApiRequest(input)) {
       const csrfToken = readCookie(CSRF_COOKIE_NAME);
-      if (csrfToken) {
-        nextInit = {
-          ...init,
-          headers: {
-            ...(init.headers || {}),
-            'X-CSRF-Token': csrfToken,
-          },
-        };
-      }
+      nextInit = { ...init, headers: apiRequestHeaders(input, init, method, csrfToken) };
     }
 
     const response = await nativeFetch(input, nextInit);

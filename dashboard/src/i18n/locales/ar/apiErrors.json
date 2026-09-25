@@ -95,6 +95,7 @@
     "account_fields_required": "المنصة والرابط مطلوبان.",
     "invalid_account_status": "يجب أن تكون الحالة: قيد الانتظار أو صالح أو مرفوض.",
     "invalid_repeat_unit": "يجب أن تكون وحدة التكرار: دقائق أو ساعات أو أيام.",
-    "invalid_repeat_value": "يجب أن يكون فاصل التكرار رقمًا موجبًا."
+    "invalid_repeat_value": "يجب أن يكون فاصل التكرار رقمًا موجبًا.",
+    "cultural_analysis_failed": "لم يُرجع النموذج تحليلاً صالحًا للاستخدام."
   }
 }

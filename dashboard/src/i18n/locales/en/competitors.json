@@ -12,6 +12,10 @@
     "threads": "Threads",
     "facebook": "Facebook",
     "instagram": "Instagram",
+    "x": "X",
+    "blog": "Blog",
+    "news": "News",
+    "social": "Social",
     "unknown": "Unknown"
   },
   "sourceKinds": {
@@ -148,6 +152,7 @@
       "benefits": "Benefits",
       "challenges": "Challenges",
       "insights": "Other insights",
+      "languageMismatch": "This saved analysis was generated in another or unknown language. Re-run it to generate the content in your current language.",
       "failed": "The analysis could not be generated.",
       "notYet": "Not yet analyzed — run it here, or from the study wizard."
     }
@@ -182,7 +187,9 @@
       "differentiators": "What sets you apart",
       "differentiatorsHint": "used to judge competitor moves",
       "differentiatorsPlaceholder": "implementation in under 30 days",
-      "marketContext": "Market context"
+      "marketContext": "Market context",
+      "languageMismatch": "This saved market context was generated in another or unknown language. Re-run it to generate the content in your current language.",
+      "notGenerated": "The market context could not be regenerated. Your previously saved context is still available."
     },
     "schedule": {
       "title": "Tracking schedule",

@@ -4,8 +4,9 @@ source/user linkage endpoints scoped to one project.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Header
 
+from app.core.language import resolve_output_language
 from api.deps import ensure_project_visible, visible_project_ids_or_none
 from api.errors import ConflictError, ValidationError
 from services.auth import permissions_store
@@ -35,10 +36,14 @@ def get_projects(limit: int | None = None, offset: int = 0, user: dict = Depends
 
 
 @router.post("/api/projects/discover")
-def discover_project(payload: dict, user: dict = Depends(require_permission("projects.create"))):
+def discover_project(
+    payload: dict,
+    user: dict = Depends(require_permission("projects.create")),
+    accept_language: str | None = Header(default=None),
+):
     if not isinstance(payload, dict):
         payload = {}
-    discovery = discover_project_links(payload)
+    discovery = discover_project_links(payload, resolve_output_language(accept_language))
     return {"discovery": discovery}
 
 
@@ -101,7 +106,11 @@ def edit_project(project_id: int, background_tasks: BackgroundTasks, payload: di
 
 
 @router.post("/api/projects/suggest")
-def suggest_project(payload: dict, user: dict = Depends(require_any_permission("projects.create", "projects.update"))):
+def suggest_project(
+    payload: dict,
+    user: dict = Depends(require_any_permission("projects.create", "projects.update")),
+    accept_language: str | None = Header(default=None),
+):
     if not isinstance(payload, dict):
         payload = {}
     name = str(payload.get("name") or "").strip()
@@ -111,7 +120,11 @@ def suggest_project(payload: dict, user: dict = Depends(require_any_permission("
             "Project name is required.",
             detail="Provide the project name before requesting AI suggestions.",
         )
-    return {"suggestions": suggest_project_metadata(name, description)}
+    return {
+        "suggestions": suggest_project_metadata(
+            name, description, resolve_output_language(accept_language)
+        )
+    }
 
 
 @router.delete("/api/projects/{project_id}")

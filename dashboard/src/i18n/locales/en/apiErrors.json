@@ -95,6 +95,7 @@
     "account_fields_required": "Platform and URL are required.",
     "invalid_account_status": "Status must be pending, valid, or rejected.",
     "invalid_repeat_unit": "Repeat interval unit must be minutes, hours, or days.",
-    "invalid_repeat_value": "Repeat interval must be a positive number."
+    "invalid_repeat_value": "Repeat interval must be a positive number.",
+    "cultural_analysis_failed": "The model did not return a usable analysis."
   }
 }

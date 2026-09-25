@@ -7,6 +7,11 @@ import re
 from collections import Counter
 
 from app.core import settings as config
+from app.core.language import (
+    output_language_instruction,
+    resolve_output_language,
+    text_matches_output_language,
+)
 from llm_client import chat_completion
 
 STOPWORDS = {
@@ -140,7 +145,10 @@ def _username_profile_urls(usernames):
 
 def _keyword_candidates(name, description):
     text = f"{name} {description}".lower()
-    words = re.findall(r"[a-z0-9][a-z0-9&+-]{2,}", text)
+    # ``[^\W_]`` is a Unicode letter/digit. The old ASCII-only expression
+    # silently returned no candidates for an Arabic project when the LLM was
+    # unavailable, which made the localized fallback mostly empty.
+    words = re.findall(r"[^\W_][^\W_&+-]{2,}", text, re.UNICODE)
     counts = Counter(
         word for word in words
         if word not in STOPWORDS and not word.isdigit()
@@ -148,12 +156,33 @@ def _keyword_candidates(name, description):
     return [word for word, _ in counts.most_common(12)]
 
 
-def _fallback_metadata(name, description):
-    keywords = _keyword_candidates(name, description)
+def _fallback_metadata(name, description, output_language="en"):
+    language = resolve_output_language(output_language)
+    keyword_candidates = _keyword_candidates(name, description)
+    if language == "ar":
+        # Keep the project name as an official term, but do not turn English
+        # description words into supposedly localized search keywords when the
+        # model is unavailable or returns the wrong language.
+        keywords = []
+        for value in [name, *keyword_candidates]:
+            text = _clean_text(value)
+            if not text or text in keywords:
+                continue
+            if text.casefold() == name.casefold() or text_matches_output_language(text, language):
+                keywords.append(text)
+    else:
+        keywords = keyword_candidates
     hashtags = _normalize_items([name] + keywords[:4], prefix="#", limit=5)
     usernames = _normalize_usernames([name] + keywords[:4], limit=4)
     target_audience = ""
-    if keywords:
+    if language == "ar":
+        if keywords:
+            target_audience = f"المهتمون بـ {keywords[0].replace('-', ' ')} وآخر المستجدات ذات الصلة"
+        elif name:
+            target_audience = f"المتابعون لـ {name}"
+        else:
+            target_audience = "القراء والمتخصصون المتابعون للموضوع"
+    elif keywords:
         target_audience = f"People interested in {keywords[0].replace('-', ' ')} and related updates"
     elif name:
         target_audience = f"People following {name}"
@@ -169,12 +198,13 @@ def _fallback_metadata(name, description):
     }
 
 
-def suggest_project_metadata(name, description):
+def suggest_project_metadata(name, description, output_language="en"):
     """Return suggested target audience, hashtags, keywords, and usernames for a project."""
     name = _clean_text(name)
     description = _clean_text(description)
+    output_language = resolve_output_language(output_language)
 
-    fallback = _fallback_metadata(name, description)
+    fallback = _fallback_metadata(name, description, output_language)
     if not config.LLM_API_KEY or not name:
         return fallback
 
@@ -188,7 +218,8 @@ def suggest_project_metadata(name, description):
         "- Normalize usernames to X/Twitter profile handles, not full URLs.\n"
         "- Return 3 to 6 hashtags and 4 to 8 keywords.\n"
         "- Return 0 to 5 usernames.\n"
-        "- Target audience should be a short plain-English phrase.\n"
+        "- Target audience should be a short plain-language phrase.\n"
+        f"- {output_language_instruction(output_language)}\n"
         "- Do not include markdown or commentary.\n\n"
         f"Project name: {name}\n"
         f"Project description: {description or '(none)'}\n"
@@ -211,6 +242,15 @@ def suggest_project_metadata(name, description):
     hashtags = _normalize_items(payload.get("hashtags") or [], prefix="#", limit=6)
     keywords = _normalize_items(payload.get("keywords") or [], prefix="", limit=8)
     usernames = _normalize_usernames(payload.get("usernames") or [], limit=5)
+
+    # Only the human-readable prose (target_audience) follows the UI locale.
+    # Keywords/hashtags/usernames are search terms that determine what gets
+    # collected, not display copy - validating them against the interface
+    # language would discard correct-market keywords whenever they don't
+    # happen to share the UI's script (see CLAUDE.md's Localization section:
+    # interface language and collected-content language are independent).
+    if not text_matches_output_language(target_audience, output_language):
+        return fallback
 
     return {
         "target_audience": target_audience,

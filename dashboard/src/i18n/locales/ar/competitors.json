@@ -4,14 +4,18 @@
     "web": "الويب",
     "hashtag": "وسم",
     "keyword": "كلمة مفتاحية",
-    "username": "حساب X",
+    "username": "حساب إكس",
     "tweet": "منشور واحد",
-    "reddit": "Reddit",
-    "telegram": "Telegram",
-    "linkedin": "LinkedIn",
-    "threads": "Threads",
-    "facebook": "Facebook",
-    "instagram": "Instagram",
+    "reddit": "ريديت",
+    "telegram": "تيليغرام",
+    "linkedin": "لينكدإن",
+    "threads": "ثريدز",
+    "facebook": "فيسبوك",
+    "instagram": "إنستغرام",
+    "x": "إكس",
+    "blog": "المدونة",
+    "news": "الأخبار",
+    "social": "التواصل الاجتماعي",
     "unknown": "غير معروف"
   },
   "sourceKinds": {
@@ -44,7 +48,7 @@
   "placeholders": {
     "term": {
       "hashtag": "الوسم بدون # (مثل EVSummit)",
-      "username": "حساب X بدون @ (مثل elonmusk)",
+      "username": "حساب إكس بدون @ (مثل elonmusk)",
       "keyword": "كلمة مفتاحية أو عبارة (مثل السيارات الكهربائية)"
     },
     "url": {
@@ -164,6 +168,7 @@
       "benefits": "المزايا",
       "challenges": "التحديات",
       "insights": "رؤى أخرى",
+      "languageMismatch": "أُنشئ هذا التحليل المحفوظ بلغة أخرى أو غير معروفة. أعد تشغيله لإنشاء المحتوى باللغة الحالية.",
       "failed": "تعذّر إنشاء التحليل.",
       "notYet": "لم يُحلَّل بعد — شغّله من هنا أو من معالج الدراسة."
     }
@@ -198,7 +203,9 @@
       "differentiators": "ما يميّزك",
       "differentiatorsHint": "يُستخدم للحكم على تحركات المنافسين",
       "differentiatorsPlaceholder": "التنفيذ في أقل من 30 يومًا",
-      "marketContext": "سياق السوق"
+      "marketContext": "سياق السوق",
+      "languageMismatch": "أُنشئ سياق السوق المحفوظ بلغة أخرى أو غير معروفة. أعد التحليل لإنشاء المحتوى باللغة الحالية.",
+      "notGenerated": "تعذّرت إعادة إنشاء سياق السوق. لا يزال السياق المحفوظ سابقًا متاحًا."
     },
     "schedule": {
       "title": "جدولة التتبّع",

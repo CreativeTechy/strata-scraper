@@ -107,6 +107,7 @@ _CATALOG: list[tuple[str, str]] = [
     ("competitors.invalid_account_status", r"status must be pending, valid, or rejected\."),
     ("competitors.invalid_repeat_unit", r"repeat_interval_unit must be minutes, hours, or days\."),
     ("competitors.invalid_repeat_value", r"repeat_interval_value must be a positive number\."),
+    ("competitors.cultural_analysis_failed", r"The model did not return a usable analysis\."),
     # catch-all handler
     ("internal_error", r"Internal server error\."),
 ]

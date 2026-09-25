@@ -7,7 +7,8 @@ import i18n from '../i18n/index.js';
 // UI translates from it. A few codes have more than one English wording
 // (e.g. "LinkedIn setup required" vs "Search setup required"), told apart by
 // the title the backend chose. An unknown code keeps the backend's own text
-// (flagged `untranslated` so callers can mark it dir="auto").
+// in English. In another UI language it uses a localized generic issue and
+// keeps the backend text in technical details.
 // Called during render only - reads the active language at call time.
 
 const CODE_KEYS = {
@@ -46,7 +47,20 @@ export function translateSourceIssue(issue) {
   if (!issue) return null;
   const key = issueKey(issue);
   if (!key || !i18n.exists(`pipeline:issues.${key}.title`)) {
-    return { ...issue, untranslated: true };
+    const english = i18n.resolvedLanguage === 'en' || !i18n.resolvedLanguage;
+    if (english) return { ...issue, untranslated: true };
+    const technicalDetail = [issue.title, issue.message, issue.action, issue.technical_detail]
+      .map((value) => String(value || '').trim())
+      .filter((value, index, values) => value && values.indexOf(value) === index)
+      .join(' — ');
+    return {
+      ...issue,
+      title: i18n.t('pipeline:issues.fetchFailed.title'),
+      message: i18n.t('pipeline:issues.fetchFailed.message'),
+      action: i18n.t('pipeline:issues.fetchFailed.action'),
+      technical_detail: technicalDetail,
+      untranslated: false,
+    };
   }
   const params = { status: httpStatusFrom(issue.message || issue.technical_detail) };
   return {
@@ -62,7 +76,8 @@ export function translateSourceIssue(issue) {
 // messages, HTTP bodies), but a handful of notes are fixed sentences from
 // backend/services/pipeline/source_diagnostics.py's build_fetch_note and
 // backend/scraper/spiders/source_rss.py. Those get a translated sentence;
-// anything else returns null and the caller shows the raw note as-is.
+// unknown notes stay visible as technical detail while their primary label is
+// localized outside English.
 const FETCH_NOTE_PATTERNS = [
   { pattern: /^Returned 0 articles\.?$/i, key: 'noArticles' },
   { pattern: /^Blocked \(HTTP (\d{3}|None)\) - likely anti-bot protection/i, key: 'blocked', status: 1 },
@@ -72,14 +87,14 @@ const FETCH_NOTE_PATTERNS = [
   { pattern: /^APIFY_API_TOKEN not set - (\w+) sources require Apify/i, key: 'apifyMissing', platform: 1 },
 ];
 
-const PLATFORM_NAMES = {
-  linkedin: 'LinkedIn',
-  threads: 'Threads',
-  facebook: 'Facebook',
-  instagram: 'Instagram',
-};
-
-export function translateFetchNote(note) {
+// `fallbackToGeneric` controls what happens when the note doesn't match any
+// known pattern: by default a non-English UI still gets a localized generic
+// label (better than showing raw English), but a caller that already falls
+// back to the raw `reason`/`fetch_note` itself (see DashboardPage.jsx's
+// competitor "needing attention" tags) should pass `false` so it gets `null`
+// instead - otherwise the generic string is never falsy and the real,
+// specific failure reason is never shown.
+export function translateFetchNote(note, { fallbackToGeneric = true } = {}) {
   const text = String(note || '').trim();
   if (!text) return null;
   for (const entry of FETCH_NOTE_PATTERNS) {
@@ -89,9 +104,11 @@ export function translateFetchNote(note) {
     if (entry.status) params.status = match[entry.status] === 'None' ? '?' : match[entry.status];
     if (entry.platform) {
       const raw = match[entry.platform].toLowerCase();
-      params.platform = PLATFORM_NAMES[raw] || match[entry.platform];
+      params.platform = i18n.t(`sources:types.${raw}`, { defaultValue: match[entry.platform] });
     }
     return i18n.t(`pipeline:fetchNotes.${entry.key}`, params);
   }
-  return null;
+  const english = i18n.resolvedLanguage === 'en' || !i18n.resolvedLanguage;
+  if (english || !fallbackToGeneric) return null;
+  return i18n.t('pipeline:fetchNotes.unknown');
 }

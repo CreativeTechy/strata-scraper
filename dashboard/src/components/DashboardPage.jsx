@@ -563,7 +563,9 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                         <div className="report-insight-card-tags">
                           {competitor.sources.map((source, index) => {
                             const issue = translateSourceIssue(source.issue);
-                            const reason = issue?.title || translateFetchNote(source.reason) || source.reason;
+                            const reason = issue?.title
+                              || translateFetchNote(source.reason, { fallbackToGeneric: false })
+                              || source.reason;
                             return (
                               <span className="report-insight-card-tag muted" key={`${competitor.id}-${index}`}>
                                 {t('competitorAttention.sourceIssue', {
