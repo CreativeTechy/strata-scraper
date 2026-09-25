@@ -182,18 +182,24 @@ def _as_list(value, limit: int = 12) -> list[str]:
 def _looks_like_official_name(
     value: str, business_name: str, reference_text: str = ""
 ) -> bool:
-    """Return True for a short Latin identifier that should stay unchanged.
+    """Return True for an identifier that should stay unchanged rather than
+    being translated or held to the output language's script.
 
     Descriptive phrases still need translation. This exemption is deliberately
-    narrow: the exact business name, one unmistakable brand-style token, or a
-    title-cased multiword phrase found verbatim in the supplied website text.
-    Capitalization alone does not make ordinary labels such as ``Coffee`` or
-    ``Customer Support`` official names.
+    narrow: the exact business name, a verbatim match against the supplied
+    website/description text (in any script - Arabic has no letter case, so an
+    Arabic official name can only be recognized this way, not via the
+    Latin-only capitalization heuristics below), one unmistakable brand-style
+    Latin token, or a title-cased multiword Latin phrase found verbatim in that
+    text. Capitalization alone does not make ordinary labels such as
+    ``Coffee`` or ``Customer Support`` official names.
     """
     text = str(value or "").strip()
     if not text:
         return False
     if text.casefold() == str(business_name or "").strip().casefold():
+        return True
+    if reference_text and text in reference_text:
         return True
     words = [word for word in text.replace("&", " ").split() if word]
     if not words or len(words) > 5 or not all(any(ch.isalpha() for ch in word) for word in words):
@@ -205,19 +211,36 @@ def _looks_like_official_name(
             or (word.isupper() and 1 < len(word) <= 10)
             or any(ch.isdigit() for ch in word)
         )
-    return text in reference_text and all(word[0].isupper() for word in words)
+    # A multiword phrase not found verbatim above (already checked) is never
+    # treated as an official name on capitalization alone - "Customer
+    # Support"/"Coffee Shops" are ordinary title-cased English labels, not
+    # identifiers.
+    return False
 
 
-def _localized_profile_prose(
-    result: dict, business_name: str, reference_text: str = ""
-) -> list[object]:
-    prose: list[object] = [result[key] for key in LOCALIZED_PROFILE_FIELDS]
-    for key in ("offerings", "keywords"):
-        prose.extend(
-            value for value in result[key]
-            if not _looks_like_official_name(value, business_name, reference_text)
-        )
-    return prose
+def _localized_profile_prose(result: dict) -> list[object]:
+    """The scalar prose fields whose language gates a retry/failure.
+
+    ``offerings``/``keywords`` are validated and filtered per item instead
+    (see ``_filter_localized_list``) - they're list fields where a single
+    wrong-language or foreign-script entry (an official name in Arabic, say)
+    should not discard the whole profile.
+    """
+    return [result[key] for key in LOCALIZED_PROFILE_FIELDS]
+
+
+def _filter_localized_list(
+    values: list, business_name: str, reference_text: str, output_language: str
+) -> list:
+    """Keep an official identifier as-is; drop a descriptive item in the wrong
+    language instead of failing the whole profile over it."""
+    kept = []
+    for value in values:
+        if _looks_like_official_name(value, business_name, reference_text):
+            kept.append(value)
+        elif text_matches_output_language(value, output_language):
+            kept.append(value)
+    return kept
 
 
 def derive_profile(
@@ -265,10 +288,15 @@ def derive_profile(
             "keywords": _as_list(parsed.get("keywords"), limit=20),
             "context_summary": str(parsed.get("context_summary") or "").strip(),
         }
-        prose = _localized_profile_prose(
-            result, result["name"] or name, f"{description}\n{scraped_text}"
-        )
+        prose = _localized_profile_prose(result)
         if result["context_summary"] and text_matches_output_language(prose, output_language):
+            reference_text = f"{description}\n{scraped_text}"
+            result["offerings"] = _filter_localized_list(
+                result["offerings"], result["name"] or name, reference_text, output_language
+            )
+            result["keywords"] = _filter_localized_list(
+                result["keywords"], result["name"] or name, reference_text, output_language
+            )
             return result
         if attempt == 0:
             messages.extend([

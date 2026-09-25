@@ -87,7 +87,14 @@ const FETCH_NOTE_PATTERNS = [
   { pattern: /^APIFY_API_TOKEN not set - (\w+) sources require Apify/i, key: 'apifyMissing', platform: 1 },
 ];
 
-export function translateFetchNote(note) {
+// `fallbackToGeneric` controls what happens when the note doesn't match any
+// known pattern: by default a non-English UI still gets a localized generic
+// label (better than showing raw English), but a caller that already falls
+// back to the raw `reason`/`fetch_note` itself (see DashboardPage.jsx's
+// competitor "needing attention" tags) should pass `false` so it gets `null`
+// instead - otherwise the generic string is never falsy and the real,
+// specific failure reason is never shown.
+export function translateFetchNote(note, { fallbackToGeneric = true } = {}) {
   const text = String(note || '').trim();
   if (!text) return null;
   for (const entry of FETCH_NOTE_PATTERNS) {
@@ -102,5 +109,6 @@ export function translateFetchNote(note) {
     return i18n.t(`pipeline:fetchNotes.${entry.key}`, params);
   }
   const english = i18n.resolvedLanguage === 'en' || !i18n.resolvedLanguage;
-  return english ? null : i18n.t('pipeline:fetchNotes.unknown');
+  if (english || !fallbackToGeneric) return null;
+  return i18n.t('pipeline:fetchNotes.unknown');
 }

@@ -78,7 +78,10 @@ def output_language_instruction(language: str | None) -> str:
     code = resolve_output_language(language)
     name = SUPPORTED_OUTPUT_LANGUAGES[code]
     return (
-        f"Write every human-readable value in {name}. Preserve official names, URLs, "
-        "usernames, hashtags, ISO codes, platform identifiers, and JSON keys exactly; "
-        "translate only descriptive prose and natural-language search terms."
+        f"Write every human-readable descriptive value (summaries, positioning, audience, "
+        f"reasons, and similar prose) in {name}. Preserve official names, URLs, usernames, "
+        "hashtags, ISO codes, platform identifiers, JSON keys, and search terms (keywords, "
+        "hashtags, usernames) exactly as they should actually be searched for - a search term "
+        "must stay in whatever language real content uses, independent of this output language, "
+        "and must never be translated just to match it."
     )

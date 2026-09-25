@@ -85,22 +85,22 @@ class OutputLanguageTests(unittest.TestCase):
         self.assertEqual(chat.call_count, 2)
 
     @patch("services.competitors.business_profile_store.chat_completion")
-    def test_business_profile_validates_descriptive_offerings_and_keywords(self, chat):
-        chat.side_effect = [
-            json.dumps({
-                "name": "Acme", "context_summary": "ملخص عربي واضح",
-                "offerings": ["Coffee drinks and sandwiches"],
-                "keywords": ["coffee shops"],
-            }),
-            json.dumps({
-                "name": "Acme", "context_summary": "ملخص عربي واضح",
-                "offerings": ["مشروبات القهوة والسندويشات"],
-                "keywords": ["مقاهي القهوة"],
-            }),
-        ]
+    def test_business_profile_filters_descriptive_offerings_and_keywords(self, chat):
+        # offerings/keywords are validated per item (F003 on PR #29), not as
+        # part of the scalar prose that gates a retry - a valid Arabic
+        # context_summary is accepted on the first attempt, and the English
+        # offering/keyword (not an official name, not in the site text) is
+        # simply dropped from its list rather than forcing a retry or
+        # discarding the whole profile.
+        chat.return_value = json.dumps({
+            "name": "Acme", "context_summary": "ملخص عربي واضح",
+            "offerings": ["Coffee drinks and sandwiches"],
+            "keywords": ["coffee shops"],
+        })
         result = business_profile_store.derive_profile("Acme", "", "", "site text", "ar")
-        self.assertEqual(result["offerings"], ["مشروبات القهوة والسندويشات"])
-        self.assertEqual(chat.call_count, 2)
+        self.assertEqual(result["offerings"], [])
+        self.assertEqual(result["keywords"], [])
+        self.assertEqual(chat.call_count, 1)
 
     @patch("services.competitors.business_profile_store.chat_completion")
     def test_business_profile_preserves_official_product_names(self, chat):
@@ -115,14 +115,41 @@ class OutputLanguageTests(unittest.TestCase):
         self.assertEqual(chat.call_count, 1)
 
     @patch("services.competitors.business_profile_store.chat_completion")
-    def test_business_profile_does_not_treat_title_case_labels_as_official(self, chat):
+    def test_business_profile_drops_title_case_labels_instead_of_failing_outright(self, chat):
+        # "Customer Support"/"Coffee Shops" are ordinary English descriptive
+        # labels, not official identifiers, and aren't found verbatim in the
+        # supplied site text - so with an Arabic output language they are
+        # dropped from their list fields rather than discarding the whole
+        # profile (see F003 on PR #29: one bad list item used to zero out an
+        # otherwise-valid profile).
         chat.return_value = json.dumps({
             "name": "Acme", "context_summary": "ملخص عربي واضح عن النشاط",
             "offerings": ["Customer Support"], "keywords": ["Coffee Shops"],
         })
         result = business_profile_store.derive_profile("Acme", "", "", "site text", "ar")
-        self.assertEqual(result, {})
-        self.assertEqual(chat.call_count, 2)
+        self.assertEqual(result["context_summary"], "ملخص عربي واضح عن النشاط")
+        self.assertEqual(result["offerings"], [])
+        self.assertEqual(result["keywords"], [])
+        self.assertEqual(chat.call_count, 1)
+
+    @patch("services.competitors.business_profile_store.chat_completion")
+    def test_business_profile_preserves_official_arabic_name_in_english_output(self, chat):
+        # An official name in Arabic script has no letter case to signal it's
+        # an identifier the way a Latin brand token does (ALL-CAPS, inner
+        # capitals, ...) - it can only be recognized by matching the supplied
+        # website text verbatim, regardless of script. Without that, an
+        # English-output profile mentioning this Arabic name used to fail the
+        # script check and discard the whole profile.
+        chat.return_value = json.dumps({
+            "name": "Beit Al Shawarma", "context_summary": "A well-known Arabic street food spot.",
+            "offerings": ["بيت الشاورما الخاص"], "keywords": ["بيت الشاورما"],
+        })
+        result = business_profile_store.derive_profile(
+            "Beit Al Shawarma", "", "", "نقدم بيت الشاورما الخاص في كل فروعنا", "en"
+        )
+        self.assertEqual(result["offerings"], ["بيت الشاورما الخاص"])
+        self.assertEqual(result["keywords"], ["بيت الشاورما"])
+        self.assertEqual(chat.call_count, 1)
 
     @patch("services.competitors.business_profile_store.chat_completion")
     def test_business_profile_rejects_empty_model_output(self, chat):
@@ -244,16 +271,20 @@ class OutputLanguageTests(unittest.TestCase):
         self.assertEqual(result["target_audience"], "الجمهور")
 
     @patch("services.projects.projects_ai.chat_completion")
-    def test_arabic_project_suggestions_reject_english_descriptive_keywords(self, chat):
+    def test_arabic_project_suggestions_keep_english_search_term_keywords(self, chat):
+        # Keywords/hashtags/usernames are search terms that decide what gets
+        # collected, not display copy - they must not be discarded just for
+        # not matching the UI's own language (F001 on PR #29). Only the
+        # human-readable target_audience prose follows the UI locale.
         chat.return_value = json.dumps({
             "target_audience": "محبو القهوة والمشروبات الساخنة",
             "hashtags": [], "keywords": ["coffee shops", "hot drinks"], "usernames": [],
         })
         with patch.object(projects_ai.config, "LLM_API_KEY", "test-key"):
             result = projects_ai.suggest_project_metadata("Acme", "coffee business", "ar")
-        self.assertEqual(result["source"], "heuristic")
-        self.assertNotIn("coffee shops", result["keywords"])
-        self.assertNotIn("hot drinks", result["keywords"])
+        self.assertEqual(result["source"], projects_ai.config.LLM_PROVIDER)
+        self.assertIn("coffee shops", result["keywords"])
+        self.assertIn("hot drinks", result["keywords"])
 
     def test_arabic_project_fallback_keeps_name_but_drops_english_description_terms(self):
         result = projects_ai._fallback_metadata("Acme", "coffee business updates", "ar")

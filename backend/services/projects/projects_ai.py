@@ -198,21 +198,6 @@ def _fallback_metadata(name, description, output_language="en"):
     }
 
 
-def _keyword_is_official_identifier(value: str, project_name: str) -> bool:
-    text = _clean_text(value)
-    if not text:
-        return False
-    if text.casefold() == _clean_text(project_name).casefold():
-        return True
-    if " " in text:
-        return False
-    return (
-        any(character.isupper() for character in text[1:])
-        or (text.isupper() and 1 < len(text) <= 10)
-        or any(character.isdigit() for character in text)
-    )
-
-
 def suggest_project_metadata(name, description, output_language="en"):
     """Return suggested target audience, hashtags, keywords, and usernames for a project."""
     name = _clean_text(name)
@@ -258,11 +243,13 @@ def suggest_project_metadata(name, description, output_language="en"):
     keywords = _normalize_items(payload.get("keywords") or [], prefix="", limit=8)
     usernames = _normalize_usernames(payload.get("usernames") or [], limit=5)
 
-    localized_values = [target_audience, *(
-        keyword for keyword in keywords
-        if not _keyword_is_official_identifier(keyword, name)
-    )]
-    if not text_matches_output_language(localized_values, output_language):
+    # Only the human-readable prose (target_audience) follows the UI locale.
+    # Keywords/hashtags/usernames are search terms that determine what gets
+    # collected, not display copy - validating them against the interface
+    # language would discard correct-market keywords whenever they don't
+    # happen to share the UI's script (see CLAUDE.md's Localization section:
+    # interface language and collected-content language are independent).
+    if not text_matches_output_language(target_audience, output_language):
         return fallback
 
     return {

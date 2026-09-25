@@ -97,8 +97,11 @@ MAX_ACCOUNTS_PER_PLATFORM = {
 # Always added on top of whatever the model suggests, not counted against
 # MAX_ACCOUNTS_PER_PLATFORM's keyword cap above (that cap exists to bound a
 # verbose model response, not these deterministic, always-wanted phrases).
+# These are search terms, not display copy, so they are never swapped for a
+# translated list based on the UI's own language - a search term has to match
+# whatever language the tracked market's own content actually uses, which the
+# UI locale says nothing about (see CLAUDE.md's Localization section).
 AUTO_KEYWORD_SUFFIXES = ("branches", "reviews", "news", "complaints", "promotions")
-AUTO_KEYWORD_SUFFIXES_AR = ("فروع", "مراجعات", "أخبار", "شكاوى", "عروض")
 
 # Hosts that are never a company's own site, so never a competitor "website".
 NON_COMPANY_HOSTS = {
@@ -293,13 +296,13 @@ def _ask_for_competitors(
         entries = parsed.get("competitors") if isinstance(parsed, dict) else None
         if not isinstance(entries, list):
             return []
-        prose = [
+        mismatched = [
             value
             for entry in entries if isinstance(entry, dict)
             for value in (entry.get("description"), entry.get("why_competitor"))
-            if value
+            if value and not text_matches_output_language(value, output_language)
         ]
-        if prose and text_matches_output_language(prose, output_language):
+        if not mismatched:
             break
         if attempt == 0:
             messages.extend([
@@ -309,8 +312,18 @@ def _ask_for_competitors(
                     f"JSON again, following this rule exactly: {output_language_instruction(output_language)}"
                 )},
             ])
-    else:
-        return []
+    # A single candidate's description/why_competitor still being in the wrong
+    # language after the retry (or a candidate the retry didn't fix) loses only
+    # that field, not the whole list - discarding every candidate over one bad
+    # field used to throw away real, corroborated competitors. The dashboard's
+    # own why_competitor/domain fallback covers a blanked field.
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        for field in ("description", "why_competitor"):
+            value = entry.get(field)
+            if value and not text_matches_output_language(value, output_language):
+                entry[field] = ""
     # Which ask produced an entry decides how the country screen treats it: the
     # "global" ask deliberately requests foreign-headquartered chains that trade
     # inside the target countries, so those must not then be rejected for being
@@ -935,8 +948,7 @@ def discover_accounts(
 
     # Guaranteed keyword coverage on top of whatever the model suggested -
     # see AUTO_KEYWORD_SUFFIXES above.
-    suffixes = AUTO_KEYWORD_SUFFIXES_AR if output_language == "ar" else AUTO_KEYWORD_SUFFIXES
-    for suffix in suffixes:
+    for suffix in AUTO_KEYWORD_SUFFIXES:
         term = f"{name} {suffix}"
         url = _derive_term_url("keyword", term)
         if not url or url.lower() in seen:
