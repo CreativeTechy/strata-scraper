@@ -1,3 +1,4 @@
+import RemoveProjectArticlesDialog from './articles/RemoveProjectArticlesDialog.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -97,25 +98,27 @@ export default function ProjectDetailPage({
   const { hasPermission } = useAuth();
   const canEdit = hasPermission('projects.update') || hasPermission('projects.delete');
   const canLinkUsers = hasPermission('projects.link_users');
+  const { t: tArticles } = useTranslation('articles');
+  const canRemoveArticles = hasPermission('articles.delete');
+  const [removeArticlesProjectId, setRemoveArticlesProjectId] = useState(null);
+  const [articlesReloadKey, setArticlesReloadKey] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [sourcesPage, setSourcesPage] = useState(1);
   const [activeSourceTab, setActiveSourceTab] = useState('all');
   const [articleStats, setArticleStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [seenProjectId, setSeenProjectId] = useState(null);
 
   const project = useMemo(
     () => projects.find((item) => Number(item.id) === Number(params.projectId)) || null,
     [projects, params.projectId]
   );
 
-  // Reset source pagination/tab when navigating to a different project. Adjusting state
-  // during render (rather than in an effect) avoids an extra render on every navigation.
-  if (project?.id !== seenProjectId) {
-    setSeenProjectId(project?.id ?? null);
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- route changes reset both controls together */
     setSourcesPage(1);
     setActiveSourceTab('all');
-  }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [project?.id]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -137,7 +140,7 @@ export default function ProjectDetailPage({
     }
     loadArticleStats();
     return () => controller.abort();
-  }, [project?.id]);
+  }, [project?.id, articlesReloadKey]);
 
   const assignedSources = useMemo(() => {
     if (!project) return [];
@@ -599,6 +602,22 @@ export default function ProjectDetailPage({
           </>
         )}
       </motion.div>
+
+      {canRemoveArticles && (
+        <section className="glass-card danger-zone" aria-labelledby="project-danger-zone-title">
+          <h2 id="project-danger-zone-title">{tArticles('removeProject.dangerZoneTitle')}</h2>
+          <div className="danger-zone-row">
+            <div><strong>{tArticles('removeProject.dangerZoneAction')}</strong><p>{tArticles('removeProject.dangerZoneBody')}</p></div>
+            <button type="button" className="btn-secondary" onClick={() => setRemoveArticlesProjectId(project.id)}>
+              <Trash2 size={16} /> {tArticles('removeProject.openButton')}
+            </button>
+          </div>
+        </section>
+      )}
+      {removeArticlesProjectId === project.id && (
+        <RemoveProjectArticlesDialog open project={project} onClose={() => setRemoveArticlesProjectId(null)}
+          onRemoved={() => { setRemoveArticlesProjectId(null); setArticlesReloadKey((value) => value + 1); }} />
+      )}
 
       <ConfirmModal
         open={deleteOpen}
