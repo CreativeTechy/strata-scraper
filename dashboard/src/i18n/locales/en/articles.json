@@ -183,5 +183,32 @@
     "loadMore": "Load More Articles",
     "emptyTitle": "No articles found",
     "emptyMessage": "Try a different sentiment or category filter."
+  },
+  "removeProject": {
+    "openButton": "Remove this project's articles…",
+    "title": "Remove all articles from {{name}}?",
+    "intro": "Articles that exist only in this project are permanently deleted. Articles shared with other projects stay there. Sources, schedules and collection run history are kept. Future collection runs can collect these articles again.",
+    "loading": "Checking what this would affect…",
+    "previewFailed": "Couldn't check what this would affect. Close this and try again.",
+    "countLinked": "Articles in this project",
+    "countDeleted": "Deleted permanently",
+    "countKept": "Kept in other projects",
+    "empty": "This project has no articles to remove.",
+    "activeRun": "A collection run is in progress. Wait for it to finish before removing articles.",
+    "activeRunLink": "Open the run",
+    "confirmLabel": "Type the project name to confirm:",
+    "submit": "Remove articles",
+    "submitting": "Removing…",
+    "success": "Removed the articles from {{name}} ({{removed}} in total).",
+    "dismiss": "Dismiss",
+    "dangerZoneTitle": "Danger zone",
+    "dangerZoneAction": "Remove all articles",
+    "dangerZoneBody": "Removes every article from this project. Shared articles stay in other projects; sources, schedules and run history are kept.",
+    "errors": {
+      "mismatch": "The name doesn't match. Type the project name exactly as shown.",
+      "activeRun": "A collection run is in progress. Wait for it to finish before removing articles.",
+      "notFound": "This project no longer exists.",
+      "failed": "The articles couldn't be removed, and nothing was changed. Try again."
+    }
   }
 }

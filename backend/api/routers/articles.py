@@ -13,7 +13,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from fastapi.responses import StreamingResponse
 
 from api.deps import ensure_project_visible
+from app.core import db
 from api.errors import ConflictError
+from services.auth import permissions_store
+from services.projects.projects_store import get_project
+from services.pipeline.pipeline_runs import get_active_run_for_project
 from services.articles.articles_store import export_articles, get_article_stats, list_articles
 from services.articles.import_jobs import create_import_run, get_import_run, run_import_job
 from services.auth.auth import require_permission
@@ -191,18 +195,87 @@ def delete_articles(confirm: str = "", user: dict = Depends(require_permission("
     which a UI can no longer submit by accident the way a plain confirm
     dialog's default button can.
     """
-    from services.articles.store import delete_all_articles
+    from services.articles.store import ArticleRemovalConflict, delete_all_articles
 
+    if not permissions_store.user_is_full_access(user):
+        raise HTTPException(status_code=403, detail="Only administrators can delete every project's articles.")
     if confirm != DELETE_ALL_ARTICLES_CONFIRMATION:
         raise HTTPException(
             status_code=400,
             detail=f'Pass ?confirm={DELETE_ALL_ARTICLES_CONFIRMATION.replace(" ", "%20")} to confirm this irreversible action.',
         )
 
-    deleted = delete_all_articles(actor=user.get("username") or user.get("email") or user.get("id"))
+    try:
+        deleted = delete_all_articles(actor=user.get("username") or user.get("email") or user.get("id"))
+    except ArticleRemovalConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not deleted:
         raise ConflictError(
             "Unable to delete articles.",
             detail="Check database connection settings.",
         )
     return {"ok": True}
+
+
+@router.get("/api/projects/{project_id}/articles/removal-preview")
+def project_article_removal_preview(project_id: int, user: dict = Depends(require_permission("articles.delete"))):
+    """What removing this project's articles would affect - the numbers its
+    confirmation dialog shows before the user commits."""
+    from services.articles.store import preview_project_article_removal
+
+    ensure_project_visible(project_id, user)
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    counts = preview_project_article_removal(project_id)
+    if counts is None:
+        raise HTTPException(status_code=503, detail="Unable to read this project's articles.")
+    try:
+        # A run for another project can also collect a shared source into this
+        # project. Match the transaction guard, without exposing its identity.
+        active = db.fetch_one("select id from pipeline_runs where status in ('queued', 'running') limit 1")
+        active_run = {"status": "running"} if active else None
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Unable to check active collection runs.") from exc
+    return {
+        "project": {"id": project.get("id"), "name": project.get("name")},
+        **counts,
+        "active_run": active_run,
+    }
+
+
+@router.delete("/api/projects/{project_id}/articles")
+def remove_project_articles_route(
+    project_id: int,
+    payload: dict | None = None,
+    user: dict = Depends(require_permission("articles.delete")),
+):
+    """Remove every article from one project. Needs the project's exact name
+    in `confirm` - checked here, not only by the dashboard's disabled button -
+    and refuses while a collection run is in flight. Shared sources can
+    write articles into several projects during the same run."""
+    from services.articles.store import ArticleRemovalConflict, remove_project_articles
+
+    ensure_project_visible(project_id, user)
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    expected = str(project.get("name") or "").strip()
+    confirm = str((payload or {}).get("confirm") or "").strip()
+    if not confirm or confirm != expected:
+        raise HTTPException(status_code=400, detail="Type the project name exactly to confirm.")
+
+    if get_active_run_for_project(project_id):
+        raise HTTPException(
+            status_code=409,
+            detail="A collection run is in progress for this project. Wait for it to finish before removing its articles.",
+        )
+
+    try:
+        result = remove_project_articles(project_id, actor=user.get("username") or user.get("email") or user.get("id"))
+    except ArticleRemovalConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=503, detail="Unable to remove this project's articles. Nothing was changed.")
+    return {"ok": True, **result}

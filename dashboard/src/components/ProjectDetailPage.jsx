@@ -1,3 +1,4 @@
+import RemoveProjectArticlesDialog from './articles/RemoveProjectArticlesDialog.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -97,6 +98,10 @@ export default function ProjectDetailPage({
   const { hasPermission } = useAuth();
   const canEdit = hasPermission('projects.update') || hasPermission('projects.delete');
   const canLinkUsers = hasPermission('projects.link_users');
+  const { t: tArticles } = useTranslation('articles');
+  const canRemoveArticles = hasPermission('articles.delete');
+  const [removeArticlesOpen, setRemoveArticlesOpen] = useState(false);
+  const [articlesReloadKey, setArticlesReloadKey] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [sourcesPage, setSourcesPage] = useState(1);
   const [activeSourceTab, setActiveSourceTab] = useState('all');
@@ -113,6 +118,7 @@ export default function ProjectDetailPage({
   // during render (rather than in an effect) avoids an extra render on every navigation.
   if (project?.id !== seenProjectId) {
     setSeenProjectId(project?.id ?? null);
+    setRemoveArticlesOpen(false);
     setSourcesPage(1);
     setActiveSourceTab('all');
   }
@@ -137,7 +143,7 @@ export default function ProjectDetailPage({
     }
     loadArticleStats();
     return () => controller.abort();
-  }, [project?.id]);
+  }, [project?.id, articlesReloadKey]);
 
   const assignedSources = useMemo(() => {
     if (!project) return [];
@@ -599,6 +605,22 @@ export default function ProjectDetailPage({
           </>
         )}
       </motion.div>
+
+      {canRemoveArticles && (
+        <section className="glass-card danger-zone" aria-labelledby="project-danger-zone-title">
+          <h2 id="project-danger-zone-title">{tArticles('removeProject.dangerZoneTitle')}</h2>
+          <div className="danger-zone-row">
+            <div><strong>{tArticles('removeProject.dangerZoneAction')}</strong><p>{tArticles('removeProject.dangerZoneBody')}</p></div>
+            <button type="button" className="btn-secondary" onClick={() => setRemoveArticlesOpen(true)}>
+              <Trash2 size={16} /> {tArticles('removeProject.openButton')}
+            </button>
+          </div>
+        </section>
+      )}
+      {removeArticlesOpen && (
+        <RemoveProjectArticlesDialog open project={project} onClose={() => setRemoveArticlesOpen(false)}
+          onRemoved={() => { setRemoveArticlesOpen(false); setArticlesReloadKey((value) => value + 1); }} />
+      )}
 
       <ConfirmModal
         open={deleteOpen}

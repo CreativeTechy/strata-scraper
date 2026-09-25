@@ -679,11 +679,115 @@ def delete_all_articles(actor=None):
         return 0
 
     try:
-        count_row = db.fetch_one("select count(*)::int as total from articles")
-        total = int((count_row or {}).get("total") or 0)
-        db.execute("delete from articles")
+        with db.transaction() as cur:
+            _guard_article_removal(cur)
+            cur.execute("delete from articles")
+            total = cur.rowcount
         logger.warning("DELETE ALL ARTICLES: %s row(s) removed by %r.", total, actor)
         return 1
+    except ArticleRemovalConflict:
+        raise
     except Exception as e:
         _log_db_error("  article delete error", e)
         return 0
+
+
+class ArticleRemovalConflict(Exception):
+    """A collection/analysis run still owns the articles being removed."""
+
+
+def _guard_article_removal(cur, project_id=None):
+    # Serialize with run creation/status changes and project-link writes until
+    # commit. Checking only in the route leaves a check/delete race.
+    cur.execute("lock table pipeline_runs in share row exclusive mode")
+    cur.execute(
+        "select id from pipeline_runs where status in ('queued', 'running')"
+        + (" and project_id = %s" if project_id is not None else "")
+        + " limit 1",
+        (project_id,) if project_id is not None else (),
+    )
+    if cur.fetchone():
+        raise ArticleRemovalConflict("A run is in progress. Wait for it to finish before removing articles.")
+    cur.execute("lock table article_projects in share row exclusive mode")
+
+
+def preview_project_article_removal(project_id):
+    """What remove_project_articles(project_id) would do, without doing it -
+    the numbers the confirmation dialog shows. None on a database error."""
+    if not config.DATABASE_URL:
+        return None
+    try:
+        row = db.fetch_one(
+            """
+            select
+                count(*)::int as linked,
+                count(*) filter (
+                    where not exists (
+                        select 1 from article_projects other
+                        where other.article_id = ap.article_id and other.project_id <> ap.project_id
+                    )
+                )::int as only_in_project
+            from article_projects ap
+            where ap.project_id = %s
+            """,
+            (int(project_id),),
+        ) or {}
+        linked = int(row.get("linked") or 0)
+        only_in_project = int(row.get("only_in_project") or 0)
+        return {
+            "linked_articles": linked,
+            "only_in_project": only_in_project,
+            "shared_with_other_projects": linked - only_in_project,
+        }
+    except Exception as e:
+        _log_db_error("  article removal preview error", e)
+        return None
+
+
+def remove_project_articles(project_id, actor=None):
+    """Unlink this project and delete only articles with no remaining owners, atomically."""
+    if not config.DATABASE_URL:
+        logger.warning("Database credentials not set, skipping project article removal.")
+        return None
+
+    project_id = int(project_id)
+    try:
+        with db.transaction() as cur:
+            _guard_article_removal(cur)
+            cur.execute(
+                "select article_id from article_projects where project_id = %s",
+                (project_id,),
+            )
+            article_ids = [row["article_id"] for row in cur.fetchall()]
+
+            cur.execute("delete from article_projects where project_id = %s", (project_id,))
+            unlinked = cur.rowcount or 0
+
+            deleted = 0
+            if article_ids:
+                cur.execute(
+                    """
+                    delete from articles a
+                    where a.id = any(%s)
+                      and not exists (select 1 from article_projects ap where ap.article_id = a.id)
+                    """,
+                    (article_ids,),
+                )
+                deleted = cur.rowcount or 0
+
+        result = {
+            "project_id": project_id,
+            "articles_removed": unlinked,
+            "articles_deleted": deleted,
+            "articles_kept_in_other_projects": unlinked - deleted,
+        }
+        logger.warning(
+            "REMOVE PROJECT ARTICLES: project %s - %s unlinked, %s deleted, %s kept in other projects; by %r.",
+            project_id, unlinked, deleted, unlinked - deleted, actor,
+        )
+        return result
+    except ArticleRemovalConflict:
+        raise
+    except Exception as e:
+        _log_db_error("  project article removal error", e)
+        return None

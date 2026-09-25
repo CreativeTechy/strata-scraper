@@ -1,3 +1,4 @@
+import RemoveProjectArticlesDialog from './articles/RemoveProjectArticlesDialog.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,13 +25,6 @@ const SORT_OPTIONS = [
 ];
 
 const PAGE_SIZES = [12, 24, 48, 96];
-
-// Must match backend/main.py's DELETE_ALL_ARTICLES_CONFIRMATION exactly - the
-// API rejects the request without it, so a typed confirmation replaces what
-// used to be a plain confirm dialog's default-button click. It is a stable
-// backend value, so it stays English in every UI language (the Arabic
-// instructions tell the user to type it exactly as shown).
-const DELETE_ALL_CONFIRMATION = 'DELETE ALL ARTICLES';
 
 const VIEW_MODES = [
   { value: 'card', labelKey: 'viewModes.card', icon: LayoutGrid },
@@ -241,7 +235,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deletingAll, setDeletingAll] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingCompetitors, setExportingCompetitors] = useState(false);
   const [competitorsExportPreview, setCompetitorsExportPreview] = useState(null);
@@ -249,7 +242,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const [importRun, setImportRun] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
-  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showExportArticlesConfirm, setShowExportArticlesConfirm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -421,31 +413,6 @@ export default function ArticlesPage({ project = null, projectId = null, project
   const currentPage = Math.min(totalPages, Math.floor(offset / limit) + 1);
   const pageNumbers = useMemo(() => getPageNumbers(currentPage, totalPages), [currentPage, totalPages]);
   const goToPage = (page) => setOffset((page - 1) * limit);
-
-  const handleDeleteAll = async () => {
-    if (deletingAll) return;
-    setDeletingAll(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/articles?confirm=${encodeURIComponent(DELETE_ALL_CONFIRMATION)}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) {
-        throw apiError(data, { status: res.status, fallback: t('errors.deleteFailed') });
-      }
-      setSearchInput('');
-      setSearch('');
-      setProjectFilter(normalizedProjectId != null ? String(normalizedProjectId) : 'all');
-      setSourceFilter('all');
-      setScrapedFrom('');
-      setScrapedTo('');
-      setOffset(0);
-      setReloadToken((value) => value + 1);
-    } catch (err) {
-      setError(err?.message ? err : t('errors.deleteFailed'));
-    } finally {
-      setDeletingAll(false);
-    }
-  };
 
   const handleExportJsonl = async () => {
     if (exporting) return;
@@ -667,15 +634,15 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 </select>
               </div>
             </div>
-            {canDeleteAll && (
+            {canDeleteAll && activeProject && (
               <button
                 className="btn-secondary"
                 onClick={() => setShowDeleteAllModal(true)}
-                disabled={loading || deletingAll}
+                disabled={loading}
                 style={{ color: '#b42318', borderColor: 'rgba(180,35,24,0.18)' }}
               >
                 <Trash2 size={16} />
-                {deletingAll ? t('common:actions.deleting') : t('header.deleteAll')}
+                {t('removeProject.openButton')}
               </button>
             )}
             <Link to="/dashboard" className="btn-secondary" style={{ textDecoration: 'none' }}>
@@ -684,56 +651,19 @@ export default function ArticlesPage({ project = null, projectId = null, project
           </div>
         </div>
 
-        <ConfirmModal
-          open={showDeleteAllModal}
-          title={t('deleteAll.title')}
-          message={t('deleteAll.message')}
-          confirmLabel={deletingAll ? t('common:actions.deleting') : t('deleteAll.confirm')}
-          cancelLabel={t('deleteAll.cancel')}
-          confirmButtonStyle={{
-            background: 'linear-gradient(135deg, #ff4757, #e03131)',
-            boxShadow: '0 4px 15px rgba(255, 71, 87, 0.28)',
-          }}
-          confirmDisabled={deletingAll || deleteAllConfirmText !== DELETE_ALL_CONFIRMATION}
-          onClose={() => {
-            if (!deletingAll) {
+        {showDeleteAllModal && activeProject && (
+          <RemoveProjectArticlesDialog
+            key={activeProject.id}
+            open
+            project={activeProject}
+            onClose={() => setShowDeleteAllModal(false)}
+            onRemoved={() => {
               setShowDeleteAllModal(false);
-              setDeleteAllConfirmText('');
-            }
-          }}
-          onConfirm={async () => {
-            if (deletingAll || deleteAllConfirmText !== DELETE_ALL_CONFIRMATION) return;
-            setShowDeleteAllModal(false);
-            setDeleteAllConfirmText('');
-            await handleDeleteAll();
-          }}
-        >
-          <label style={{ display: 'block', marginTop: '0.5rem' }}>
-            <Trans
-              t={t}
-              i18nKey="deleteAll.typeToConfirm"
-              values={{ phrase: DELETE_ALL_CONFIRMATION }}
-              components={{ phrase: <strong className="ltr-isolate ltr-inline" /> }}
-            />
-            <input
-              type="text"
-              dir="ltr"
-              value={deleteAllConfirmText}
-              onChange={(event) => setDeleteAllConfirmText(event.target.value)}
-              autoComplete="off"
-              aria-label={t('deleteAll.inputAria')}
-              style={{
-                display: 'block',
-                width: '100%',
-                marginTop: '0.4rem',
-                padding: '0.5rem 0.75rem',
-                borderRadius: '8px',
-                border: '1px solid var(--border, #ccc)',
-                fontSize: '0.95rem',
-              }}
-            />
-          </label>
-        </ConfirmModal>
+              setOffset(0);
+              setReloadToken((value) => value + 1);
+            }}
+          />
+        )}
 
         <ConfirmModal
           open={Boolean(competitorsExportPreview)}
@@ -970,7 +900,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 </option>
               ))}
             </select>
-            <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={loading || exporting || exportingCompetitors || deletingAll}>
+            <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={loading || exporting || exportingCompetitors}>
               <Upload size={16} />
               {exporting || exportingCompetitors ? t('toolbar.exporting') : t('common:actions.export')}
             </button>
@@ -996,7 +926,7 @@ export default function ArticlesPage({ project = null, projectId = null, project
                 <button
                   className="btn-secondary"
                   onClick={() => setShowImportModal(true)}
-                  disabled={loading || importing || deletingAll}
+                  disabled={loading || importing}
                 >
                   <Download size={16} />
                   {importing ? t('toolbar.importing') : t('common:actions.import')}
