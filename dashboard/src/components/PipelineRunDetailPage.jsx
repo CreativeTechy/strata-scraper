@@ -111,6 +111,10 @@ const SOURCE_COLUMNS = [
   { key: 'saved', labelKey: 'detail.columns.saved' },
 ];
 
+// A competitor-mode run can report dozens of sources; page the breakdown
+// client-side (the endpoint already returns every row in one response).
+const SOURCE_PAGE_SIZES = [10, 25, 50, 100];
+
 // A source's fetch-status badge, distinct from the "Content filtered" column
 // above (that one counts articles content_guard rejected AFTER a successful
 // fetch - this is about whether the source's own page could be reached at
@@ -177,6 +181,9 @@ export default function PipelineRunDetailPage({ projects = [] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedSources, setExpandedSources] = useState(() => new Set());
+  const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
+  const [sourcePage, setSourcePage] = useState(1);
+  const [sourcePageSize, setSourcePageSize] = useState(SOURCE_PAGE_SIZES[0]);
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [exportingArticles, setExportingArticles] = useState(false);
   const [exportError, setExportError] = useState('');
@@ -218,6 +225,7 @@ export default function PipelineRunDetailPage({ projects = [] }) {
 
     setRun(null);
     setSources([]);
+    setSourcePage(1);
     load({ showLoading: true }).then((loadedRun) => {
       if (cancelled) return;
       const status = (loadedRun?.status || '').toLowerCase();
@@ -290,6 +298,13 @@ export default function PipelineRunDetailPage({ projects = [] }) {
       : '';
   const showOriginalMessage = Boolean(run?.message) && displayMessage !== run.message;
   const articlesSaved = run?.articles_saved || 0;
+  // Clamp rather than reset: rows keep arriving while a run is live, and the
+  // page the user is reading shouldn't jump back to 1 on every poll.
+  const totalSourcePages = Math.max(1, Math.ceil(sources.length / sourcePageSize));
+  const safeSourcePage = Math.min(sourcePage, totalSourcePages);
+  const sourcePageStart = (safeSourcePage - 1) * sourcePageSize;
+  const pagedSources = sources.slice(sourcePageStart, sourcePageStart + sourcePageSize);
+  const showSourceTable = run?.has_detail && sources.length > 0;
 
   return (
     <div className="admin-page-shell">
@@ -420,148 +435,218 @@ export default function PipelineRunDetailPage({ projects = [] }) {
           </div>
 
           <div className="glass-card">
-            <h3 className="run-detail-section-title">{t('detail.perSource')}</h3>
-            {!run.has_detail ? (
-              <div className="run-detail-fallback">{t('detail.legacySources')}</div>
-            ) : sources.length === 0 ? (
-              <div className="run-detail-fallback">{t('detail.noSourceData')}</div>
-            ) : (
-              <div className="table-scroll">
-                <table className="run-detail-source-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'start', background: 'var(--glass-bg)' }}>
-                      <th style={{ padding: '8px 10px', width: 28 }} />
-                      <th style={{ padding: '8px 10px' }}>{t('detail.columns.source')}</th>
-                      <th style={{ padding: '8px 10px' }}>{t('detail.columns.fetchStatus')}</th>
-                      {SOURCE_COLUMNS.map((col) => (
-                        <th key={col.key} style={{ padding: '8px 10px', textAlign: 'end' }}>
-                          {t(col.labelKey)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sources.map((row) => {
-                      const key = row.source;
-                      const isExpanded = expandedSources.has(key);
-                      const issue = translateSourceIssue(row.issue);
-                      const issueDir = issue?.untranslated ? 'auto' : undefined;
-                      const badge = sourceStatusBadge(row, issue);
-                      const translatedNote = issue ? null : translateFetchNote(row.fetch_note);
-                      const hasDetails = Boolean(row.fetch_note);
-                      const href = sourceHref(row);
-                      const showNameSeparately = href && row.source && row.source !== href;
-                      return (
-                        <Fragment key={key}>
-                          <tr style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                            <td style={{ padding: '8px 10px' }}>
-                              {hasDetails ? (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSource(key)}
-                                  aria-label={isExpanded ? t('detail.collapseDetails') : t('detail.expandDetails')}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    color: 'var(--text-light)',
-                                  }}
-                                >
-                                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} className="icon-flip-rtl" />}
-                                </button>
-                              ) : null}
-                            </td>
-                            <td style={{ padding: '8px 10px', wordBreak: 'break-word', maxWidth: 280 }}>
-                              {showNameSeparately ? (
-                                <div style={{ fontWeight: 600, marginBottom: 2 }} dir="auto">{row.source}</div>
-                              ) : null}
-                              {href ? (
-                                <a
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title={t('detail.visit', { url: href })}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'flex-start',
-                                    gap: 4,
-                                    color: 'var(--primary-color)',
-                                    textDecoration: 'none',
-                                    fontWeight: showNameSeparately ? 400 : 600,
-                                    wordBreak: 'break-all',
-                                  }}
-                                >
-                                  <span className="ltr-isolate">{href}</span>
-                                  <ExternalLink size={11} style={{ flexShrink: 0, marginTop: 2 }} />
-                                </a>
-                              ) : (
-                                <bdi>{row.source}</bdi>
-                              )}
-                            </td>
-                            <td style={{ padding: '8px 10px' }}>
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  padding: '3px 9px',
-                                  borderRadius: 999,
-                                  background: `${badge.color}1f`,
-                                  color: badge.color,
-                                  fontWeight: 600,
-                                  fontSize: '0.75rem',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                <badge.Icon size={13} /> <span dir={issueDir}>{badge.label}</span>
-                              </span>
-                            </td>
-                            {SOURCE_COLUMNS.map((col) => (
-                              <td key={col.key} style={{ padding: '8px 10px', textAlign: 'end' }}>
-                                {formatNumber(row[col.key] ?? 0)}
+            <h3 className="run-detail-section-title" style={sourcesCollapsed ? { marginBottom: 0 } : undefined}>
+              <button
+                type="button"
+                className="run-detail-section-toggle"
+                onClick={() => setSourcesCollapsed((value) => !value)}
+                aria-expanded={!sourcesCollapsed}
+                aria-controls="run-detail-per-source"
+                title={sourcesCollapsed ? t('detail.expandSection') : t('detail.collapseSection')}
+              >
+                {sourcesCollapsed ? <ChevronRight size={16} className="icon-flip-rtl" /> : <ChevronDown size={16} />}
+                <span>{t('detail.perSource')}</span>
+                {showSourceTable ? (
+                  <span className="panel-chip">
+                    {t('detail.sourcesCount', { count: sources.length, formatted: formatNumber(sources.length) })}
+                  </span>
+                ) : null}
+              </button>
+            </h3>
+            <div id="run-detail-per-source" hidden={sourcesCollapsed}>
+              {!run.has_detail ? (
+                <div className="run-detail-fallback">{t('detail.legacySources')}</div>
+              ) : sources.length === 0 ? (
+                <div className="run-detail-fallback">{t('detail.noSourceData')}</div>
+              ) : (
+                <div className="table-scroll">
+                  <table className="run-detail-source-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'start', background: 'var(--glass-bg)' }}>
+                        <th style={{ padding: '8px 10px', width: 28 }} />
+                        <th style={{ padding: '8px 10px' }}>{t('detail.columns.source')}</th>
+                        <th style={{ padding: '8px 10px' }}>{t('detail.columns.fetchStatus')}</th>
+                        {SOURCE_COLUMNS.map((col) => (
+                          <th key={col.key} style={{ padding: '8px 10px', textAlign: 'end' }}>
+                            {t(col.labelKey)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedSources.map((row) => {
+                        const key = row.source;
+                        const isExpanded = expandedSources.has(key);
+                        const issue = translateSourceIssue(row.issue);
+                        const issueDir = issue?.untranslated ? 'auto' : undefined;
+                        const badge = sourceStatusBadge(row, issue);
+                        const translatedNote = issue ? null : translateFetchNote(row.fetch_note);
+                        const hasDetails = Boolean(row.fetch_note);
+                        const href = sourceHref(row);
+                        const showNameSeparately = href && row.source && row.source !== href;
+                        return (
+                          <Fragment key={key}>
+                            <tr style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                              <td style={{ padding: '8px 10px' }}>
+                                {hasDetails ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSource(key)}
+                                    aria-label={isExpanded ? t('detail.collapseDetails') : t('detail.expandDetails')}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      color: 'var(--text-light)',
+                                    }}
+                                  >
+                                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} className="icon-flip-rtl" />}
+                                  </button>
+                                ) : null}
                               </td>
-                            ))}
-                          </tr>
-                          {isExpanded && hasDetails ? (
-                            <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
-                              <td />
-                              <td colSpan={SOURCE_COLUMNS.length + 2} style={{ padding: '8px 10px 12px', fontSize: '0.8rem', color: 'var(--text-dark)' }}>
-                                {issue ? (
-                                  <div style={{ display: 'grid', gap: 5 }}>
-                                    <strong dir={issueDir}>{issue.title}</strong>
-                                    <span dir={issueDir}>{issue.message}</span>
-                                    <span style={{ color: 'var(--text-light)' }} dir={issueDir}>{issue.action}</span>
-                                    {issue.technical_detail ? (
-                                      <details style={{ marginTop: 3 }}>
-                                        <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontWeight: 700 }}>{t('common:errors.technicalDetails')}</summary>
-                                        <div dir="ltr" style={{ marginTop: 6, overflowWrap: 'anywhere', color: 'var(--text-light)' }}>{issue.technical_detail}</div>
-                                      </details>
-                                    ) : null}
-                                  </div>
-                                ) : translatedNote ? (
-                                  <div style={{ display: 'grid', gap: 5 }}>
-                                    <span>{translatedNote}</span>
-                                    <details style={{ marginTop: 3 }}>
-                                      <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontWeight: 700 }}>{t('common:errors.technicalDetails')}</summary>
-                                      <div dir="ltr" style={{ marginTop: 6, overflowWrap: 'anywhere', color: 'var(--text-light)' }}>{row.fetch_note}</div>
-                                    </details>
-                                  </div>
+                              <td style={{ padding: '8px 10px', wordBreak: 'break-word', maxWidth: 280 }}>
+                                {showNameSeparately ? (
+                                  <div style={{ fontWeight: 600, marginBottom: 2 }} dir="auto">{row.source}</div>
+                                ) : null}
+                                {href ? (
+                                  <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={t('detail.visit', { url: href })}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'flex-start',
+                                      gap: 4,
+                                      color: 'var(--primary-color)',
+                                      textDecoration: 'none',
+                                      fontWeight: showNameSeparately ? 400 : 600,
+                                      wordBreak: 'break-all',
+                                    }}
+                                  >
+                                    <span className="ltr-isolate">{href}</span>
+                                    <ExternalLink size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+                                  </a>
                                 ) : (
-                                  <span dir="auto">{row.fetch_note}</span>
+                                  <bdi>{row.source}</bdi>
                                 )}
                               </td>
+                              <td style={{ padding: '8px 10px' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '3px 9px',
+                                    borderRadius: 999,
+                                    background: `${badge.color}1f`,
+                                    color: badge.color,
+                                    fontWeight: 600,
+                                    fontSize: '0.75rem',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <badge.Icon size={13} /> <span dir={issueDir}>{badge.label}</span>
+                                </span>
+                              </td>
+                              {SOURCE_COLUMNS.map((col) => (
+                                <td key={col.key} style={{ padding: '8px 10px', textAlign: 'end' }}>
+                                  {formatNumber(row[col.key] ?? 0)}
+                                </td>
+                              ))}
                             </tr>
-                          ) : null}
-                        </Fragment>
-                      );
+                            {isExpanded && hasDetails ? (
+                              <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
+                                <td />
+                                <td colSpan={SOURCE_COLUMNS.length + 2} style={{ padding: '8px 10px 12px', fontSize: '0.8rem', color: 'var(--text-dark)' }}>
+                                  {issue ? (
+                                    <div style={{ display: 'grid', gap: 5 }}>
+                                      <strong dir={issueDir}>{issue.title}</strong>
+                                      <span dir={issueDir}>{issue.message}</span>
+                                      <span style={{ color: 'var(--text-light)' }} dir={issueDir}>{issue.action}</span>
+                                      {issue.technical_detail ? (
+                                        <details style={{ marginTop: 3 }}>
+                                          <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontWeight: 700 }}>{t('common:errors.technicalDetails')}</summary>
+                                          <div dir="ltr" style={{ marginTop: 6, overflowWrap: 'anywhere', color: 'var(--text-light)' }}>{issue.technical_detail}</div>
+                                        </details>
+                                      ) : null}
+                                    </div>
+                                  ) : translatedNote ? (
+                                    <div style={{ display: 'grid', gap: 5 }}>
+                                      <span>{translatedNote}</span>
+                                      <details style={{ marginTop: 3 }}>
+                                        <summary style={{ cursor: 'pointer', color: 'var(--secondary-color)', fontWeight: 700 }}>{t('common:errors.technicalDetails')}</summary>
+                                        <div dir="ltr" style={{ marginTop: 6, overflowWrap: 'anywhere', color: 'var(--text-light)' }}>{row.fetch_note}</div>
+                                      </details>
+                                    </div>
+                                  ) : (
+                                    <span dir="auto">{row.fetch_note}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {showSourceTable && sources.length > SOURCE_PAGE_SIZES[0] ? (
+                <div className="run-detail-pagination" role="navigation" aria-label={t('detail.sourcePaginationLabel')}>
+                  <div className="run-detail-pagination-info">
+                    {t('common:pagination.showing', {
+                      from: formatNumber(sourcePageStart + 1),
+                      to: formatNumber(Math.min(sourcePageStart + sourcePageSize, sources.length)),
+                      total: formatNumber(sources.length),
                     })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  </div>
+                  <div className="run-detail-pagination-controls">
+                    <select
+                      className="filter-select"
+                      value={sourcePageSize}
+                      onChange={(e) => {
+                        setSourcePageSize(Number(e.target.value));
+                        setSourcePage(1);
+                      }}
+                      aria-label={t('detail.perPageAria')}
+                    >
+                      {SOURCE_PAGE_SIZES.map((size) => (
+                        <option key={size} value={size}>
+                          {t('detail.perPageOption', { formatted: formatNumber(size) })}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setSourcePage(Math.max(1, safeSourcePage - 1))}
+                      disabled={safeSourcePage <= 1}
+                      aria-label={t('common:pagination.previousPage')}
+                      style={{ padding: '8px 10px', fontSize: '0.8rem' }}
+                    >
+                      {t('common:actions.previous')}
+                    </button>
+                    <span className="panel-chip">
+                      {t('common:pagination.page', { page: formatNumber(safeSourcePage), total: formatNumber(totalSourcePages) })}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setSourcePage(Math.min(totalSourcePages, safeSourcePage + 1))}
+                      disabled={safeSourcePage >= totalSourcePages}
+                      aria-label={t('common:pagination.nextPage')}
+                      style={{ padding: '8px 10px', fontSize: '0.8rem' }}
+                    >
+                      {t('common:actions.next')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </>
       )}

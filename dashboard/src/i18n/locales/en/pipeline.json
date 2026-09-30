@@ -208,6 +208,13 @@
     "perSource": "Per-source breakdown",
     "legacySources": "Details unavailable for legacy run — this run finished before per-source stats were tracked.",
     "noSourceData": "No per-source data recorded for this run yet.",
+    "sourcesCount_one": "{{formatted}} source",
+    "sourcesCount_other": "{{formatted}} sources",
+    "expandSection": "Show per-source breakdown",
+    "collapseSection": "Hide per-source breakdown",
+    "sourcePaginationLabel": "Per-source breakdown pages",
+    "perPageOption": "{{formatted}} per page",
+    "perPageAria": "Sources per page",
     "columns": {
       "source": "Source",
       "fetchStatus": "Fetch status",

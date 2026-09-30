@@ -2237,6 +2237,59 @@ h1, h2, h3 {
   margin: 0 0 10px;
 }
 
+.run-detail-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+.run-detail-section-toggle > svg {
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.run-detail-section-toggle .panel-chip {
+  font-weight: 600;
+}
+
+.run-detail-pagination {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.run-detail-pagination-info {
+  font-size: 0.84rem;
+  color: var(--text-light);
+}
+
+.run-detail-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .run-detail-pagination,
+  .run-detail-pagination-controls {
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 .run-detail-fallback {
   font-size: 0.85rem;
   color: var(--text-light);
