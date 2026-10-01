@@ -23,6 +23,7 @@ import { friendlyRunMessage } from '../errors/userFacingError.js';
 import { formatDateTime, formatDuration, formatNumber } from '../i18n/format.js';
 import i18n from '../i18n/index.js';
 import { translateFetchNote, translateSourceIssue } from '../lib/sourceIssue.js';
+import { attentionFirst, keepRowOrder } from '../lib/runSourceOrder.js';
 
 // Stage/status codes come from the backend (pipeline_runs.stage/status) and
 // stay as-is for comparisons; only their display label is translated.
@@ -114,6 +115,11 @@ const SOURCE_COLUMNS = [
 // A competitor-mode run can report dozens of sources; page the breakdown
 // client-side (the endpoint already returns every row in one response).
 const SOURCE_PAGE_SIZES = [10, 25, 50, 100];
+
+function isLiveRun(run) {
+  const status = (run?.status || '').toLowerCase();
+  return status === 'queued' || status === 'running';
+}
 
 // A source's fetch-status badge, distinct from the "Content filtered" column
 // above (that one counts articles content_guard rejected AFTER a successful
@@ -211,7 +217,10 @@ export default function PipelineRunDetailPage({ projects = [] }) {
           if (!res.ok) throw apiError(data, { status: res.status, fallback: i18n.t('pipeline:errors.loadRunFailed') });
           if (cancelled) return null;
           setRun(data?.run || null);
-          setSources(Array.isArray(data?.sources) ? data.sources : []);
+          const nextSources = Array.isArray(data?.sources) ? data.sources : [];
+          // While live, keep rows where they were so a paginated table doesn't
+          // reshuffle on every poll; take the server's ranking once it's done.
+          setSources((prev) => (isLiveRun(data?.run) ? keepRowOrder(prev, nextSources) : nextSources));
           return data?.run || null;
         })
         .catch((err) => {
@@ -227,16 +236,13 @@ export default function PipelineRunDetailPage({ projects = [] }) {
     setSources([]);
     setSourcePage(1);
     load({ showLoading: true }).then((loadedRun) => {
-      if (cancelled) return;
-      const status = (loadedRun?.status || '').toLowerCase();
-      if (status !== 'queued' && status !== 'running') return;
+      if (cancelled || !isLiveRun(loadedRun)) return;
       // Per-source rows fill in live while the run is active (see
       // backend/scraper/pipelines.py's StreamingCollectPipeline) - poll until
       // the run reaches a terminal status instead of leaving this static.
       intervalId = setInterval(() => {
         load().then((polledRun) => {
-          const polledStatus = (polledRun?.status || '').toLowerCase();
-          if (polledRun && polledStatus !== 'queued' && polledStatus !== 'running' && intervalId) {
+          if (polledRun && !isLiveRun(polledRun) && intervalId) {
             clearInterval(intervalId);
             intervalId = null;
           }
@@ -300,10 +306,13 @@ export default function PipelineRunDetailPage({ projects = [] }) {
   const articlesSaved = run?.articles_saved || 0;
   // Clamp rather than reset: rows keep arriving while a run is live, and the
   // page the user is reading shouldn't jump back to 1 on every poll.
-  const totalSourcePages = Math.max(1, Math.ceil(sources.length / sourcePageSize));
+  // Sources needing attention lead, so the "review below" run message points
+  // at page 1 rather than the 0-article tail of a `scraped desc` ranking.
+  const orderedSources = useMemo(() => attentionFirst(sources), [sources]);
+  const totalSourcePages = Math.max(1, Math.ceil(orderedSources.length / sourcePageSize));
   const safeSourcePage = Math.min(sourcePage, totalSourcePages);
   const sourcePageStart = (safeSourcePage - 1) * sourcePageSize;
-  const pagedSources = sources.slice(sourcePageStart, sourcePageStart + sourcePageSize);
+  const pagedSources = orderedSources.slice(sourcePageStart, sourcePageStart + sourcePageSize);
   const showSourceTable = run?.has_detail && sources.length > 0;
 
   return (
