@@ -69,15 +69,15 @@
 }
 
 .cs-btn-primary {
-  background: linear-gradient(135deg, #fb923c, #f97316);
+  background: linear-gradient(135deg, #c2410c, #9a3412);
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.22);
+  box-shadow: 0 8px 18px rgba(194, 65, 12, 0.22);
 }
 
 .cs-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #fb923c, #f97316);
-  box-shadow: 0 12px 24px rgba(249, 115, 22, 0.26);
+  background: linear-gradient(135deg, #b43a0a, #7c2d12);
+  box-shadow: 0 12px 24px rgba(194, 65, 12, 0.26);
 }
 
 .cs-btn-ghost {
@@ -344,7 +344,7 @@
 
 .cs-search-field:focus-within {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.14);
 }
 
 .cs-search-field input {
@@ -555,7 +555,7 @@
 }
 
 .cs-mode-card-selected .cs-mode-card-icon {
-  background: linear-gradient(135deg, #fb923c, #f97316);
+  background: linear-gradient(135deg, #c2410c, #9a3412);
   color: #fff;
 }
 
@@ -597,7 +597,7 @@
 }
 
 .cs-dropzone-active {
-  border-color: #f97316;
+  border-color: #c2410c;
   background: #fff8f1;
   transform: scale(1.005);
 }
@@ -615,7 +615,7 @@
 }
 
 .cs-dropzone-active .cs-dropzone-icon {
-  background: linear-gradient(135deg, #fb923c, #f97316);
+  background: linear-gradient(135deg, #c2410c, #9a3412);
   color: #fff;
 }
 
@@ -660,7 +660,7 @@
   background: #fff;
   border-color: #fed7aa;
   color: var(--text-dark);
-  box-shadow: 0 4px 12px -8px rgba(249, 115, 22, 0.5);
+  box-shadow: 0 4px 12px -8px rgba(194, 65, 12, 0.5);
 }
 
 .cs-step-done { color: #15803d; background: #f0fdf4; }
@@ -720,7 +720,7 @@
 .cs-textarea:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.14);
 }
 
 .cs-textarea { resize: vertical; min-height: 84px; line-height: 1.55; }
@@ -739,7 +739,7 @@
 .cs-select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.14);
 }
 
 /* Alternate-name editor inside a competitor's expanded panel. */
