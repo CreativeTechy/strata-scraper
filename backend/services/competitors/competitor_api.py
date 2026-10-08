@@ -378,14 +378,10 @@ def discover_competitor_accounts(
 # Competitors + accounts
 # --------------------------------------------------------------------------- #
 @router.get("/studies/{project_id}/competitors")
-def list_competitors(
-    project_id: int,
-    accept_language: str | None = Header(default=None),
-    user: dict = Depends(require_permission("competitors.view")),
-):
+def list_competitors(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
     _project_or_404(project_id)
     try:
-        competitor_discovery.fill_missing_name_translations(project_id, accept_language)
+        competitor_discovery.fill_missing_name_translations(project_id)
     except Exception:
         # Display names are a nicety; the list itself must still load.
         logger.warning("Competitor name translation skipped", exc_info=True)

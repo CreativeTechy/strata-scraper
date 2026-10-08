@@ -10,10 +10,14 @@ app already reads.
 
 from __future__ import annotations
 
+import logging
+
 from app.core import db
 from services.articles.articles_store import get_article_stats
 from services.pipeline.pipeline_runs import list_pipeline_runs
 from services.pipeline.source_diagnostics import classify_fetch_issue
+
+logger = logging.getLogger(__name__)
 
 RUNS_SERIES_LIMIT = 20
 
@@ -220,6 +224,18 @@ def _competitor_totals(project_id):
     return int((row or {}).get("tracked") or 0)
 
 
+def _fill_competitor_name_translations(project_id):
+    """Give the attention cards' competitor names their translations before
+    they are read, same as the competitors list does - the dashboard may well
+    be the first page loaded. A failure only means English names here."""
+    from services.competitors.competitor_discovery import fill_missing_name_translations
+
+    try:
+        fill_missing_name_translations(project_id)
+    except Exception:
+        logger.warning("Competitor name translation skipped", exc_info=True)
+
+
 def _competitors_needing_attention(project_id, run_id):
     """Tracked competitors with at least one valid, linked source that came
     back with a fetch_note on the latest run - grouped so the dashboard can
@@ -289,6 +305,7 @@ def get_dashboard_summary(project_id):
     }
 
     if project.get("mode") == "competitor":
+        _fill_competitor_name_translations(project_id)
         summary["totals"]["competitors"] = _competitor_totals(project_id)
         summary["competitors_needing_attention"] = _competitors_needing_attention(project_id, latest_run_id)
 

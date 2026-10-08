@@ -44,7 +44,6 @@ from urllib.parse import urlparse
 
 from app.core import settings as config
 from app.core.language import (
-    DEFAULT_OUTPUT_LANGUAGE,
     SUPPORTED_OUTPUT_LANGUAGES,
     TRANSLATED_NAME_LANGUAGES,
     clean_name_translations,
@@ -442,33 +441,35 @@ def translate_competitor_names(names: list[str], language: str) -> dict[str, str
     return translated
 
 
-def fill_missing_name_translations(project_id: int, language: str | None) -> int:
+def fill_missing_name_translations(project_id: int) -> int:
     """Translate the names of any competitors in a project still lacking one.
 
     Discovery asks for translated names up front, so this only reaches rows
-    from before that, competitors typed in by hand, and renamed ones. Runs
-    only when the dashboard is actually in that language, and each name is
-    translated once: the result is stored, and a failure is remembered.
+    from before that, competitors typed in by hand, and renamed ones. It runs
+    for every translated language whatever the interface is currently in:
+    the dashboard's language switcher only re-renders, so a name has to
+    already be stored by the time someone switches to see it. Each name is
+    translated once - the result is stored, and a failure is remembered.
     """
     from services.competitors import competitors_store
 
-    language = resolve_output_language(language)
-    if language == DEFAULT_OUTPUT_LANGUAGE:
-        return 0
-    pending = [
-        row for row in competitors_store.competitors_missing_name_translation(project_id, language)
-        if (row["id"], row["name"], language) not in _untranslatable_names
-    ][:NAME_TRANSLATION_BATCH]
-    if not pending:
-        return 0
-    translated = translate_competitor_names([row["name"] for row in pending], language)
-    for row in pending:
-        value = translated.get(row["name"])
-        if value:
-            competitors_store.set_name_translation(row["id"], row["name"], language, value)
-        else:
-            _untranslatable_names.add((row["id"], row["name"], language))
-    return sum(1 for row in pending if translated.get(row["name"]))
+    filled = 0
+    for language in TRANSLATED_NAME_LANGUAGES:
+        pending = [
+            row for row in competitors_store.competitors_missing_name_translation(project_id, language)
+            if (row["id"], row["name"], language) not in _untranslatable_names
+        ][:NAME_TRANSLATION_BATCH]
+        if not pending:
+            continue
+        translated = translate_competitor_names([row["name"] for row in pending], language)
+        for row in pending:
+            value = translated.get(row["name"])
+            if value:
+                competitors_store.set_name_translation(row["id"], row["name"], language, value)
+                filled += 1
+            else:
+                _untranslatable_names.add((row["id"], row["name"], language))
+    return filled
 
 
 def verify_competitor(name: str, website: str | None, log=None) -> dict:

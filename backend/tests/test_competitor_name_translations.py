@@ -70,21 +70,17 @@ class FillMissingNameTranslationsTests(unittest.TestCase):
     def setUp(self):
         competitor_discovery._untranslatable_names.clear()
 
-    @patch("services.competitors.competitor_discovery.translate_competitor_names")
-    @patch("services.competitors.competitors_store.competitors_missing_name_translation")
-    def test_english_interface_never_translates(self, missing, translate):
-        self.assertEqual(competitor_discovery.fill_missing_name_translations(5, "en-US,en;q=0.9"), 0)
-        missing.assert_not_called()
-        translate.assert_not_called()
-
     @patch("services.competitors.competitors_store.set_name_translation")
     @patch("services.competitors.competitor_discovery.translate_competitor_names")
     @patch("services.competitors.competitors_store.competitors_missing_name_translation")
     def test_stores_translations_and_remembers_failures(self, missing, translate, store):
+        """Runs without any notion of the interface language: the language
+        switcher only re-renders, so Arabic names must already be stored
+        before anyone switches to Arabic."""
         missing.return_value = [{"id": 1, "name": "Starbucks"}, {"id": 2, "name": "Cafe Younes"}]
         translate.return_value = {"Starbucks": "ستاربكس"}
 
-        filled = competitor_discovery.fill_missing_name_translations(5, "ar")
+        filled = competitor_discovery.fill_missing_name_translations(5)
 
         self.assertEqual(filled, 1)
         missing.assert_called_once_with(5, "ar")
@@ -94,7 +90,7 @@ class FillMissingNameTranslationsTests(unittest.TestCase):
         # load, so a failing LLM doesn't add its timeout to every list fetch.
         missing.return_value = [{"id": 2, "name": "Cafe Younes"}]
         translate.reset_mock()
-        self.assertEqual(competitor_discovery.fill_missing_name_translations(5, "ar"), 0)
+        self.assertEqual(competitor_discovery.fill_missing_name_translations(5), 0)
         translate.assert_not_called()
 
 
@@ -153,15 +149,39 @@ class CompetitorRoutesTests(unittest.TestCase):
     def test_other_edits_keep_the_translation(self):
         self.assertEqual(self._update({"aliases": ["SBUX"]})["name_translations"], {"ar": "ستاربكس"})
 
-    def test_list_fills_translations_in_the_request_language_and_survives_failure(self):
+    def test_list_fills_translations_in_any_language_and_survives_failure(self):
         with patch("services.competitors.competitor_api._project_or_404"), \
              patch("services.competitors.competitors_store.competitor_overview", return_value=[]), \
              patch("services.competitors.competitor_discovery.fill_missing_name_translations",
                    side_effect=RuntimeError("boom")) as fill:
-            res = self.client.get("/api/competitor/studies/3/competitors", headers={"Accept-Language": "ar"})
+            res = self.client.get("/api/competitor/studies/3/competitors", headers={"Accept-Language": "en"})
 
         self.assertEqual(res.status_code, 200)
-        fill.assert_called_once_with(3, "ar")
+        fill.assert_called_once_with(3)
+
+
+class DashboardSummaryTranslationsTests(unittest.TestCase):
+    def test_competitor_summary_fills_names_first_and_survives_failure(self):
+        from services.dashboard import dashboard_store
+
+        calls = []
+        with patch.object(dashboard_store, "_project_or_none", return_value={"id": 3, "mode": "competitor"}), \
+             patch.object(dashboard_store, "get_article_stats", return_value={"total": 0, "sources": []}), \
+             patch.object(dashboard_store, "_latest_detailed_run_id", return_value=None), \
+             patch.object(dashboard_store, "_total_sources", return_value=0), \
+             patch.object(dashboard_store, "_total_runs", return_value=0), \
+             patch.object(dashboard_store, "_runs_series", return_value=[]), \
+             patch.object(dashboard_store, "_articles_by_platform", return_value=[]), \
+             patch.object(dashboard_store, "_sources_needing_attention", return_value=[]), \
+             patch.object(dashboard_store, "_competitor_totals", return_value=1), \
+             patch.object(dashboard_store, "_competitors_needing_attention",
+                          side_effect=lambda *_: calls.append("attention") or []), \
+             patch("services.competitors.competitor_discovery.fill_missing_name_translations",
+                   side_effect=lambda *_: calls.append("fill") or (_ for _ in ()).throw(RuntimeError("boom"))):
+            summary = dashboard_store.get_dashboard_summary(3)
+
+        self.assertEqual(calls, ["fill", "attention"])
+        self.assertEqual(summary["totals"]["competitors"], 1)
 
 
 class DiscoveryNameTranslationsTests(unittest.TestCase):
