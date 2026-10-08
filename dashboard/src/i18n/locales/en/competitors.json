@@ -266,6 +266,11 @@
       "message_other": "This will download {{count}} tracked competitors for \"{{name}}\" as JSONL.",
       "messageUnnamed_one": "This will download {{count}} tracked competitor for this study as JSONL.",
       "messageUnnamed_other": "This will download {{count}} tracked competitors for this study as JSONL."
+    },
+    "namesLanguage": {
+      "label": "Names language",
+      "hint": "Independent of the interface language - view these competitor names in a specific language.",
+      "translating": "Translating..."
     }
   },
   "sourceEditor": {

@@ -38,12 +38,16 @@ knows how to query the web and normalise a result.
 from __future__ import annotations
 
 import json
+import threading
 import re
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 from app.core import settings as config
 from app.core.language import (
+    SUPPORTED_OUTPUT_LANGUAGES,
+    TRANSLATED_NAME_LANGUAGES,
+    clean_name_translations,
     output_language_instruction,
     resolve_output_language,
     text_matches_output_language,
@@ -57,7 +61,7 @@ from services.projects.project_discovery import (
 )
 from services.sources.sources_store import _derive_term_url
 
-PROMPT_VERSION = "competitor-discovery-2026-09-24-localized"
+PROMPT_VERSION = "competitor-discovery-2026-10-08-name-translations"
 
 SIZE_TIERS = ("enterprise", "mid_market", "smb", "startup", "unknown")
 TIER_WEIGHT = {"enterprise": 0, "mid_market": 1, "smb": 2, "startup": 3, "unknown": 4}
@@ -388,6 +392,132 @@ def _corroborate(name: str, website: str, log=None) -> dict:
     return {"reachable": reachable, "search_hits": hits, "resolved_website": resolved}
 
 
+NAME_TRANSLATION_BATCH = 40
+
+# (competitor id, name, language) triples the model already failed to
+# translate in this process. Without this a broken or unconfigured LLM would be
+# retried on every load of the competitor list, adding its timeout each time.
+_untranslatable_names: set[tuple[int, str, str]] = set()
+
+# One fill per project at a time: parallel page loads (or a forced fill racing
+# a background one) would otherwise send the same pending names to the model
+# once each. The second caller waits, then finds nothing left to translate.
+_fill_locks: dict[int, threading.Lock] = {}
+_fill_locks_guard = threading.Lock()
+_fills_scheduled: set[int] = set()
+
+
+def translate_competitor_names(names: list[str], language: str) -> dict[str, str]:
+    """Display names for `names` in `language`, keyed by the original name.
+
+    One LLM call for the whole batch. Names the model leaves untranslated or
+    renders in the wrong script are simply absent from the result.
+    """
+    names = [name for name in dict.fromkeys(str(n or "").strip() for n in names) if name]
+    if not names or language not in TRANSLATED_NAME_LANGUAGES:
+        return {}
+    language_name = SUPPORTED_OUTPUT_LANGUAGES[language]
+    try:
+        raw = chat_completion(
+            messages=[
+                {"role": "system", "content": (
+                    f"You write company and brand names as they are written in {language_name}. "
+                    f"Use the company's official {language_name} brand name if it has one, "
+                    f"otherwise the standard {language_name} transliteration. Render the name; "
+                    "never translate the meaning of its words. Return ONLY this JSON, no "
+                    'markdown: {"names": {"<name exactly as given>": "<written name>"}}'
+                )},
+                {"role": "user", "content": json.dumps(names, ensure_ascii=False)},
+            ],
+            temperature=0.0,
+            max_tokens=4000,
+            timeout=60,
+            json_mode=True,
+        )
+        parsed = json.loads(_strip_fences(raw))
+    except (LLMError, json.JSONDecodeError, ValueError) as exc:
+        print(f"  competitor name translation failed: {exc}")
+        return {}
+    mapping = parsed.get("names") if isinstance(parsed, dict) else None
+    if not isinstance(mapping, dict):
+        return {}
+    translated: dict[str, str] = {}
+    for name in names:
+        if name not in mapping:
+            continue  # the model skipped it: a failure, worth retrying
+        cleaned = clean_name_translations({language: mapping.get(name)}, name)
+        # A name the model answered for but that has no distinct rendering
+        # (a Latin brand used as-is, or an echo) is settled with the name
+        # itself, so it is not asked about again on every load.
+        translated[name] = cleaned.get(language) or name
+    return translated
+
+
+def fill_missing_name_translations(project_id: int, force: bool = False) -> int:
+    """Translate the names of any competitors in a project still lacking one.
+
+    Discovery asks for translated names up front, so this only reaches rows
+    from before that, competitors typed in by hand, and renamed ones. It runs
+    for every translated language whatever the interface is currently in:
+    the dashboard's language switcher only re-renders, so a name has to
+    already be stored by the time someone switches to see it. Each name is
+    translated once - the result is stored, and a failure is remembered.
+    `force` (a card's own language switch asking for this list right now)
+    retries names that failed before instead of skipping them.
+    """
+    from services.competitors import competitors_store
+
+    with _fill_locks_guard:
+        lock = _fill_locks.setdefault(int(project_id), threading.Lock())
+    with lock:
+        return _fill_missing_name_translations(competitors_store, project_id, force)
+
+
+def schedule_name_translation(project_id: int) -> None:
+    """Fill missing names in the background so a read never waits on the model.
+
+    At most one pending fill per project; a failure only means English names
+    until the next load.
+    """
+    project_id = int(project_id)
+    with _fill_locks_guard:
+        if project_id in _fills_scheduled:
+            return
+        _fills_scheduled.add(project_id)
+
+    def run():
+        try:
+            fill_missing_name_translations(project_id)
+        except Exception as exc:
+            print(f"  competitor name translation skipped: {exc}")
+        finally:
+            with _fill_locks_guard:
+                _fills_scheduled.discard(project_id)
+
+    threading.Thread(target=run, name=f"name-translation-{project_id}", daemon=True).start()
+
+
+def _fill_missing_name_translations(competitors_store, project_id: int, force: bool) -> int:
+    filled = 0
+    for language in TRANSLATED_NAME_LANGUAGES:
+        pending = [
+            row for row in competitors_store.competitors_missing_name_translation(project_id, language)
+            if force or (row["id"], row["name"], language) not in _untranslatable_names
+        ][:NAME_TRANSLATION_BATCH]
+        if not pending:
+            continue
+        translated = translate_competitor_names([row["name"] for row in pending], language)
+        for row in pending:
+            value = translated.get(row["name"])
+            if value:
+                competitors_store.set_name_translation(row["id"], row["name"], language, value)
+                _untranslatable_names.discard((row["id"], row["name"], language))
+                filled += 1
+            else:
+                _untranslatable_names.add((row["id"], row["name"], language))
+    return filled
+
+
 def verify_competitor(name: str, website: str | None, log=None) -> dict:
     """Phase 2: corroborate one AI-suggested competitor against the live web.
 
@@ -596,6 +726,7 @@ def discover_competitors(
         log(f"{name}: accepted.")
         accepted.append({
             "name": name,
+            "name_translations": clean_name_translations(entry.get("name_translations"), name),
             "website": resolved or None,
             "domain": domain or None,
             "description": str(entry.get("description") or "").strip(),
@@ -624,6 +755,17 @@ def discover_competitors(
     for index, item in enumerate(accepted, start=1):
         item["size_rank"] = index
         item.pop("stated_rank", None)
+
+    # Rejected candidates are listed back to the user too, so they get the
+    # same display names as accepted ones.
+    translations_by_name = {
+        str(entry.get("name") or "").strip().casefold(): entry.get("name_translations")
+        for entry in suggestions if isinstance(entry, dict)
+    }
+    for item in rejected:
+        item["name_translations"] = clean_name_translations(
+            translations_by_name.get(item["name"].casefold()), item["name"]
+        )
 
     return {"competitors": accepted, "rejected": rejected, "error": None}
 

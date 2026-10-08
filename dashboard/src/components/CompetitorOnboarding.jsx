@@ -65,7 +65,7 @@ import {
   formatDuration, formatList, formatNumber, generatedLanguageNeedsRefresh,
   generatedTextDirection,
 } from '../i18n/format.js';
-import { translateDiscoveryLog, translateRejectionReason } from '../i18n/competitorText.js';
+import { competitorName, translateDiscoveryLog, translateRejectionReason } from '../i18n/competitorText.js';
 import '../styles/Competitors.css';
 
 // `labelKey` is translated at render time (competitorOnboarding namespace).
@@ -351,6 +351,7 @@ function intervalToDays(value, unit) {
 
 export default function CompetitorOnboarding() {
   const { t, i18n } = useTranslation('competitorOnboarding');
+  const language = i18n.resolvedLanguage || i18n.language;
   const navigate = useNavigate();
   const [step, setStep] = useState(2);
   const [error, setError] = useState('');
@@ -1345,7 +1346,7 @@ export default function CompetitorOnboarding() {
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {rejected.map((item) => (
                     <div key={item.name} style={{ fontSize: '0.81rem', color: 'var(--text-light)' }}>
-                      <strong dir="auto" style={{ color: 'var(--text-dark)' }}>{item.name}</strong>
+                      <strong dir="auto" style={{ color: 'var(--text-dark)' }}>{competitorName(item, language)}</strong>
                       {' — '}
                       <bdi>{translateRejectionReason(item, t)}</bdi>
                     </div>
@@ -1423,10 +1424,10 @@ export default function CompetitorOnboarding() {
                           style={{ background: avatarGradient(competitor.name), width: 30, height: 30, fontSize: '0.72rem' }}
                           aria-hidden="true"
                         >
-                          {initials(competitor.name)}
+                          {initials(competitorName(competitor, language))}
                         </div>
                         <div className="cs-row-main">
-                          <div className="cs-row-name" dir="auto">{competitor.name}</div>
+                          <div className="cs-row-name" dir="auto">{competitorName(competitor, language)}</div>
                           {detailsOpen ? (
                           <div className="cs-row-desc" dir={generatedTextDirection(competitor.generated_language)}>
                             {competitor.description || competitor.size_signals?.why_competitor || competitor.domain || '—'}
@@ -1607,9 +1608,9 @@ export default function CompetitorOnboarding() {
                     style={{ background: avatarGradient(competitor.name), width: 26, height: 26, fontSize: '0.68rem' }}
                     aria-hidden="true"
                   >
-                    {initials(competitor.name)}
+                    {initials(competitorName(competitor, language))}
                   </div>
-                  <strong dir="auto" style={{ fontSize: '0.88rem' }}>{competitor.name}</strong>
+                  <strong dir="auto" style={{ fontSize: '0.88rem' }}>{competitorName(competitor, language)}</strong>
                 </div>
                 <div className="cs-rows" style={{ marginInlineStart: 30 }}>
                   {!accounts ? (

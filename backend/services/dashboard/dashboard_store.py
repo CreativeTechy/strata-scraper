@@ -220,6 +220,15 @@ def _competitor_totals(project_id):
     return int((row or {}).get("tracked") or 0)
 
 
+def _fill_competitor_name_translations(project_id):
+    """Queue the attention cards' competitor names for translation, same as the
+    competitors list does - in the background, so the summary never waits on
+    the model. Until it lands the cards show English names."""
+    from services.competitors.competitor_discovery import schedule_name_translation
+
+    schedule_name_translation(project_id)
+
+
 def _competitors_needing_attention(project_id, run_id):
     """Tracked competitors with at least one valid, linked source that came
     back with a fetch_note on the latest run - grouped so the dashboard can
@@ -228,7 +237,7 @@ def _competitors_needing_attention(project_id, run_id):
         return []
     rows = db.fetch_all(
         """
-        select c.id, c.name, ca.platform, ca.url as source_url, prs.fetch_note,
+        select c.id, c.name, c.name_translations, ca.platform, ca.url as source_url, prs.fetch_note,
                prs.http_status, prs.network_blocked
         from competitors c
         join competitor_accounts ca on ca.competitor_id = c.id and ca.validation_status = 'valid'
@@ -242,7 +251,10 @@ def _competitors_needing_attention(project_id, run_id):
     )
     grouped = {}
     for row in rows:
-        entry = grouped.setdefault(row["id"], {"id": row["id"], "name": row["name"], "sources": []})
+        entry = grouped.setdefault(row["id"], {
+            "id": row["id"], "name": row["name"],
+            "name_translations": row.get("name_translations") or {}, "sources": [],
+        })
         issue = classify_fetch_issue(
             row["fetch_note"],
             http_status=row.get("http_status"),
@@ -286,6 +298,7 @@ def get_dashboard_summary(project_id):
     }
 
     if project.get("mode") == "competitor":
+        _fill_competitor_name_translations(project_id)
         summary["totals"]["competitors"] = _competitor_totals(project_id)
         summary["competitors_needing_attention"] = _competitors_needing_attention(project_id, latest_run_id)
 

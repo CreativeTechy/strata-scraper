@@ -5,7 +5,7 @@ import {
   countryName, formatDate, formatNumber, generatedLanguageNeedsRefresh,
   generatedTextDirection, isRtl, languageName,
 } from '../format.js';
-import { translateDiscoveryLog, translateRejectionReason } from '../competitorText.js';
+import { competitorName, translateDiscoveryLog, translateRejectionReason } from '../competitorText.js';
 import { userFacingError, friendlyRunMessage } from '../../errors/userFacingError.js';
 import { apiError } from '../../errors/apiError.js';
 import { REPEAT_UNIT_OPTIONS } from '../../constants/schedule.js';
@@ -210,5 +210,20 @@ describe('API errors', () => {
     expect(friendlyRunMessage({ message: '2 source(s) had fetch issues' })).toBe('Pipeline complete. 2 sources need attention.');
     await i18n.changeLanguage('ar');
     expect(friendlyRunMessage({ message: '2 source(s) had fetch issues' })).toContain('مصدران');
+  });
+});
+
+describe('competitor display names', () => {
+  const competitor = { name: 'Starbucks', name_translations: { ar: 'ستاربكس' } };
+
+  it('shows the translation for the active language', () => {
+    expect(competitorName(competitor, 'ar')).toBe('ستاربكس');
+    expect(competitorName(competitor, 'ar-LB')).toBe('ستاربكس');
+  });
+
+  it('falls back to the canonical name', () => {
+    expect(competitorName(competitor, 'en')).toBe('Starbucks');
+    expect(competitorName({ name: 'Cafe Younes' }, 'ar')).toBe('Cafe Younes');
+    expect(competitorName({ name: 'Deluxe', name_translations: { ar: '  ' } }, 'ar')).toBe('Deluxe');
   });
 });

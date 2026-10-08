@@ -18,11 +18,17 @@ Rules:
   primarily headquartered or operates (e.g. "US", "GB", "DE"). Always give your
   best real-world answer; return "" only if the company's home country is truly
   impossible to determine. A blank country causes the entry to be discarded.
+- `name_translations.ar` — the company's name as it is written in Arabic: its
+  official Arabic brand name if it has one (e.g. "ستاربكس" for Starbucks),
+  otherwise the standard Arabic transliteration of the name. Render the name,
+  never translate the meaning of its words. This field is always Arabic,
+  whatever language the rest of the output uses. `name` itself stays exactly as
+  the company officially writes it.
 - If web search results are supplied, treat them as evidence of who is really
   operating in that market and prefer companies they name over ones you recall.
 
 Return ONLY this JSON, no markdown:
 {"competitors": [
-  {"name": "", "website": "", "description": "", "size_tier": "enterprise",
+  {"name": "", "name_translations": {"ar": ""}, "website": "", "description": "", "size_tier": "enterprise",
    "size_rank": 1, "size_signals": [], "why_competitor": "", "country": ""}
 ]}

@@ -66,6 +66,10 @@ export const getDiscoveryStatus = (id, runId) => request(`/studies/${id}/discove
 export const discoverTrackedAccounts = (id) => request(`/studies/${id}/discover-accounts`, { method: 'POST' });
 export const listCompetitors = (id) => request(`/studies/${id}/competitors`);
 export const addCompetitor = (id, body) => request(`/studies/${id}/competitors`, { method: 'POST', body });
+/** Translates every competitor name still missing a translation, now - for a
+ *  card's own language switch. Returns { competitors: [{ id, name, name_translations }] }. */
+export const translateCompetitorNames = (id) =>
+  request(`/studies/${id}/competitors/translate-names`, { method: 'POST' });
 /** Creates a competitor and validates+links its sources in one call — the
  *  manual-first path, as opposed to addCompetitor()+addAccount() one at a time. */
 export const addCompetitorManual = (id, body) =>

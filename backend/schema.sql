@@ -678,6 +678,11 @@ execute function public.set_updated_at();
 -- here is a deliberate human statement that this string identifies this company,
 -- so it is trusted where a derived one is not.
 --
+-- `name_translations` is the same company's name as written in each
+-- non-English interface language ({"ar": "ستاربكس"}), for display only.
+-- `name` stays the canonical identity - the dedupe index, web searches, and
+-- attribution all key on it - so translating it in place would break all three.
+--
 -- The embedding is of the competitor's own identity (name, aliases,
 -- description), so attribution can fall back to semantic similarity when a
 -- competitor is never named literally - a rebrand, a translation, an indirect
@@ -687,6 +692,7 @@ create table if not exists public.competitors (
     id                    bigint generated always as identity primary key,
     project_id            bigint not null references public.projects(id) on delete cascade,
     name                  text not null,
+    name_translations     jsonb not null default '{}'::jsonb,
     aliases               jsonb not null default '[]'::jsonb,
     website               text,
     domain                text,

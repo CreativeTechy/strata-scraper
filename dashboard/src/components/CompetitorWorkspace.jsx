@@ -28,6 +28,7 @@ import {
   formatList, formatNumber, formatPercent, generatedLanguageNeedsRefresh,
   generatedTextDirection,
 } from '../i18n/format.js';
+import { competitorName } from '../i18n/competitorText.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
@@ -236,11 +237,11 @@ function SourcesPanel({
                       style={{ background: avatarGradient(source.competitor_name), width: 28, height: 28, fontSize: '0.68rem' }}
                       aria-hidden="true"
                     >
-                      {initials(source.competitor_name)}
+                      {initials(source.competitor_display_name)}
                     </div>
                     <div className="cs-row-main">
                       <div className="cs-row-name">
-                        <bdi>{source.competitor_name}</bdi>
+                        <bdi>{source.competitor_display_name}</bdi>
                         <span style={{ fontWeight: 400, color: 'var(--text-light)' }}>
                           {' '}· {sourceTypeLabel(t, source.platform)}
                           {source.handle ? <>{' '}<span className="ltr-isolate">@{source.handle}</span></> : null}
@@ -419,7 +420,8 @@ function CulturalAnalysisPanel({ analysis, targetCountries, onRun, running }) {
 }
 
 export default function CompetitorWorkspace() {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
+  const language = i18n.resolvedLanguage || i18n.language;
   const { studyId } = useParams();
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
@@ -549,8 +551,9 @@ export default function CompetitorWorkspace() {
       ...account,
       competitor_id: competitor.id,
       competitor_name: competitor.name,
+      competitor_display_name: competitorName(competitor, language),
     }))),
-    [competitors],
+    [competitors, language],
   );
 
   // Ranked by count, highest first - the chart and the "filter by source
@@ -569,9 +572,9 @@ export default function CompetitorWorkspace() {
 
   const competitorOptions = useMemo(
     () => competitors
-      .map((competitor) => ({ id: String(competitor.id), name: competitor.name }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [competitors],
+      .map((competitor) => ({ id: String(competitor.id), name: competitorName(competitor, language) }))
+      .sort((a, b) => a.name.localeCompare(b.name, language)),
+    [competitors, language],
   );
 
   const sourceStats = useMemo(() => ({
@@ -588,7 +591,7 @@ export default function CompetitorWorkspace() {
       if (sourceCompetitorFilter && String(source.competitor_id) !== sourceCompetitorFilter) return false;
       if (sourceStatusFilter && source.validation_status !== sourceStatusFilter) return false;
       if (query) {
-        const haystack = `${source.competitor_name} ${source.handle || ''} ${source.url || ''}`.toLowerCase();
+        const haystack = `${source.competitor_name} ${source.competitor_display_name} ${source.handle || ''} ${source.url || ''}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;

@@ -17,12 +17,15 @@ import {
   PLATFORM_LABELS, SIZE_TIER_LABELS, addAccount, addCompetitorManual,
   avatarGradient, deleteCompetitor, discoverAccounts, discoverCompetitors,
   discoverTrackedAccounts, getStudy, initials, listAccounts, listCompetitors,
-  pollDiscoveryRun, setCompetitorStatus, updateCompetitor, validateAccount,
+  pollDiscoveryRun, setCompetitorStatus, translateCompetitorNames, updateCompetitor, validateAccount,
 } from '../competitorApi.js';
 import { countryLabel } from '../constants/countries.js';
 import { apiError } from '../errors/apiError.js';
 import { formatList, formatNumber, formatPercent } from '../i18n/format.js';
+import { competitorName } from '../i18n/competitorText.js';
+import { DEFAULT_LANGUAGE, resolveLanguage } from '../i18n/config.js';
 import { useAuth } from '../auth/useAuth.js';
+import CardLanguageSwitcher from './CardLanguageSwitcher.jsx';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import { AddCompetitorForm, AddSourceRow, AliasEditor } from './CompetitorSourceEditor.jsx';
@@ -32,7 +35,8 @@ import '../styles/Competitors.css';
 const PAGE_SIZE = 10;
 
 export default function CompetitorsListPage() {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
+  const language = i18n.resolvedLanguage || i18n.language;
   const { studyId } = useParams();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('competitors.manage');
@@ -46,6 +50,13 @@ export default function CompetitorsListPage() {
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+
+  // This card's own names language. null follows the interface language;
+  // once the card's switch is used it keeps that choice, whatever the global
+  // switcher does, so the user can force just this list into one language.
+  const [namesLanguageChoice, setNamesLanguageChoice] = useState(null);
+  const [translatingNames, setTranslatingNames] = useState(false);
+  const namesLanguage = namesLanguageChoice || resolveLanguage(language);
 
   const [showAddCompetitor, setShowAddCompetitor] = useState(false);
   const [addingManual, setAddingManual] = useState(false);
@@ -88,6 +99,32 @@ export default function CompetitorsListPage() {
       cancelled = true;
     };
   }, [studyId]);
+
+  const chooseNamesLanguage = async (code) => {
+    setNamesLanguageChoice(code);
+    // Forcing a translation is a manage action; a viewer just sees what the
+    // background fill has stored so far.
+    const missing = canManage && code !== DEFAULT_LANGUAGE
+      && competitors.some((competitor) => !competitor.name_translations?.[code]);
+    if (!missing) return;
+    setTranslatingNames(true);
+    try {
+      const result = await translateCompetitorNames(studyId);
+      const byId = new Map((result.competitors || []).map((row) => [row.id, row]));
+      setCompetitors((current) => current.map((competitor) => {
+        const row = byId.get(competitor.id);
+        // Only when the name is unchanged: a rename since the list loaded
+        // must not pick up a translation of the other name.
+        return row && row.name === competitor.name
+          ? { ...competitor, name_translations: row.name_translations }
+          : competitor;
+      }));
+    } catch (caught) {
+      setActionError(caught);
+    } finally {
+      setTranslatingNames(false);
+    }
+  };
 
   const refreshCompetitors = async () => {
     try {
@@ -313,6 +350,7 @@ export default function CompetitorsListPage() {
     return competitors.filter((competitor) => {
       const haystack = [
         competitor.name,
+        ...Object.values(competitor.name_translations || {}),
         competitor.domain,
         competitor.website,
         ...(Array.isArray(competitor.aliases) ? competitor.aliases : []),
@@ -426,6 +464,13 @@ export default function CompetitorsListPage() {
               placeholder={t('list.searchPlaceholder')}
             />
           </label>
+          <CardLanguageSwitcher
+            value={namesLanguage}
+            onChange={chooseNamesLanguage}
+            label={t('list.namesLanguage.label')}
+            hint={translatingNames ? t('list.namesLanguage.translating') : t('list.namesLanguage.hint')}
+            busy={translatingNames}
+          />
         </div>
 
         {canManage ? (
@@ -463,10 +508,12 @@ export default function CompetitorsListPage() {
                     <div className="cs-row">
                       <span className="cs-row-rank">{competitor.size_rank != null ? formatNumber(competitor.size_rank) : t('list.noRank')}</span>
                       <div className="cs-avatar" style={{ background: avatarGradient(competitor.name), width: 30, height: 30, fontSize: '0.72rem' }} aria-hidden="true">
-                        {initials(competitor.name)}
+                        {initials(competitorName(competitor, namesLanguage))}
                       </div>
                       <div className="cs-row-main">
-                        <div className="cs-row-name" dir="auto">{competitor.name}</div>
+                        {/* <bdi>, not dir="auto": the card's names language can differ from the
+                            interface's, and the name should sit next to its avatar either way. */}
+                        <div className="cs-row-name"><bdi>{competitorName(competitor, namesLanguage)}</bdi></div>
                         <div className="cs-row-desc">
                           {[
                             t('list.channelsConfirmed', {
@@ -532,7 +579,7 @@ export default function CompetitorsListPage() {
                               type="button"
                               className="cs-btn cs-btn-sm cs-btn-danger"
                               onClick={() => setDeleteTarget(competitor)}
-                              aria-label={t('list.deleteCompetitor', { name: competitor.name })}
+                              aria-label={t('list.deleteCompetitor', { name: competitorName(competitor, namesLanguage) })}
                             >
                               <Trash2 size={13} />
                             </button>
@@ -648,7 +695,7 @@ export default function CompetitorsListPage() {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title={t('list.removeConfirm.title', { name: deleteTarget?.name || '' })}
+        title={t('list.removeConfirm.title', { name: deleteTarget ? competitorName(deleteTarget, namesLanguage) : '' })}
         message={t('list.removeConfirm.message')}
         confirmLabel={deletingCompetitor ? t('list.removeConfirm.confirming') : t('list.removeConfirm.confirm')}
         cancelLabel={t('list.removeConfirm.cancel')}

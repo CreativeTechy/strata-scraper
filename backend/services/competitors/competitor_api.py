@@ -19,6 +19,7 @@ gateway timeout.
 
 from __future__ import annotations
 
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
@@ -34,6 +35,8 @@ from app.core import db
 from services.auth.auth import require_permission
 from services.pipeline.pipeline_runs import get_active_run_for_project
 from services.projects.projects_store import delete_project, list_sources_for_project, project_has_articles
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/competitor", tags=["competitor"])
 
@@ -377,10 +380,31 @@ def discover_competitor_accounts(
 @router.get("/studies/{project_id}/competitors")
 def list_competitors(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
     _project_or_404(project_id)
+    # Background, never inline: a read must not wait on (or be a way to spend)
+    # an LLM call. Names missing now show in English until the next load.
+    competitor_discovery.schedule_name_translation(project_id)
     competitors = competitors_store.competitor_overview(project_id)
     for competitor in competitors:
         competitor["accounts"] = competitors_store.list_accounts(competitor["id"])
     return {"competitors": competitors}
+
+
+@router.post("/studies/{project_id}/competitors/translate-names")
+def translate_names(project_id: int, user: dict = Depends(require_permission("competitors.manage"))):
+    """Translate every still-untranslated competitor name now, for a card's own
+    language switch. Unlike the list load, this retries names that failed
+    before - the user explicitly asked for this list in another language."""
+    _project_or_404(project_id)
+    try:
+        competitor_discovery.fill_missing_name_translations(project_id, force=True)
+    except Exception:
+        logger.warning("Competitor name translation failed", exc_info=True)
+    return {
+        "competitors": [
+            {"id": row["id"], "name": row["name"], "name_translations": row.get("name_translations") or {}}
+            for row in competitors_store.list_competitors(project_id)
+        ]
+    }
 
 
 @router.post("/studies/{project_id}/competitors")
@@ -455,9 +479,13 @@ def add_competitor_manual(project_id: int, payload: dict, user: dict = Depends(r
 @router.put("/competitors/{competitor_id}")
 def update_competitor(competitor_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
     competitor = _competitor_or_404(competitor_id)
-    record = competitors_store.upsert_competitor(
-        competitor["project_id"], {**competitor, **(payload or {})}
-    )
+    payload = payload or {}
+    merged = {**competitor, **payload}
+    if "name_translations" not in payload and str(merged.get("name") or "").strip() != competitor["name"]:
+        # The stored translations name the old company name; the list endpoint
+        # translates the new one the next time it is loaded.
+        merged["name_translations"] = {}
+    record = competitors_store.upsert_competitor(competitor["project_id"], merged)
     competitors_store.rerank_competitors(competitor["project_id"])
     return {"competitor": record}
 

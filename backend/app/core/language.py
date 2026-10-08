@@ -73,6 +73,36 @@ def text_matches_output_language(value: object, language: str | None) -> bool:
     return True
 
 
+TRANSLATED_NAME_LANGUAGES = tuple(
+    code for code in SUPPORTED_OUTPUT_LANGUAGES if code != DEFAULT_OUTPUT_LANGUAGE
+)
+MAX_TRANSLATED_NAME_LENGTH = 120
+
+
+def clean_name_translations(value: object, name: str | None = None) -> dict[str, str]:
+    """Keep only usable `{language: name}` display translations.
+
+    A translation must be for a supported non-default language and actually be
+    written in that language's script - a model that echoes the Latin name back
+    has not translated anything, and storing it would hide the fact that the
+    name still needs translating. A value identical to the canonical name is
+    dropped for the same reason.
+    """
+    if not isinstance(value, dict):
+        return {}
+    canonical = str(name or "").strip().casefold()
+    cleaned: dict[str, str] = {}
+    for code, raw in value.items():
+        code = str(code or "").strip().lower()
+        text = " ".join(str(raw or "").split())[:MAX_TRANSLATED_NAME_LENGTH]
+        if code not in TRANSLATED_NAME_LANGUAGES or not text:
+            continue
+        if text.casefold() == canonical or not text_matches_output_language(text, code):
+            continue
+        cleaned[code] = text
+    return cleaned
+
+
 def output_language_instruction(language: str | None) -> str:
     """Prompt rule that localizes prose while protecting machine values."""
     code = resolve_output_language(language)
