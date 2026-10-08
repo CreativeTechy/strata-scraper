@@ -1432,13 +1432,21 @@ export default function CompetitorOnboarding() {
                             {competitor.description || competitor.size_signals?.why_competitor || competitor.domain || '—'}
                           </div>
                           ) : null}
-                          {detailsOpen && generatedLanguageNeedsRefresh(competitor, i18n.resolvedLanguage || i18n.language) ? (
+                          {generatedLanguageNeedsRefresh(competitor, i18n.resolvedLanguage || i18n.language) ? (
                             <div className="cs-row-desc" style={{ color: 'var(--warning-dark, #92400e)' }}>
                               {t('competitors.languageMismatch')}
                             </div>
                           ) : null}
                         </div>
                         <div className="cs-row-side">
+                          {tracked && unverified[competitor.id] ? (
+                            <span
+                              className="cs-pill cs-pill-signal"
+                              title={t('competitors.unverifiedTitle')}
+                            >
+                              {t('competitors.unverified')}
+                            </span>
+                          ) : null}
                           {detailsOpen ? (<>
                           <span className={`cs-pill ${isManual ? 'cs-pill-manual' : 'cs-pill-ai'}`}>
                             {isManual ? t('competitors.origin.manual') : t('competitors.origin.ai')}
@@ -1463,14 +1471,6 @@ export default function CompetitorOnboarding() {
                               defaultValue: SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier,
                             })}
                           </span>
-                          {tracked && unverified[competitor.id] ? (
-                            <span
-                              className="cs-pill cs-pill-signal"
-                              title={t('competitors.unverifiedTitle')}
-                            >
-                              {t('competitors.unverified')}
-                            </span>
-                          ) : null}
                           <button type="button" className="cs-btn cs-btn-sm" onClick={() => toggleChannels(competitor.id)}>
                             <Link2 size={13} /> {channelsOpen ? t('competitors.hideSources') : t('competitors.sources')}
                           </button>
