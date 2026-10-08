@@ -441,7 +441,7 @@ def translate_competitor_names(names: list[str], language: str) -> dict[str, str
     return translated
 
 
-def fill_missing_name_translations(project_id: int) -> int:
+def fill_missing_name_translations(project_id: int, force: bool = False) -> int:
     """Translate the names of any competitors in a project still lacking one.
 
     Discovery asks for translated names up front, so this only reaches rows
@@ -450,6 +450,8 @@ def fill_missing_name_translations(project_id: int) -> int:
     the dashboard's language switcher only re-renders, so a name has to
     already be stored by the time someone switches to see it. Each name is
     translated once - the result is stored, and a failure is remembered.
+    `force` (a card's own language switch asking for this list right now)
+    retries names that failed before instead of skipping them.
     """
     from services.competitors import competitors_store
 
@@ -457,7 +459,7 @@ def fill_missing_name_translations(project_id: int) -> int:
     for language in TRANSLATED_NAME_LANGUAGES:
         pending = [
             row for row in competitors_store.competitors_missing_name_translation(project_id, language)
-            if (row["id"], row["name"], language) not in _untranslatable_names
+            if force or (row["id"], row["name"], language) not in _untranslatable_names
         ][:NAME_TRANSLATION_BATCH]
         if not pending:
             continue
@@ -466,6 +468,7 @@ def fill_missing_name_translations(project_id: int) -> int:
             value = translated.get(row["name"])
             if value:
                 competitors_store.set_name_translation(row["id"], row["name"], language, value)
+                _untranslatable_names.discard((row["id"], row["name"], language))
                 filled += 1
             else:
                 _untranslatable_names.add((row["id"], row["name"], language))

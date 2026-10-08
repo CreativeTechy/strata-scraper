@@ -310,6 +310,11 @@
       "messageUnnamed_few": "سيتم تنزيل {{count}} منافسين متتبَّعين لهذه الدراسة بصيغة JSONL.",
       "messageUnnamed_many": "سيتم تنزيل {{count}} منافسًا متتبَّعًا لهذه الدراسة بصيغة JSONL.",
       "messageUnnamed_other": "سيتم تنزيل {{count}} منافس متتبَّع لهذه الدراسة بصيغة JSONL."
+    },
+    "namesLanguage": {
+      "label": "لغة الأسماء",
+      "hint": "مستقلة عن لغة الواجهة - اعرض أسماء المنافسين بلغة محددة.",
+      "translating": "جارٍ الترجمة..."
     }
   },
   "sourceEditor": {

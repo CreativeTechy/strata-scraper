@@ -94,6 +94,24 @@ class FillMissingNameTranslationsTests(unittest.TestCase):
         translate.assert_not_called()
 
 
+    @patch("services.competitors.competitors_store.set_name_translation")
+    @patch("services.competitors.competitor_discovery.translate_competitor_names")
+    @patch("services.competitors.competitors_store.competitors_missing_name_translation")
+    def test_force_retries_names_that_failed_before(self, missing, translate, store):
+        """A card's own language switch asks for this list now, so a name the
+        list load gave up on is sent to the model again."""
+        missing.return_value = [{"id": 2, "name": "Cafe Younes"}]
+        translate.return_value = {}
+        competitor_discovery.fill_missing_name_translations(5)
+
+        translate.reset_mock()
+        translate.return_value = {"Cafe Younes": "مقهى يونس"}
+        self.assertEqual(competitor_discovery.fill_missing_name_translations(5, force=True), 1)
+        translate.assert_called_once_with(["Cafe Younes"], "ar")
+        store.assert_called_once_with(2, "Cafe Younes", "ar", "مقهى يونس")
+        self.assertNotIn((2, "Cafe Younes", "ar"), competitor_discovery._untranslatable_names)
+
+
 class UpsertCompetitorTranslationsTests(unittest.TestCase):
     def test_translations_are_cleaned_and_reset_on_rename(self):
         with patch("services.competitors.competitors_store.db.fetch_one", return_value={"id": 1}) as fetch_one:
@@ -158,6 +176,23 @@ class CompetitorRoutesTests(unittest.TestCase):
 
         self.assertEqual(res.status_code, 200)
         fill.assert_called_once_with(3)
+
+
+    def test_translate_names_forces_a_fill_and_returns_every_name(self):
+        rows = [{"id": 1, "name": "Starbucks", "name_translations": {"ar": "ستاربكس"}, "status": "tracked"},
+                {"id": 2, "name": "Urbanista", "name_translations": {}, "status": "tracked"}]
+        with patch("services.competitors.competitor_api._project_or_404"), \
+             patch("services.competitors.competitors_store.list_competitors", return_value=rows), \
+             patch("services.competitors.competitor_discovery.fill_missing_name_translations",
+                   side_effect=RuntimeError("boom")) as fill:
+            res = self.client.post("/api/competitor/studies/3/competitors/translate-names")
+
+        self.assertEqual(res.status_code, 200)
+        fill.assert_called_once_with(3, force=True)
+        self.assertEqual(res.json()["competitors"], [
+            {"id": 1, "name": "Starbucks", "name_translations": {"ar": "ستاربكس"}},
+            {"id": 2, "name": "Urbanista", "name_translations": {}},
+        ])
 
 
 class DashboardSummaryTranslationsTests(unittest.TestCase):

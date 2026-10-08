@@ -468,6 +468,7 @@
 
 .cs-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   padding: 13px 15px;
@@ -493,7 +494,10 @@
   flex-shrink: 0;
 }
 
-.cs-row-main { flex: 1; min-width: 0; }
+/* A real basis, not flex: 1's 0%: when the side pills and buttons would
+   squeeze the name below this, they wrap onto their own line instead of
+   letting the name overflow onto its neighbours. */
+.cs-row-main { flex: 1 1 10rem; min-width: 0; }
 .cs-row-name { font-size: 0.9rem; font-weight: 600; color: var(--text-dark); }
 .cs-row-desc {
   font-size: 0.79rem;

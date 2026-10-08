@@ -391,6 +391,24 @@ def list_competitors(project_id: int, user: dict = Depends(require_permission("c
     return {"competitors": competitors}
 
 
+@router.post("/studies/{project_id}/competitors/translate-names")
+def translate_names(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
+    """Translate every still-untranslated competitor name now, for a card's own
+    language switch. Unlike the list load, this retries names that failed
+    before - the user explicitly asked for this list in another language."""
+    _project_or_404(project_id)
+    try:
+        competitor_discovery.fill_missing_name_translations(project_id, force=True)
+    except Exception:
+        logger.warning("Competitor name translation failed", exc_info=True)
+    return {
+        "competitors": [
+            {"id": row["id"], "name": row["name"], "name_translations": row.get("name_translations") or {}}
+            for row in competitors_store.list_competitors(project_id)
+        ]
+    }
+
+
 @router.post("/studies/{project_id}/competitors")
 def add_competitor(project_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
     _project_or_404(project_id)
