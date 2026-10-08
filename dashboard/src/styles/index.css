@@ -165,11 +165,72 @@ body::after {
   overflow-x: hidden;
 }
 
+/* Slim scrollbar: invisible until the sidebar is hovered/focused. */
+.sidebar,
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+  transition: scrollbar-color 0.2s ease;
+}
+
+.sidebar:hover,
+.sidebar:focus-within,
+.sidebar-nav:hover,
+.sidebar-nav:focus-within {
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.sidebar::-webkit-scrollbar,
+.sidebar-nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb,
+.sidebar:focus-within::-webkit-scrollbar-thumb,
+.sidebar-nav:hover::-webkit-scrollbar-thumb,
+.sidebar-nav:focus-within::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
 .sidebar-nav-link.btn-secondary {
   white-space: nowrap;
   overflow: hidden;
   padding: 12px 18px;
   min-height: 46px;
+}
+
+/* Selected page: NavLink adds .active (and aria-current="page") to the current route. */
+.sidebar-nav-link.btn-secondary.active {
+  background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.12);
+}
+
+.sidebar-nav-link.btn-secondary.active:hover {
+  background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+  filter: brightness(1.05);
 }
 
 .sidebar-nav-group {
