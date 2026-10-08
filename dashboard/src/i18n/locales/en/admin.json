@@ -26,7 +26,8 @@
     "roles": "Roles",
     "sources": "Sources",
     "users": "Users",
-    "competitors": "Competitors"
+    "competitors": "Competitors",
+    "settings": "Settings"
   },
   "permissions": {
     "projects": {
@@ -68,7 +69,9 @@
       "view": "View competitor studies, competitors, and findings",
       "manage": "Create and edit the business profile and competitors",
       "analyze": "Run competitor discovery and generate analysis"
-    }
+    },
+    "settings.view": "View collection provider settings",
+    "settings.update": "Edit collection provider settings"
   },
   "errorContext": {
     "manageUsers": "manage users",

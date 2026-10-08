@@ -1,0 +1,357 @@
+/* Summary strip */
+.settings-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.settings-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  background: var(--surface-color);
+}
+
+.settings-stat > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-stat strong {
+  font-size: 1.05rem;
+}
+
+.settings-stat-label {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-stat-icon {
+  display: inline-flex;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-light);
+}
+
+.settings-stat-ok .settings-stat-icon {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.settings-stat-warn .settings-stat-icon {
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+
+.settings-banner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 170, 0, 0.14);
+  font-size: 0.9rem;
+}
+
+/* Platform sections */
+.settings-group {
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.settings-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.settings-group-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 9px;
+  background: #334155;
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-badge-twitter { background: #0f172a; }
+.settings-badge-reddit { background: #c2410c; }
+.settings-badge-linkedin { background: #1d4ed8; }
+.settings-badge-threads { background: #1f2937; }
+.settings-badge-instagram { background: #be185d; }
+.settings-badge-facebook { background: #2563eb; }
+
+/* One card per actor */
+.settings-actors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-actor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 0.55fr);
+  gap: 10px 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.settings-actor-dirty {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.1);
+}
+
+.settings-actor-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-kind {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.settings-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.settings-chip-dirty {
+  background: rgba(194, 65, 12, 0.12);
+  color: var(--primary-color);
+}
+
+.settings-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr);
+  gap: 12px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.settings-input-wrap input {
+  width: 100%;
+  padding-block: 8px;
+  padding-inline: 10px 32px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  background: white;
+  font: inherit;
+}
+
+.settings-input-wrap input:focus-visible {
+  outline: 2px solid var(--secondary-color);
+  outline-offset: 1px;
+}
+
+.settings-input-wrap input:disabled {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* The unit sits inside the input, left of the reset button. */
+.settings-input-unit {
+  position: absolute;
+  inset-inline-end: 30px;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  pointer-events: none;
+}
+
+.settings-input-wrap:has(.settings-input-unit) input {
+  padding-inline-end: 56px;
+}
+
+.settings-reset {
+  position: absolute;
+  inset-inline-end: 6px;
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.settings-reset:hover,
+.settings-reset:focus-visible {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.settings-pricebox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline-start: 16px;
+  border-inline-start: 1px dashed rgba(0, 0, 0, 0.14);
+}
+
+.settings-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.settings-price-main {
+  font-weight: 600;
+}
+
+.settings-muted {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.settings-note {
+  margin: 4px 0 16px;
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+/* Save bar sticks to the bottom so Save is reachable from any row. */
+.settings-savebar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: var(--surface-color);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.settings-savebar-active {
+  border-color: var(--primary-color);
+}
+
+.settings-savebar-status {
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+.settings-savebar-active .settings-savebar-status {
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.settings-savebar-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Loading skeleton */
+.settings-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-skeleton {
+  block-size: 64px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.05));
+  background-size: 200% 100%;
+  animation: settings-shimmer 1.4s linear infinite;
+}
+
+.settings-skeleton-tall {
+  block-size: 140px;
+}
+
+.settings-spin {
+  animation: settings-spin 1s linear infinite;
+}
+
+@keyframes settings-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes settings-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-spin,
+  .settings-skeleton { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .settings-actor {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-pricebox {
+    padding-inline-start: 0;
+    padding-block-start: 10px;
+    border-inline-start: 0;
+    border-block-start: 1px dashed rgba(0, 0, 0, 0.14);
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-field-actor {
+    grid-column: 1 / -1;
+  }
+}

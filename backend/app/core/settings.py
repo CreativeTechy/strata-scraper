@@ -425,6 +425,56 @@ APIFY_INSTAGRAM_MAX_POSTS = _env_int("APIFY_INSTAGRAM_MAX_POSTS", 20)
 APIFY_INSTAGRAM_TIMEOUT_SECONDS = _env_int("APIFY_INSTAGRAM_TIMEOUT_SECONDS", APIFY_TIMEOUT_SECONDS)
 
 
+# --- Apify - settings editable from the dashboard ---------------------------
+# Every actor id, result cap, and timeout above can be overridden at runtime
+# from the dashboard's Settings page (services/settings/apify_settings.py
+# stores the overrides in the `app_settings` table). The value the env/default
+# resolved to at import is kept as the baseline, so clearing an override falls
+# back to it rather than to nothing. Each pipeline run is a fresh subprocess
+# and applies the stored overrides on startup (see the spider's __init__), so
+# a saved change takes effect on the next run.
+APIFY_EDITABLE_KEYS = (
+    "APIFY_TWITTER_SEARCH_ACTOR", "APIFY_TWITTER_MAX_TWEETS", "APIFY_TWITTER_SEARCH_TIMEOUT_SECONDS",
+    "APIFY_REDDIT_SEARCH_ACTOR", "APIFY_REDDIT_MAX_ITEMS", "APIFY_REDDIT_SEARCH_TIMEOUT_SECONDS",
+    "APIFY_LINKEDIN_POSTS_ACTOR", "APIFY_LINKEDIN_SEARCH_ACTOR", "APIFY_LINKEDIN_MAX_POSTS",
+    "APIFY_LINKEDIN_POSTS_TIMEOUT_SECONDS", "APIFY_LINKEDIN_SEARCH_TIMEOUT_SECONDS",
+    "APIFY_THREADS_ACTOR", "APIFY_THREADS_MAX_POSTS", "APIFY_THREADS_TIMEOUT_SECONDS",
+    "APIFY_INSTAGRAM_ACTOR", "APIFY_INSTAGRAM_MAX_POSTS", "APIFY_INSTAGRAM_TIMEOUT_SECONDS",
+    "APIFY_FACEBOOK_PAGES_ACTOR", "APIFY_FACEBOOK_GROUPS_ACTOR",
+    "APIFY_FACEBOOK_SEARCH_ACTOR", "APIFY_FACEBOOK_PROFILE_ACTOR",
+    "APIFY_FACEBOOK_MAX_POSTS", "APIFY_FACEBOOK_PROFILE_MAX_POSTS",
+    "APIFY_FACEBOOK_PAGES_TIMEOUT_SECONDS", "APIFY_FACEBOOK_GROUPS_TIMEOUT_SECONDS",
+    "APIFY_FACEBOOK_SEARCH_TIMEOUT_SECONDS", "APIFY_FACEBOOK_PROFILE_TIMEOUT_SECONDS",
+)
+APIFY_BASELINE = {key: globals()[key] for key in APIFY_EDITABLE_KEYS}
+
+
+def apply_apify_overrides(overrides: dict) -> None:
+    """Set every editable Apify setting to its override, or back to the
+    env/default baseline when `overrides` has none for it. Values are stored
+    as text, so ints are coerced here; an unparseable one is ignored."""
+    for key in APIFY_EDITABLE_KEYS:
+        baseline = APIFY_BASELINE[key]
+        raw = overrides.get(key)
+        value = baseline
+        if raw is not None and str(raw).strip():
+            try:
+                value = int(raw) if isinstance(baseline, int) else str(raw).strip()
+            except ValueError:
+                value = baseline
+        globals()[key] = value
+
+
+def load_apify_overrides() -> None:
+    """Read the stored overrides and apply them. Best-effort: with no
+    database or no table yet, the env/default values simply stay in force."""
+    try:
+        rows = db.fetch_all("select key, value from app_settings")
+    except Exception:
+        return
+    apply_apify_overrides({row["key"]: row["value"] for row in rows})
+
+
 # --- Skip already-collected articles -----------------------------------------
 # When a scraped URL is already in the `articles` table, skip saving it again
 # instead of re-upserting a row whose text we already hold (see

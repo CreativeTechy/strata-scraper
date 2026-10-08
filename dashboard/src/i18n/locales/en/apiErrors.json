@@ -97,5 +97,10 @@
     "invalid_repeat_unit": "Repeat interval unit must be minutes, hours, or days.",
     "invalid_repeat_value": "Repeat interval must be a positive number.",
     "cultural_analysis_failed": "The model did not return a usable analysis."
+  },
+  "settings": {
+    "invalid_actor": "{{key}} must look like \"username/actor-name\".",
+    "out_of_range": "{{key}} must be a whole number between {{min}} and {{max}}.",
+    "unknown_key": "Unknown setting: {{key}}."
   }
 }

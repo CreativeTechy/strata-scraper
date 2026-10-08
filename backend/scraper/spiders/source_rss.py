@@ -178,6 +178,10 @@ class SourceRssSpider(scrapy.Spider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Pick up Apify actor/cap/timeout overrides saved from the dashboard's
+        # Settings page; each run is a fresh process, so this is what makes a
+        # saved change apply to the next run.
+        config.load_apify_overrides()
         self._progress_pages = 0
         self._progress_articles = 0
         self._progress_last_update = 0.0
