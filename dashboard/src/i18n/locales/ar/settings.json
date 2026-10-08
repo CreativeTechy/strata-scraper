@@ -1,0 +1,80 @@
+{
+  "kicker": "مزوّد الجمع",
+  "title": "إعدادات Apify",
+  "subtitle": "اختر الـ Actor الذي تستخدمه كل منصة، وعدد المنشورات التي يمكن أن يعيدها كل استدعاء، ومدة الانتظار.",
+  "errorContext": "تحميل إعدادات Apify أو حفظها",
+  "loading": "جارٍ تحميل الإعدادات…",
+  "loadFailed": "تعذّر تحميل إعدادات Apify.",
+  "saveFailed": "تعذّر حفظ إعدادات Apify.",
+  "tokenMissing": "لم يتم ضبط رمز Apify API (APIFY_API_TOKEN في backend/.env)، لذا لن تعمل هذه الـ Actors. تظل الأسعار أدناه معروضة.",
+  "seconds": "ثانية",
+  "save": "حفظ التغييرات",
+  "saving": "جارٍ الحفظ…",
+  "saved": "تم الحفظ. يسري ابتداءً من التشغيل التالي لخط المعالجة.",
+  "discard": "تجاهل التغييرات",
+  "readOnly": "يمكنك عرض هذه الإعدادات دون تغييرها.",
+  "resetTo": "إعادة التعيين إلى الافتراضي ({{value}})",
+  "note": "تسري التغييرات ابتداءً من التشغيل التالي لخط المعالجة. القيمة الفارغة أو الافتراضية تعود إلى الإعداد المضمّن. الحد الأقصى للمنشورات مشترك بين الـ Actors من المنصة نفسها عندما تعرض القيمة ذاتها.",
+  "fields": {
+    "actor": "Actor",
+    "max": "الحد الأقصى للمنشورات",
+    "timeout": "المهلة",
+    "price": "السعر المعلن"
+  },
+  "platforms": {
+    "twitter": "X / تويتر",
+    "reddit": "ريديت",
+    "linkedin": "لينكدإن",
+    "threads": "ثريدز",
+    "instagram": "إنستغرام",
+    "facebook": "فيسبوك"
+  },
+  "kinds": {
+    "search": "بحث",
+    "posts": "منشورات الحساب",
+    "pages": "الصفحات",
+    "groups": "المجموعات",
+    "profile": "الملفات الشخصية"
+  },
+  "pricing": {
+    "loading": "جارٍ تحميل السعر…",
+    "refresh": "تحديث الأسعار",
+    "loadFailed": "تعذّر تحميل أسعار الـ Actors.",
+    "saveToSee": "احفظ لعرض سعر هذا الـ Actor.",
+    "free": "مجاني (تكلفة استخدام المنصة فقط)",
+    "perThousand": "{{price}} لكل 1,000 ({{unit}})",
+    "perEvent": "{{price}} لكل {{event}}",
+    "monthly": "{{price}} شهريًا (إيجار)",
+    "ceiling": "حتى {{price}} لكل استدعاء عند {{posts}} منشور",
+    "viewOnApify": "عرض على Apify",
+    "error": {
+      "not_found": "لم يتم العثور على الـ Actor في Apify.",
+      "unreachable": "تعذّر الوصول إلى Apify."
+    },
+    "unknown": "السعر غير متاح - راجع Apify",
+    "result": "نتيجة"
+  },
+  "summary": {
+    "token": "رمز API",
+    "tokenOk": "مضبوط",
+    "tokenMissing": "غير موجود",
+    "actors": "الـ Actors",
+    "customized": "المخصّصة"
+  },
+  "actorCount_zero": "لا Actors",
+  "actorCount_one": "Actor واحد",
+  "actorCount_two": "Actorان",
+  "actorCount_few": "{{count}} Actors",
+  "actorCount_many": "{{count}} Actor",
+  "actorCount_other": "{{count}} Actor",
+  "unsavedChip": "غير محفوظ",
+  "customizedChip": "مخصّص",
+  "secondsShort": "ث",
+  "unsavedCount_zero": "لا تغييرات غير محفوظة",
+  "unsavedCount_one": "تغيير واحد غير محفوظ",
+  "unsavedCount_two": "تغييران غير محفوظين",
+  "unsavedCount_few": "{{count}} تغييرات غير محفوظة",
+  "unsavedCount_many": "{{count}} تغييرًا غير محفوظ",
+  "unsavedCount_other": "{{count}} تغيير غير محفوظ",
+  "noChanges": "لا تغييرات غير محفوظة"
+}

@@ -97,5 +97,10 @@
     "invalid_repeat_unit": "يجب أن تكون وحدة التكرار: دقائق أو ساعات أو أيام.",
     "invalid_repeat_value": "يجب أن يكون فاصل التكرار رقمًا موجبًا.",
     "cultural_analysis_failed": "لم يُرجع النموذج تحليلاً صالحًا للاستخدام."
+  },
+  "settings": {
+    "invalid_actor": "يجب أن يكون {{key}} بالشكل \"username/actor-name\".",
+    "out_of_range": "يجب أن يكون {{key}} عددًا صحيحًا بين {{min}} و{{max}}.",
+    "unknown_key": "إعداد غير معروف: {{key}}."
   }
 }

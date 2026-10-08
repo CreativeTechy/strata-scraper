@@ -98,7 +98,8 @@
     "expandNavigation": "توسيع القائمة",
     "collapseNavigation": "طي القائمة",
     "logOut": "تسجيل الخروج",
-    "profileTitle": "{{username}} ({{role}})"
+    "profileTitle": "{{username}} ({{role}})",
+    "settings": "الإعدادات"
   },
   "access": {
     "loading": "جارٍ التحميل…",

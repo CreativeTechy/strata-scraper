@@ -102,7 +102,9 @@ export default function CompetitorsListPage() {
 
   const chooseNamesLanguage = async (code) => {
     setNamesLanguageChoice(code);
-    const missing = code !== DEFAULT_LANGUAGE
+    // Forcing a translation is a manage action; a viewer just sees what the
+    // background fill has stored so far.
+    const missing = canManage && code !== DEFAULT_LANGUAGE
       && competitors.some((competitor) => !competitor.name_translations?.[code]);
     if (!missing) return;
     setTranslatingNames(true);

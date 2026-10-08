@@ -1,0 +1,72 @@
+{
+  "kicker": "Collection provider",
+  "title": "Apify settings",
+  "subtitle": "Choose the Apify actor behind each platform, how many posts a single call may return, and how long to wait for it.",
+  "errorContext": "load or save the Apify settings",
+  "loading": "Loading settings…",
+  "loadFailed": "Unable to load the Apify settings.",
+  "saveFailed": "Unable to save the Apify settings.",
+  "tokenMissing": "No Apify API token is configured (APIFY_API_TOKEN in backend/.env), so these actors will not run. Prices below are still shown.",
+  "seconds": "seconds",
+  "save": "Save changes",
+  "saving": "Saving…",
+  "saved": "Saved. Applies from the next pipeline run.",
+  "discard": "Discard changes",
+  "readOnly": "You can view these settings but not change them.",
+  "resetTo": "Reset to default ({{value}})",
+  "note": "Changes apply from the next pipeline run. A blank or default value falls back to the built-in setting. Max posts is shared by actors of the same platform where they list the same value.",
+  "fields": {
+    "actor": "Actor",
+    "max": "Max posts",
+    "timeout": "Timeout",
+    "price": "List price"
+  },
+  "platforms": {
+    "twitter": "X / Twitter",
+    "reddit": "Reddit",
+    "linkedin": "LinkedIn",
+    "threads": "Threads",
+    "instagram": "Instagram",
+    "facebook": "Facebook"
+  },
+  "kinds": {
+    "search": "Search",
+    "posts": "Account posts",
+    "pages": "Pages",
+    "groups": "Groups",
+    "profile": "Profiles"
+  },
+  "pricing": {
+    "loading": "Loading price…",
+    "refresh": "Refresh prices",
+    "loadFailed": "Unable to load actor prices.",
+    "saveToSee": "Save to see the price of this actor.",
+    "free": "Free (platform usage only)",
+    "perThousand": "{{price}} per 1,000 {{unit}}s",
+    "perEvent": "{{price}} per {{event}}",
+    "monthly": "{{price}} per month (rental)",
+    "ceiling": "Up to {{price}} per call at {{posts}} posts",
+    "viewOnApify": "View on Apify",
+    "error": {
+      "not_found": "Actor not found on Apify.",
+      "unreachable": "Couldn't reach Apify."
+    },
+    "unknown": "Price unavailable - see Apify",
+    "result": "result"
+  },
+  "summary": {
+    "token": "API token",
+    "tokenOk": "Configured",
+    "tokenMissing": "Missing",
+    "actors": "Actors",
+    "customized": "Customized"
+  },
+  "actorCount_one": "{{count}} actor",
+  "actorCount_other": "{{count}} actors",
+  "unsavedChip": "Unsaved",
+  "customizedChip": "Customized",
+  "secondsShort": "s",
+  "unsavedCount_one": "{{count}} unsaved change",
+  "unsavedCount_other": "{{count}} unsaved changes",
+  "noChanges": "No unsaved changes"
+}

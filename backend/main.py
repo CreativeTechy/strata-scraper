@@ -35,6 +35,7 @@ from api.routers import dashboard as dashboard_router
 from api.routers import pipeline as pipeline_router
 from api.routers import projects as projects_router
 from api.routers import roles as roles_router
+from api.routers import settings as settings_router
 from api.routers import sources as sources_router
 from api.routers import users as users_router
 from services.competitors import competitor_api
@@ -73,6 +74,7 @@ app.include_router(projects_router.router)
 app.include_router(pipeline_router.router)
 app.include_router(articles_router.router)
 app.include_router(dashboard_router.router)
+app.include_router(settings_router.router)
 
 
 @app.exception_handler(HTTPException)
@@ -125,6 +127,11 @@ async def _apply_migrations():
         logger.warning("DATABASE_URL is missing; skipping migrations.")
         return
     migrate.run_on_startup()
+
+
+@app.on_event("startup")
+async def _load_apify_overrides():
+    config.load_apify_overrides()
 
 
 @app.on_event("startup")

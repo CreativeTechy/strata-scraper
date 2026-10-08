@@ -380,11 +380,9 @@ def discover_competitor_accounts(
 @router.get("/studies/{project_id}/competitors")
 def list_competitors(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
     _project_or_404(project_id)
-    try:
-        competitor_discovery.fill_missing_name_translations(project_id)
-    except Exception:
-        # Display names are a nicety; the list itself must still load.
-        logger.warning("Competitor name translation skipped", exc_info=True)
+    # Background, never inline: a read must not wait on (or be a way to spend)
+    # an LLM call. Names missing now show in English until the next load.
+    competitor_discovery.schedule_name_translation(project_id)
     competitors = competitors_store.competitor_overview(project_id)
     for competitor in competitors:
         competitor["accounts"] = competitors_store.list_accounts(competitor["id"])
@@ -392,7 +390,7 @@ def list_competitors(project_id: int, user: dict = Depends(require_permission("c
 
 
 @router.post("/studies/{project_id}/competitors/translate-names")
-def translate_names(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
+def translate_names(project_id: int, user: dict = Depends(require_permission("competitors.manage"))):
     """Translate every still-untranslated competitor name now, for a card's own
     language switch. Unlike the list load, this retries names that failed
     before - the user explicitly asked for this list in another language."""

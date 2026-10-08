@@ -10,6 +10,7 @@ import {
   Users,
   ShieldCheck,
   Link2,
+  Settings,
   LogOut,
   ChevronsLeft,
   ChevronsRight,
@@ -55,6 +56,7 @@ const ADMIN_NAV_ITEMS = [
   { to: '/admin/users', labelKey: 'nav.users', icon: Users, permission: 'users.view' },
   { to: '/admin/roles', labelKey: 'nav.roles', icon: ShieldCheck, permission: 'roles.view' },
   { to: '/admin/project-linkage', labelKey: 'nav.projectAccess', icon: Link2, permission: 'projects.link_users' },
+  { to: '/admin/settings', labelKey: 'nav.settings', icon: Settings, permission: 'settings.view' },
 ];
 
 // Rendered as one more collapsible group alongside NAV_SECTIONS so admin gets

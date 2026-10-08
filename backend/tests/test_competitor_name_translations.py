@@ -41,7 +41,7 @@ class CleanNameTranslationsTests(unittest.TestCase):
 
 class TranslateCompetitorNamesTests(unittest.TestCase):
     @patch("services.competitors.competitor_discovery.chat_completion")
-    def test_one_batched_call_returns_only_valid_translations(self, chat):
+    def test_one_batched_call_settles_answered_names_and_skips_unanswered(self, chat):
         chat.return_value = json.dumps({"names": {
             "Starbucks": "ستاربكس",
             "Cafe Younes": "Cafe Younes",
@@ -51,7 +51,9 @@ class TranslateCompetitorNamesTests(unittest.TestCase):
             ["Starbucks", "Cafe Younes", "Starbucks", "Missing"], "ar"
         )
 
-        self.assertEqual(result, {"Starbucks": "ستاربكس"})
+        # "Cafe Younes" was answered but has no distinct rendering: settled with
+        # itself so it is not re-requested. "Missing" was skipped: left to retry.
+        self.assertEqual(result, {"Starbucks": "ستاربكس", "Cafe Younes": "Cafe Younes"})
         chat.assert_called_once()
         sent = json.loads(chat.call_args.kwargs["messages"][1]["content"])
         self.assertEqual(sent, ["Starbucks", "Cafe Younes", "Missing"])
@@ -167,16 +169,22 @@ class CompetitorRoutesTests(unittest.TestCase):
     def test_other_edits_keep_the_translation(self):
         self.assertEqual(self._update({"aliases": ["SBUX"]})["name_translations"], {"ar": "ستاربكس"})
 
-    def test_list_fills_translations_in_any_language_and_survives_failure(self):
+    def test_list_schedules_translation_in_the_background(self):
         with patch("services.competitors.competitor_api._project_or_404"), \
              patch("services.competitors.competitors_store.competitor_overview", return_value=[]), \
-             patch("services.competitors.competitor_discovery.fill_missing_name_translations",
-                   side_effect=RuntimeError("boom")) as fill:
+             patch("services.competitors.competitor_discovery.fill_missing_name_translations") as inline, \
+             patch("services.competitors.competitor_discovery.schedule_name_translation") as fill:
             res = self.client.get("/api/competitor/studies/3/competitors", headers={"Accept-Language": "en"})
 
         self.assertEqual(res.status_code, 200)
         fill.assert_called_once_with(3)
+        inline.assert_not_called()
 
+    def test_translate_names_needs_manage(self):
+        with patch("services.auth.permissions_store.user_is_full_access", return_value=False),              patch("services.auth.permissions_store.user_permission_keys", return_value={"competitors.view"}),              patch("services.competitors.competitor_api._project_or_404"),              patch("services.competitors.competitor_discovery.fill_missing_name_translations") as fill:
+            res = self.client.post("/api/competitor/studies/3/competitors/translate-names")
+        self.assertEqual(res.status_code, 403)
+        fill.assert_not_called()
 
     def test_translate_names_forces_a_fill_and_returns_every_name(self):
         rows = [{"id": 1, "name": "Starbucks", "name_translations": {"ar": "ستاربكس"}, "status": "tracked"},
@@ -196,7 +204,7 @@ class CompetitorRoutesTests(unittest.TestCase):
 
 
 class DashboardSummaryTranslationsTests(unittest.TestCase):
-    def test_competitor_summary_fills_names_first_and_survives_failure(self):
+    def test_competitor_summary_queues_names_first(self):
         from services.dashboard import dashboard_store
 
         calls = []
@@ -211,8 +219,8 @@ class DashboardSummaryTranslationsTests(unittest.TestCase):
              patch.object(dashboard_store, "_competitor_totals", return_value=1), \
              patch.object(dashboard_store, "_competitors_needing_attention",
                           side_effect=lambda *_: calls.append("attention") or []), \
-             patch("services.competitors.competitor_discovery.fill_missing_name_translations",
-                   side_effect=lambda *_: calls.append("fill") or (_ for _ in ()).throw(RuntimeError("boom"))):
+             patch("services.competitors.competitor_discovery.schedule_name_translation",
+                   side_effect=lambda *_: calls.append("fill")):
             summary = dashboard_store.get_dashboard_summary(3)
 
         self.assertEqual(calls, ["fill", "attention"])

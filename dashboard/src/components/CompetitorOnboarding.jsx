@@ -45,7 +45,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
+  ArrowLeft, ArrowRight, Building2, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronRight,
   Globe, Link2, Loader2, Plus, Radar, Search, Sparkles, Trash2, Users, X,
 } from 'lucide-react';
 import {
@@ -388,6 +388,8 @@ export default function CompetitorOnboarding() {
   const [discoveryLogs, setDiscoveryLogs] = useState([]);
 
   const [expandedChannels, setExpandedChannels] = useState(() => new Set());
+  // Rows start collapsed (name + track button only): the list gets long enough to push Continue off-screen.
+  const [expandedCompetitors, setExpandedCompetitors] = useState(() => new Set());
   const [accountsByCompetitor, setAccountsByCompetitor] = useState({});
   const [sourceBusy, setSourceBusy] = useState({});
   const [trackingBusy, setTrackingBusy] = useState({});
@@ -806,6 +808,15 @@ export default function CompetitorOnboarding() {
       }));
       setTrackingAllBusy(false);
     }
+  };
+
+  const toggleCompetitor = (competitorId) => {
+    setExpandedCompetitors((current) => {
+      const next = new Set(current);
+      if (next.has(competitorId)) next.delete(competitorId);
+      else next.add(competitorId);
+      return next;
+    });
   };
 
   const toggleChannels = async (competitorId) => {
@@ -1358,6 +1369,17 @@ export default function CompetitorOnboarding() {
                   />
                 </p>
               </div>
+              {competitors.length > 1 ? (
+                <button
+                  type="button"
+                  className="cs-btn cs-btn-sm"
+                  onClick={() => setExpandedCompetitors(
+                    expandedCompetitors.size ? new Set() : new Set(competitors.map((c) => c.id)),
+                  )}
+                >
+                  <ChevronDown size={13} /> {expandedCompetitors.size ? t('competitors.collapseAll') : t('competitors.expandAll')}
+                </button>
+              ) : null}
               {untrackedCompetitors.length ? (
                 <button type="button" className="cs-btn cs-btn-sm" onClick={trackAllCompetitors} disabled={trackingAllBusy}>
                   {trackingAllBusy ? <span className="cs-spinner" /> : <Check size={13} />}
@@ -1378,12 +1400,24 @@ export default function CompetitorOnboarding() {
               <div className="cs-rows">
                 {competitors.map((competitor) => {
                   const channelsOpen = expandedChannels.has(competitor.id);
+                  const detailsOpen = expandedCompetitors.has(competitor.id);
                   const accounts = accountsByCompetitor[competitor.id];
                   const isManual = competitor.discovery_source === 'manual';
                   const tracked = competitor.status === 'tracked';
                   return (
                     <div key={competitor.id}>
                       <div className={`cs-row${tracked ? ' cs-row-selected' : ''}`}>
+                        <button
+                          type="button"
+                          className="cs-btn cs-btn-sm"
+                          onClick={() => toggleCompetitor(competitor.id)}
+                          aria-expanded={detailsOpen}
+                          aria-label={detailsOpen ? t('competitors.collapse') : t('competitors.expand')}
+                          title={detailsOpen ? t('competitors.collapse') : t('competitors.expand')}
+                          style={{ padding: 4 }}
+                        >
+                          {detailsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} className="icon-flip-rtl" />}
+                        </button>
                         <span className="cs-row-rank">{competitor.size_rank != null ? formatNumber(competitor.size_rank) : '-'}</span>
                         <div
                           className="cs-avatar"
@@ -1394,9 +1428,11 @@ export default function CompetitorOnboarding() {
                         </div>
                         <div className="cs-row-main">
                           <div className="cs-row-name" dir="auto">{competitorName(competitor, language)}</div>
+                          {detailsOpen ? (
                           <div className="cs-row-desc" dir={generatedTextDirection(competitor.generated_language)}>
                             {competitor.description || competitor.size_signals?.why_competitor || competitor.domain || '—'}
                           </div>
+                          ) : null}
                           {generatedLanguageNeedsRefresh(competitor, i18n.resolvedLanguage || i18n.language) ? (
                             <div className="cs-row-desc" style={{ color: 'var(--warning-dark, #92400e)' }}>
                               {t('competitors.languageMismatch')}
@@ -1404,6 +1440,15 @@ export default function CompetitorOnboarding() {
                           ) : null}
                         </div>
                         <div className="cs-row-side">
+                          {tracked && unverified[competitor.id] ? (
+                            <span
+                              className="cs-pill cs-pill-signal"
+                              title={t('competitors.unverifiedTitle')}
+                            >
+                              {t('competitors.unverified')}
+                            </span>
+                          ) : null}
+                          {detailsOpen ? (<>
                           <span className={`cs-pill ${isManual ? 'cs-pill-manual' : 'cs-pill-ai'}`}>
                             {isManual ? t('competitors.origin.manual') : t('competitors.origin.ai')}
                           </span>
@@ -1427,17 +1472,10 @@ export default function CompetitorOnboarding() {
                               defaultValue: SIZE_TIER_LABELS[competitor.size_tier] || competitor.size_tier,
                             })}
                           </span>
-                          {tracked && unverified[competitor.id] ? (
-                            <span
-                              className="cs-pill cs-pill-signal"
-                              title={t('competitors.unverifiedTitle')}
-                            >
-                              {t('competitors.unverified')}
-                            </span>
-                          ) : null}
                           <button type="button" className="cs-btn cs-btn-sm" onClick={() => toggleChannels(competitor.id)}>
                             <Link2 size={13} /> {channelsOpen ? t('competitors.hideSources') : t('competitors.sources')}
                           </button>
+                          </>) : null}
                           <button
                             type="button"
                             className={`cs-btn cs-btn-sm${tracked ? ' cs-btn-primary' : ''}`}
@@ -1455,7 +1493,7 @@ export default function CompetitorOnboarding() {
                         </div>
                       </div>
 
-                      {channelsOpen ? (
+                      {detailsOpen && channelsOpen ? (
                         <div className="cs-rows" style={{ marginInlineStart: 30, marginBottom: 14 }}>
                           {!accounts ? (
                             <div className="cs-row-desc" style={{ padding: '8px 0' }}>{t('competitors.loadingSources')}</div>

@@ -22,6 +22,7 @@ import RoleEditPage from './components/RoleEditPage';
 import ProjectLinkageListPage from './components/ProjectLinkageListPage';
 import ProjectLinkageDetailPage from './components/ProjectLinkageDetailPage';
 import ProjectLinkageEditPage from './components/ProjectLinkageEditPage';
+import SettingsPage from './components/SettingsPage';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth/useAuth.js';
 import { apiError } from './errors/apiError.js';
@@ -801,6 +802,14 @@ export default function App() {
             element={(
               <RequirePermission permissions={['projects.link_users']}>
                 <ProjectLinkageEditPage projects={projects} users={users} onSetProjectUsers={setProjectUsers} />
+              </RequirePermission>
+            )}
+          />
+          <Route
+            path="/admin/settings"
+            element={(
+              <RequirePermission permissions={['settings.view']}>
+                <SettingsPage />
               </RequirePermission>
             )}
           />

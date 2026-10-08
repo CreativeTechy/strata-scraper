@@ -10,14 +10,10 @@ app already reads.
 
 from __future__ import annotations
 
-import logging
-
 from app.core import db
 from services.articles.articles_store import get_article_stats
 from services.pipeline.pipeline_runs import list_pipeline_runs
 from services.pipeline.source_diagnostics import classify_fetch_issue
-
-logger = logging.getLogger(__name__)
 
 RUNS_SERIES_LIMIT = 20
 
@@ -225,15 +221,12 @@ def _competitor_totals(project_id):
 
 
 def _fill_competitor_name_translations(project_id):
-    """Give the attention cards' competitor names their translations before
-    they are read, same as the competitors list does - the dashboard may well
-    be the first page loaded. A failure only means English names here."""
-    from services.competitors.competitor_discovery import fill_missing_name_translations
+    """Queue the attention cards' competitor names for translation, same as the
+    competitors list does - in the background, so the summary never waits on
+    the model. Until it lands the cards show English names."""
+    from services.competitors.competitor_discovery import schedule_name_translation
 
-    try:
-        fill_missing_name_translations(project_id)
-    except Exception:
-        logger.warning("Competitor name translation skipped", exc_info=True)
+    schedule_name_translation(project_id)
 
 
 def _competitors_needing_attention(project_id, run_id):
