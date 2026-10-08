@@ -19,6 +19,7 @@ gateway timeout.
 
 from __future__ import annotations
 
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
@@ -34,6 +35,8 @@ from app.core import db
 from services.auth.auth import require_permission
 from services.pipeline.pipeline_runs import get_active_run_for_project
 from services.projects.projects_store import delete_project, list_sources_for_project, project_has_articles
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/competitor", tags=["competitor"])
 
@@ -375,8 +378,17 @@ def discover_competitor_accounts(
 # Competitors + accounts
 # --------------------------------------------------------------------------- #
 @router.get("/studies/{project_id}/competitors")
-def list_competitors(project_id: int, user: dict = Depends(require_permission("competitors.view"))):
+def list_competitors(
+    project_id: int,
+    accept_language: str | None = Header(default=None),
+    user: dict = Depends(require_permission("competitors.view")),
+):
     _project_or_404(project_id)
+    try:
+        competitor_discovery.fill_missing_name_translations(project_id, accept_language)
+    except Exception:
+        # Display names are a nicety; the list itself must still load.
+        logger.warning("Competitor name translation skipped", exc_info=True)
     competitors = competitors_store.competitor_overview(project_id)
     for competitor in competitors:
         competitor["accounts"] = competitors_store.list_accounts(competitor["id"])
@@ -455,9 +467,13 @@ def add_competitor_manual(project_id: int, payload: dict, user: dict = Depends(r
 @router.put("/competitors/{competitor_id}")
 def update_competitor(competitor_id: int, payload: dict, user: dict = Depends(require_permission("competitors.manage"))):
     competitor = _competitor_or_404(competitor_id)
-    record = competitors_store.upsert_competitor(
-        competitor["project_id"], {**competitor, **(payload or {})}
-    )
+    payload = payload or {}
+    merged = {**competitor, **payload}
+    if "name_translations" not in payload and str(merged.get("name") or "").strip() != competitor["name"]:
+        # The stored translations name the old company name; the list endpoint
+        # translates the new one the next time it is loaded.
+        merged["name_translations"] = {}
+    record = competitors_store.upsert_competitor(competitor["project_id"], merged)
     competitors_store.rerank_competitors(competitor["project_id"])
     return {"competitor": record}
 

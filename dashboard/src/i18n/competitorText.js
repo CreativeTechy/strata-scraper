@@ -60,3 +60,17 @@ export function translateRejectionReason(item, t) {
   }
   return String(item?.reason || '');
 }
+
+// A competitor's name for the active interface language. `name` is the
+// canonical identity the backend searches and matches on; `name_translations`
+// holds display-only renderings ({ ar: '...' }), so a missing one falls back
+// to the canonical name rather than to nothing.
+export function localizedName(name, translations, language) {
+  const code = String(language || '').toLowerCase().split('-')[0];
+  const translated = translations && typeof translations === 'object' ? translations[code] : '';
+  return String(translated || '').trim() || String(name || '');
+}
+
+export function competitorName(competitor, language) {
+  return localizedName(competitor?.name, competitor?.name_translations, language);
+}

@@ -22,6 +22,7 @@ import {
 import { countryLabel } from '../constants/countries.js';
 import { apiError } from '../errors/apiError.js';
 import { formatList, formatNumber, formatPercent } from '../i18n/format.js';
+import { competitorName } from '../i18n/competitorText.js';
 import { useAuth } from '../auth/useAuth.js';
 import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
@@ -32,7 +33,8 @@ import '../styles/Competitors.css';
 const PAGE_SIZE = 10;
 
 export default function CompetitorsListPage() {
-  const { t } = useTranslation('competitors');
+  const { t, i18n } = useTranslation('competitors');
+  const language = i18n.resolvedLanguage || i18n.language;
   const { studyId } = useParams();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('competitors.manage');
@@ -313,6 +315,7 @@ export default function CompetitorsListPage() {
     return competitors.filter((competitor) => {
       const haystack = [
         competitor.name,
+        ...Object.values(competitor.name_translations || {}),
         competitor.domain,
         competitor.website,
         ...(Array.isArray(competitor.aliases) ? competitor.aliases : []),
@@ -463,10 +466,10 @@ export default function CompetitorsListPage() {
                     <div className="cs-row">
                       <span className="cs-row-rank">{competitor.size_rank != null ? formatNumber(competitor.size_rank) : t('list.noRank')}</span>
                       <div className="cs-avatar" style={{ background: avatarGradient(competitor.name), width: 30, height: 30, fontSize: '0.72rem' }} aria-hidden="true">
-                        {initials(competitor.name)}
+                        {initials(competitorName(competitor, language))}
                       </div>
                       <div className="cs-row-main">
-                        <div className="cs-row-name" dir="auto">{competitor.name}</div>
+                        <div className="cs-row-name" dir="auto">{competitorName(competitor, language)}</div>
                         <div className="cs-row-desc">
                           {[
                             t('list.channelsConfirmed', {
@@ -532,7 +535,7 @@ export default function CompetitorsListPage() {
                               type="button"
                               className="cs-btn cs-btn-sm cs-btn-danger"
                               onClick={() => setDeleteTarget(competitor)}
-                              aria-label={t('list.deleteCompetitor', { name: competitor.name })}
+                              aria-label={t('list.deleteCompetitor', { name: competitorName(competitor, language) })}
                             >
                               <Trash2 size={13} />
                             </button>
@@ -648,7 +651,7 @@ export default function CompetitorsListPage() {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title={t('list.removeConfirm.title', { name: deleteTarget?.name || '' })}
+        title={t('list.removeConfirm.title', { name: deleteTarget ? competitorName(deleteTarget, language) : '' })}
         message={t('list.removeConfirm.message')}
         confirmLabel={deletingCompetitor ? t('list.removeConfirm.confirming') : t('list.removeConfirm.confirm')}
         cancelLabel={t('list.removeConfirm.cancel')}

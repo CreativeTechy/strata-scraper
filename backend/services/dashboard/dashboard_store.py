@@ -228,7 +228,7 @@ def _competitors_needing_attention(project_id, run_id):
         return []
     rows = db.fetch_all(
         """
-        select c.id, c.name, ca.platform, ca.url as source_url, prs.fetch_note,
+        select c.id, c.name, c.name_translations, ca.platform, ca.url as source_url, prs.fetch_note,
                prs.http_status, prs.network_blocked
         from competitors c
         join competitor_accounts ca on ca.competitor_id = c.id and ca.validation_status = 'valid'
@@ -242,7 +242,10 @@ def _competitors_needing_attention(project_id, run_id):
     )
     grouped = {}
     for row in rows:
-        entry = grouped.setdefault(row["id"], {"id": row["id"], "name": row["name"], "sources": []})
+        entry = grouped.setdefault(row["id"], {
+            "id": row["id"], "name": row["name"],
+            "name_translations": row.get("name_translations") or {}, "sources": [],
+        })
         issue = classify_fetch_issue(
             row["fetch_note"],
             http_status=row.get("http_status"),

@@ -30,6 +30,7 @@ import ErrorNotice from './ErrorNotice';
 import { apiError } from '../errors/apiError.js';
 import i18n from '../i18n/index.js';
 import { formatDateTime, formatNumber, formatPercent, isRtl } from '../i18n/format.js';
+import { competitorName } from '../i18n/competitorText.js';
 import { translateFetchNote, translateSourceIssue } from '../lib/sourceIssue.js';
 import {
   ResponsiveContainer,
@@ -289,7 +290,8 @@ function AttentionList({ items, healthyLabel, renderItem, pageSize = 0, paginati
 }
 
 export default function DashboardPage({ projects = [], projectId = null }) {
-  const { t } = useTranslation('dashboard');
+  const { t, i18n: activeI18n } = useTranslation('dashboard');
+  const language = activeI18n.resolvedLanguage || activeI18n.language;
   const [selectedId, setSelectedId] = useState(() => {
     if (projectId != null) return Number(projectId);
     return projects[0]?.id != null ? Number(projects[0].id) : null;
@@ -559,7 +561,7 @@ export default function DashboardPage({ projects = [], projectId = null }) {
                   <div className="report-insight-card tone-negative" key={competitor.id}>
                     <div className="report-insight-card-top">
                       <div className="report-insight-card-copy">
-                        <p className="report-insight-card-text" dir="auto">{competitor.name}</p>
+                        <p className="report-insight-card-text" dir="auto">{competitorName(competitor, language)}</p>
                         <div className="report-insight-card-tags">
                           {competitor.sources.map((source, index) => {
                             const issue = translateSourceIssue(source.issue);

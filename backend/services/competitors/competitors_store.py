@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from psycopg.types.json import Jsonb
 
 from app.core import db
-from app.core.language import resolve_output_language
+from app.core.language import clean_name_translations, resolve_output_language
 from services.competitors.countries import COUNTRIES, validate_countries
 from services.sources.sources_store import (
     _derive_facebook_url,
@@ -40,7 +40,7 @@ from services.sources.sources_store import (
 KIND_PLATFORMS = {"reddit", "linkedin", "threads", "facebook", "instagram"}
 
 COMPETITOR_COLUMNS = """
-    id, project_id, name, website, domain, description, country,
+    id, project_id, name, name_translations, website, domain, description, country,
     operates_in_countries, aliases, size_tier, size_rank, size_signals,
     relevance_score, status, discovery_source, discovery_query,
     generated_language, last_scraped_at, last_analyzed_at, created_at, updated_at
@@ -237,6 +237,7 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
 
     payload = {
         "name": name,
+        "name_translations": Jsonb(clean_name_translations(values.get("name_translations"), name)),
         "website": website,
         "domain": domain,
         "description": str(values.get("description") or "").strip() or None,
@@ -288,6 +289,13 @@ def upsert_competitor(project_id: int, values: dict) -> dict | None:
         # wipe the ones a human typed in to make this competitor matchable.
         "aliases": "aliases = case when excluded.aliases = '[]'::jsonb "
                    "then competitors.aliases else excluded.aliases end",
+        # Translations describe one specific name: kept and merged while the
+        # name is unchanged, but a rename (or a different company converging
+        # on the same domain) takes only what came with the new name, so a
+        # stale translation of the old name is never shown for the new one.
+        "name_translations": "name_translations = case when competitors.name = excluded.name "
+                             "then competitors.name_translations || excluded.name_translations "
+                             "else excluded.name_translations end",
     }
     assignments = ", ".join(
         assignments_by_field.get(
@@ -343,6 +351,32 @@ def export_competitors(project_id: int) -> list[dict]:
         order by size_rank nulls last, lower(name)
         """,
         (int(project_id),),
+    )
+
+
+def competitors_missing_name_translation(project_id: int, language: str) -> list[dict]:
+    """Competitors with no display name yet in `language` - rows from before
+    translations existed, or typed in by hand rather than discovered."""
+    return db.fetch_all(
+        """
+        select id, name from competitors
+        where project_id = %s and not (name_translations ? %s)
+        order by size_rank nulls last, lower(name)
+        """,
+        (int(project_id), language),
+    )
+
+
+def set_name_translation(competitor_id: int, name: str, language: str, translated: str) -> None:
+    """Store one display translation, only if the competitor still has `name`:
+    a rename racing the translation call must not receive the old name's."""
+    db.execute(
+        """
+        update competitors
+        set name_translations = name_translations || jsonb_build_object(%s::text, %s::text)
+        where id = %s and name = %s
+        """,
+        (language, translated, int(competitor_id), name),
     )
 
 
