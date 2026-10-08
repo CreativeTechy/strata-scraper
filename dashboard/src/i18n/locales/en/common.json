@@ -98,7 +98,8 @@
     "expandNavigation": "Expand navigation",
     "collapseNavigation": "Collapse navigation",
     "logOut": "Log out",
-    "profileTitle": "{{username}} ({{role}})"
+    "profileTitle": "{{username}} ({{role}})",
+    "settings": "Settings"
   },
   "access": {
     "loading": "Loading…",

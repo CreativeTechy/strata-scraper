@@ -832,6 +832,15 @@ create index if not exists competitor_findings_pipeline_run_id_idx
 -- 10. Seed data
 -- =============================================================================
 
+-- Runtime-editable settings (key/value text), currently the Apify actor,
+-- result-cap, and timeout overrides - see services/settings/apify_settings.py.
+create table if not exists public.app_settings (
+    key text primary key,
+    value text not null,
+    updated_at timestamptz not null default now(),
+    updated_by text
+);
+
 insert into public.permissions (key, description) values
     ('projects.view', 'View projects'),
     ('projects.create', 'Create projects'),
@@ -858,7 +867,9 @@ insert into public.permissions (key, description) values
     ('roles.delete', 'Delete roles'),
     ('competitors.view', 'View competitor studies, competitors, and findings'),
     ('competitors.manage', 'Create and edit the business profile and competitors'),
-    ('competitors.analyze', 'Run competitor discovery and generate analysis')
+    ('competitors.analyze', 'Run competitor discovery and generate analysis'),
+    ('settings.view', 'View collection provider (Apify) settings'),
+    ('settings.update', 'Edit collection provider (Apify) settings')
 on conflict (key) do nothing;
 
 insert into public.roles (name, description, is_system, full_access) values
